@@ -19,7 +19,7 @@ Detailed medical identifiers, source object IDs, checksums and populated accepta
 - Foreign-key performance hardening: PASS
 - Scheduler workflows committed: PASS
 - Scheduler secrets/manual bootstrap: PENDING OWNER SETUP
-- Leaked-password protection: PENDING OWNER SETUP
+- Leaked-password protection: NOT AVAILABLE ON CURRENT FREE PLAN (non-blocking)
 - Full migration authorized: NO
 - Cutover: NO
 
@@ -27,6 +27,6 @@ Detailed medical identifiers, source object IDs, checksums and populated accepta
 
 The technical MVP architecture and recovery path are proven.
 
-Operational acceptance remains conditional on one successful manual run of each scheduler workflow after secrets are configured, plus enabling leaked-password protection.
+Operational acceptance remains conditional on one successful manual run of each scheduler workflow after secrets are configured. Leaked-password protection is not an MVP blocker because it is unavailable on the current Free plan.
 
 Full migration requires a separate explicit owner command.

@@ -97,26 +97,51 @@ h3 { margin: 1.4rem 0 .6rem; }
 }
 
 
-.global-filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(10rem, 1fr)) minmax(14rem, 2fr);
-  gap: .8rem;
+.global-filters,
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem .65rem;
   align-items: end;
-  margin: 1rem 0;
-  padding: 1rem;
+  margin: .7rem 0;
+  padding: .55rem .65rem;
   border: 1px solid #d8d8d8;
-  border-radius: .8rem;
+  border-radius: .65rem;
   background: white;
+  font-size: .8rem;
 }
-.active-filter-block { display: grid; gap: .4rem; align-self: stretch; }
-.active-filter-tags { display: flex; flex-wrap: wrap; gap: .35rem; min-height: 2.55rem; align-items: center; }
+.global-filters label,
+.filter-bar label {
+  display: grid;
+  gap: .2rem;
+  min-width: 8.5rem;
+  font-size: .8rem;
+  font-weight: 600;
+}
+.global-filters input,
+.global-filters select,
+.filter-bar input,
+.filter-bar select {
+  min-height: 1.9rem;
+  padding: .3rem .42rem;
+  border-radius: .45rem;
+  font-size: .8rem;
+}
+.filter-bar-title,
+.filter-bar-label {
+  font-size: .8rem;
+  font-weight: 700;
+  align-self: center;
+}
+.active-filter-block { display: grid; gap: .2rem; min-width: 10rem; }
+.active-filter-tags { display: flex; flex-wrap: wrap; gap: .25rem; min-height: 1.9rem; align-items: center; }
 .active-filter-tag {
-  padding: .32rem .55rem;
+  padding: .2rem .45rem;
   border: 1px solid #aaa;
   border-radius: 999px;
   background: transparent;
   color: inherit;
-  font-size: .82rem;
+  font-size: .78rem;
 }
 .tag-filter-button {
   padding: .12rem .42rem;
@@ -127,19 +152,41 @@ h3 { margin: 1.4rem 0 .6rem; }
   font-size: .78rem;
 }
 .tag-filter-button:hover,
-.tag-filter-button:focus-visible { text-decoration: underline; }
-.column-filters th { padding: .4rem .45rem; background: #f7f7f7; }
-.column-filter {
-  min-width: 7rem;
-  padding: .42rem .5rem;
-  border-radius: .45rem;
-  font-size: .78rem;
-  font-weight: 400;
-}
-.table-count { margin: .45rem 0 0; font-size: .85rem; }
+.tag-filter-button:focus-visible,
+.record-tag-link:hover,
+.record-tag-link:focus-visible { text-decoration: underline; }
+.table-count { margin: .35rem 0 0; font-size: .78rem; }
 .data-table tr[hidden] { display: none; }
 .question-card summary { line-height: 1.35; }
 .rec-inline { display: flex; flex-wrap: wrap; gap: .35rem .7rem; }
+
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  width: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: 700;
+  text-align: left;
+}
+.sort-indicator { min-width: 1em; color: #777; font-weight: 500; }
+.sort-button.active .sort-indicator { color: inherit; }
+
+.record-meta { margin: .8rem 0 1rem; }
+.record-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin: .8rem 0 1.2rem; }
+.record-tag-link { text-decoration: none; }
+.rich-record-body { white-space: normal; }
+.rich-record-body h2,
+.rich-record-body h3,
+.rich-record-body h4 { margin: 1.4rem 0 .55rem; }
+.rich-record-body p { max-width: 90ch; }
+.record-list { padding-left: 1.35rem; }
+.record-list li { margin: .28rem 0; }
 
 .table-wrap {
   width: 100%;
@@ -195,7 +242,6 @@ dd { margin: 0; overflow-wrap: anywhere; }
   .topbar nav { order: 3; width: 100%; gap: .8rem; }
   .ghost { margin-left: auto; }
   .data-table { font-size: .86rem; }
-  .global-filters { grid-template-columns: 1fr; }
   .summary-cell { min-width: 16rem; }
   dl, .meta-list { grid-template-columns: 1fr; gap: .15rem; }
   dd { margin-bottom: .6rem; }
@@ -203,13 +249,12 @@ dd { margin: 0; overflow-wrap: anywhere; }
 
 @media (prefers-color-scheme: dark) {
   :root { color: #f0f0f0; background: #101010; }
-  input, select, .cards li, .record-body, .case-card, .table-wrap, .global-filters { background: #181818; border-color: #333; }
+  input, select, .cards li, .record-body, .case-card, .table-wrap, .global-filters, .filter-bar { background: #181818; border-color: #333; }
   .topbar { background: color-mix(in srgb, #101010 92%, transparent); border-color: #333; }
   .muted, .empty, .intro, .summary-date { color: #aaa; }
   .ghost { border-color: #555; }
   .case-card[open] > summary, .data-table th, .data-table td { border-color: #333; }
   .data-table th { background: #202020; }
-  .column-filters th { background: #181818; }
   .tag-filter-button { color: #ccc; background: #202020; border-color: #444; }
   .active-filter-tag { border-color: #555; }
   .data-table tbody tr:hover { background: #1d1d1d; }

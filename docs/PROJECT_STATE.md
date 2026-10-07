@@ -5,7 +5,7 @@ Status: MVP operational acceptance PASS; full migration awaiting owner authoriza
 ## Confirmed
 
 - Public repository `Alexio00/HEALTH` is intentionally safe for public inspection.
-- Private scheduler repository `Alexio000/SHEDULLER` is connected and contains manual bootstrap workflows for database backup, Sources backup, verification and keepalive.
+- Private scheduler repository `Alexio000/SHEDULLER` is connected and contains database backup, Sources backup, verification and keepalive workflows.
 - Existing Drive-native HealthDB remains the canonical source of truth until explicit cutover.
 - Supabase project `HEALTH` is connected and healthy.
 - Core schema, RLS, browser grants and secure default privileges are active.
@@ -62,5 +62,3 @@ MVP operational acceptance is complete.
 Full migration is now blocked only on explicit owner authorization. No migration starts implicitly from this status update.
 
 When authorized, migration starts from a fresh live Drive-native snapshot and isolated staging validation; the representative MVP is replaced rather than treated as an incremental baseline. Cutover remains a separate owner decision.
-
-When authorized, migration starts from a fresh Drive-native snapshot and isolated staging validation; the representative MVP is replaced rather than treated as an incremental baseline. Cutover remains a separate owner decision.

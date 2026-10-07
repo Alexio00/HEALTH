@@ -57,15 +57,15 @@ MVP operational acceptance is PASS:
 Current verdict: **NO-GO**.
 
 Resolved during the rerun:
-- source-freeze/package contract mismatch fixed in commit `9d3bc8a6bc725982a1e13c8835b8a23cf597be54`;
-- code validation run `37679186790` PASS;
+- source-freeze/package contract mismatch fixed and then strengthened so the sealed package fingerprint binds freeze/capture control metadata; latest hardening commit `89bbaa0882330016c623090559301cc952694313`;
+- code validation run `37685406167` PASS;
 - live Auth invariants PASS;
 - live browser/database security invariants PASS;
 - scheduler hardened database -> Sources -> verification chain PASS;
 - schema migration ledger matches the nine canonical timestamped migration files.
 
 Remaining blocker:
-- the hardened five-file database backup format now includes `supabase_migrations` schema/data, but no **real isolated restore drill** has been performed after that backup-format/tooling change. Checksum/round-trip verification is PASS but is not a restore.
+- the hardened five-file database backup format now includes `supabase_migrations` schema/data, but a **real isolated restore drill** has not yet passed after that backup-format/tooling change. The private scheduler now runs that drill against a fresh local Supabase stack; checksum/round-trip verification remains PASS but is not a restore.
 
 Full migration remains forbidden until that restore drill passes and the final audit is rerun to PASS.
 

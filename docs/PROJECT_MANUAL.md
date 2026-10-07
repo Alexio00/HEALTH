@@ -51,10 +51,14 @@ The legacy/current health database stays authoritative until the owner explicitl
 
 ## PWA table and navigation conventions
 
-- Every table shown on GitHub Pages must provide a filter field for every column in the table header.
-- Table filters are empty by default and must not hide any rows until the owner enters a filter.
-- Filtering is immediate; no separate Apply action is used.
-- The Records index additionally provides global date-from/date-to and multi-tag filters.
-- Tags in the Records table are interactive filter controls: selecting a tag immediately adds it to the active tag filter.
+- Every table shown on GitHub Pages must support sorting by clicking the column title.
+- Column headers use a neutral bidirectional sort marker by default and show ascending/descending direction when active.
+- Do not render a separate text-filter row under table headers.
+- Add a compact filter block before a table or card collection when the dataset has useful categorical/repeating values or a meaningful date range.
+- Repeating categorical values should use select controls populated from the live dataset; filters are empty/All by default.
+- The Records index always provides date-from/date-to and tag filters, and additionally exposes repeated Record Type / Confirmation values when more than one value exists.
+- Tags in the Records table and REC page are interactive filter controls; selecting a tag immediately opens/updates the Records index with that tag active.
 - Current State questions use the same collapsible-detail reading pattern as chronic states and open cases.
+- Sources linked from a REC should open the original primary Google Drive object directly when a primary locator exists.
+- Technical provenance fields such as link role and source hashes stay in the database/validation layer unless the owner explicitly asks to inspect them.
 - These are presentation rules only; they must not weaken read-only browser access or embed medical data in the public repository.

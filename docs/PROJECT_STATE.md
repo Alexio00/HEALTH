@@ -32,7 +32,7 @@ MVP operational acceptance is PASS:
 - secure default privileges are now represented in the live migration history.
 - full migration has an executable private-package runner: seal -> verify -> stage -> exact fingerprints -> guarded commit -> exact public compare.
 - full migration commit requires a PREPARED HEALTH operation plus the explicit authorization token `FULL_MIGRATION_AUTHORIZED`.
-- old Drive-native HealthDB freeze is defined through its own PREPARED maintenance Change Log row occupying the single-writer slot.
+- old Drive-native HealthDB freeze is defined through its own PREPARED maintenance Change Log row occupying the single-writer slot; the sealed migration package records that freeze operation ID/state and zero other unfinished operations, and the old Change Log must be reread immediately before target commit.
 - Auth recovery is explicit: create the replacement sole owner and rebind app_readers; medical IDs do not depend on the Auth UUID.
 - recovery documentation requires real restore drills; checksum round-trip alone is not called a restore.
 - scheduler code pins Ubuntu 24.04 and checksum-verifies exact rclone v1.75.1.
@@ -45,13 +45,29 @@ MVP operational acceptance is PASS:
 - Public code CI synthetic migration package seal/verify: PASS.
 - Hardened private scheduler execution test: PASS (revision 6). Database backup, Sources copy, database/source verification and five-file database round-trip SHA-256 all PASS.
 
-## Remaining pre-migration owner gates
+## Owner gates
 
-1. **Supabase region decision** — current project primary region is `us-west-1`. Owner must explicitly accept that region for the full medical dataset or authorize migration to a chosen replacement region before full migration.
+1. **Supabase region** — RESOLVED: owner explicitly accepted the existing `us-west-1` project; no region migration is requested before full migration.
 2. **Supabase Auth dashboard** — RESOLVED by prior owner confirmation: public self-signup/new-user creation and anonymous sign-ins were disabled; subsequent hardening did not modify Auth dashboard configuration.
-3. **Public Git commit email privacy** — connector-generated public commits expose the configured GitHub author email in commit metadata. Decide whether to accept existing history or perform a separate history/privacy cleanup; configure future Git author privacy outside this repository workflow.
-4. **Owner PWA login smoke after first-party Auth-client hardening** — deployment succeeded, but the owner session should be exercised once before the full-migration gate.
-5. **Final pre-migration audit** — rerun after scheduler validation and owner gates.
+3. **Public Git commit email privacy** — RESOLVED: owner accepts the existing public commit-history email exposure and does not want history rewritten.
+4. **Post-hardening PWA smoke** — PASS by owner: login succeeded and multiple records/pages were checked after first-party Auth-client hardening.
+
+## Final pre-migration audit
+
+Current verdict: **NO-GO**.
+
+Resolved during the rerun:
+- source-freeze/package contract mismatch fixed in commit `9d3bc8a6bc725982a1e13c8835b8a23cf597be54`;
+- code validation run `37679186790` PASS;
+- live Auth invariants PASS;
+- live browser/database security invariants PASS;
+- scheduler hardened database -> Sources -> verification chain PASS;
+- schema migration ledger matches the nine canonical timestamped migration files.
+
+Remaining blocker:
+- the hardened five-file database backup format now includes `supabase_migrations` schema/data, but no **real isolated restore drill** has been performed after that backup-format/tooling change. Checksum/round-trip verification is PASS but is not a restore.
+
+Full migration remains forbidden until that restore drill passes and the final audit is rerun to PASS.
 
 ## Non-blocking advisor status
 

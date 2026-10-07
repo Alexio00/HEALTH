@@ -774,7 +774,7 @@ async function renderRecords({ initialTags = [] } = {}) {
         <div id="records-active-tags" class="active-filter-tags"></div>
       </div>
     </div>
-    ${filterableTable(["REC","Дата","Домен / теги","Тип записи","Достоверность","Кратко","Кейс"], rows, { id: "records-index" })}
+    ${filterableTable(["REC","Дата","Домен / теги","Тип записи","Подтверждение","Кратко","Кейс"], rows, { id: "records-index" })}
   `;
   bindFilterableTables();
   setupRecordFilters(initialTags);

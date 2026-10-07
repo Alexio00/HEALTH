@@ -966,7 +966,19 @@ async function renderRecord(recordId) {
 
     <section>
       <h2>Источники</h2>
-      ${list(sources, x => `<li><a href="#/sources/${encodeURIComponent(x.source_id)}">${esc(x.source_id)}</a><p class="muted">${esc(x.role)} ${esc(x.source_pages || "")}</p></li>`)}
+      ${sourceViews.length ? list(sourceViews, item => {
+        const driveId = item.location?.provider_object_id;
+        const href = driveId ? `https://drive.google.com/open?id=${encodeURIComponent(driveId)}` : "";
+        return `
+          <li>
+            ${href
+              ? `<a href="${href}" target="_blank" rel="noopener noreferrer"><strong>Открыть оригинал</strong></a>`
+              : `<strong>Оригинал недоступен</strong>`}
+            ${record.source_label ? `<p>${esc(record.source_label)}</p>` : ""}
+            ${item.source_pages ? `<p class="muted">Страницы в источнике: ${esc(item.source_pages)}</p>` : ""}
+          </li>
+        `;
+      }) : empty("Источники не привязаны")}
     </section>
   `;
   bindFilterableTables();

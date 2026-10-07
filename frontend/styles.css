@@ -221,7 +221,7 @@ h3 { margin: 1.4rem 0 .6rem; }
 .rich-record-body h2,
 .rich-record-body h3,
 .rich-record-body h4 {
-  margin: 1.5em 0 1em;
+  margin: .75em 0 .5em;
   line-height: 1.25;
 }
 .rich-record-body > :first-child {
@@ -229,7 +229,10 @@ h3 { margin: 1.4rem 0 .6rem; }
 }
 .rich-record-body p {
   max-width: 88ch;
-  margin: 0 0 1em;
+  margin: 0;
+}
+.rich-record-body .record-list {
+  margin: 0;
 }
 .record-list {
   padding-left: 1.35rem;

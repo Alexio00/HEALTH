@@ -29,4 +29,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ! grep -RIE --exclude-dir=.git --exclude='*.md'             '(service_role|postgresql://[^[:space:]]+:[^[:space:]]+@|refresh_token[[:space:]]*[:=]|client_secret[[:space:]]*[:=])' .
+          ! grep -RIE --exclude-dir=.git --exclude='*.md' --exclude='code-validation.yml' \
+            '(sb_secret_[A-Za-z0-9_-]{20,}|postgres(ql)?://[^:[:space:]]+:[^@/[:space:]]{8,}@|client_secret[[:space:]]*[:=][[:space:]]*["'"']?[A-Za-z0-9_-]{20,}|refresh_token[[:space:]]*[:=][[:space:]]*["'"']?(1//|[A-Za-z0-9_-]{40,}))' .

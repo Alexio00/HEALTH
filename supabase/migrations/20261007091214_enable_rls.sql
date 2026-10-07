@@ -1,4 +1,3 @@
-begin;
 alter table public.operations enable row level security;
 alter table public.app_readers enable row level security;
 alter table public.domains enable row level security;
@@ -19,4 +18,3 @@ alter table public.questions enable row level security;
 alter table public.validation_checks enable row level security;
 alter table public.validation_results enable row level security;
 alter table public.system_state enable row level security;
-commit;

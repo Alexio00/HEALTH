@@ -540,14 +540,19 @@ async function renderCurrentState() {
     const due = x.metadata?.due_text || fmtDate(x.due_on) || "";
     const kind = x.metadata?.kind || "";
     const status = x.metadata?.source_status || "запланировано";
-    return [
-      tableCell(esc(due), due),
-      tableCell(esc(kind), kind),
-      tableCell(esc(x.title), x.title),
-      tableCell(esc(status), status),
-      tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
-    ];
+    return {
+      attrs: { "data-kind": kind, "data-plan-status": status },
+      cells: [
+        tableCell(esc(due), due),
+        tableCell(esc(kind), kind),
+        tableCell(esc(x.title), x.title),
+        tableCell(esc(status), status),
+        tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
+      ]
+    };
   });
+  const planKinds = uniqueValues((plan.data || []).map(x => x.metadata?.kind || ""));
+  const planStatuses = uniqueValues((plan.data || []).map(x => x.metadata?.source_status || "запланировано"));
 
   view.innerHTML = `
     <h1>Текущее состояние</h1>

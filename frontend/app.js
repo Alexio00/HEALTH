@@ -712,6 +712,87 @@ function recordDisplayTitle(record) {
   return fallback.charAt(0).toUpperCase() + fallback.slice(1);
 }
 
+function inlineRecordMarkdown(value) {
+  let html = esc(value);
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  html = html.replace(/\[(REC-\d{8}-\d{3})\]/g, (_, id) => recLink(id));
+  return html;
+}
+
+function parseMarkdownTableRow(line) {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(x => x.trim());
+}
+
+let inlineTableSequence = 0;
+
+function renderRecordBody(text) {
+  const lines = cleanLegacyRecordText(text).split(/\r?\n/);
+  if (lines[0]?.startsWith("# ")) lines.shift();
+
+  const blocks = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+
+    if (!line || /^---+$/.test(line)) {
+      i += 1;
+      continue;
+    }
+
+    if (line.startsWith("|") && i + 1 < lines.length && /^\|?\s*:?-+/.test(lines[i + 1].trim())) {
+      const headers = parseMarkdownTableRow(line);
+      i += 2;
+      const rows = [];
+
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        const cells = parseMarkdownTableRow(lines[i]);
+        rows.push(cells.map(cell => tableCell(inlineRecordMarkdown(cell), cell.replace(/\*\*/g, ""))));
+        i += 1;
+      }
+
+      blocks.push(filterableTable(headers, rows, { id: `record-inline-table-${++inlineTableSequence}` }));
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      const level = Math.min(4, heading[1].length + 1);
+      blocks.push(`<h${level}>${inlineRecordMarkdown(heading[2])}</h${level}>`);
+      i += 1;
+      continue;
+    }
+
+    if (/^-\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^-\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^-\s+/, ""));
+        i += 1;
+      }
+      blocks.push(`<ul class="record-list">${items.map(item => `<li>${inlineRecordMarkdown(item)}</li>`).join("")}</ul>`);
+      continue;
+    }
+
+    const paragraph = [line];
+    i += 1;
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !/^(#{1,4})\s+/.test(lines[i].trim()) &&
+      !/^-\s+/.test(lines[i].trim()) &&
+      !lines[i].trim().startsWith("|") &&
+      !/^---+$/.test(lines[i].trim())
+    ) {
+      paragraph.push(lines[i].trim());
+      i += 1;
+    }
+    blocks.push(`<p>${inlineRecordMarkdown(paragraph.join(" "))}</p>`);
+  }
+
+  return blocks.join("\n");
+}
+
 async function renderRecords({ initialTags = [] } = {}) {
   const [{ data: records, error: recordsError }, { data: links, error: linksError }, { data: cases, error: casesError }] = await Promise.all([
     supabase

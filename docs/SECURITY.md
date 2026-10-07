@@ -66,3 +66,16 @@ After schema or security changes, run `scripts/validation/security_invariants.sq
 - no public-table privileges for `anon`;
 - SELECT-only access for `authenticated` on the explicit browser allow-list;
 - safe default privileges for future `postgres`-owned objects.
+
+
+## Pre-migration Auth gate
+
+Before full migration and again before cutover:
+
+- run `scripts/validation/auth_invariants.sql`;
+- run `scripts/validation/security_invariants.sql`;
+- verify in the Supabase Auth dashboard that public self-signup / new-user creation is disabled for the project;
+- verify only the intended owner account remains active;
+- verify the browser still has SELECT-only access and anonymous access remains denied.
+
+The database scripts intentionally fail closed for database/Auth-user invariants. Dashboard-only Auth settings must be checked explicitly because they are not proven by SQL alone.

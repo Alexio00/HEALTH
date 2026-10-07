@@ -22,6 +22,10 @@ Status: MVP technical acceptance PASS; scheduler bootstrap pending
 - No source-system medical data was deleted or moved.
 - No cutover has occurred.
 - Full migration has not begun.
+- Public-safe full migration procedure is documented in `docs/FULL_MIGRATION_PLAN.md`.
+- Lossless Drive-to-HEALTH transformation rules are documented in `docs/MIGRATION_FIELD_MAP.md`.
+- Full migration will use a fresh live Google Drive snapshot; legacy HealthDB GitHub repositories are excluded as migration inputs.
+- The HEALTH ID reservation ledger now has private JSON metadata capacity for preserving legacy ledger provenance without coercing old text operation IDs into new UUIDs.
 
 ## Scheduler bootstrap
 
@@ -47,3 +51,5 @@ Schedules are intentionally not enabled until required repository secrets are co
 After scheduler secrets are configured, run all four workflows manually once. If they PASS, enable schedules and complete final operational acceptance.
 
 Full migration remains blocked until the owner explicitly authorizes it after this gate.
+
+When authorized, migration starts from a fresh Drive-native snapshot and isolated staging validation; the representative MVP is replaced rather than treated as an incremental baseline. Cutover remains a separate owner decision.

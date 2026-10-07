@@ -1,58 +1,50 @@
 # Project State
 
-Status: Representative MVP import PASS; visual data check and backup/restore pending
+Status: MVP technical acceptance PASS; scheduler bootstrap and one Auth hardening toggle pending
 
 ## Confirmed
 
 - Public repository `Alexio00/HEALTH` is intentionally safe for public inspection.
-- Private scheduler repository `Alexio000/SHEDULLER` is connected with administrative/write access.
-- Primary target Sources storage exists on the private owner Drive.
-- Independent backup Drive folders exist.
+- Private scheduler repository `Alexio000/SHEDULLER` is connected and contains manual bootstrap workflows for database backup, Sources backup, verification and keepalive.
 - Existing Drive-native HealthDB remains the canonical source of truth until explicit cutover.
 - Supabase project `HEALTH` is connected and healthy.
-- Core schema, RLS, secure browser grants and secure default privileges are active.
+- Core schema, RLS, browser grants and secure default privileges are active.
 - Exactly one approved Auth reader is configured.
-- Auth and database security invariants PASS.
 - Read-only PWA is deployed through GitHub Pages and owner authentication is confirmed.
-- PWA navigation now mirrors the useful reading structure of the legacy HealthDB: Current State, Closed Cases, Records Index, Case card, REC and Source.
-- Current State uses collapsible case blocks; Closed Cases has a separate collapsible register; Records is a linked table index.
-- All PWA tables sort by clicking column headers with ascending/descending indicators; the old separate text-filter row is removed.
-- Compact filter bars use live repeated categorical values and date ranges only where useful.
-- Records has date, tag, Record Type and Confirmation filters; tags are clickable deep links to an already-filtered Records view.
-- Current State questions use the same collapsible-detail pattern as chronic states and open cases.
-- REC pages hide migration/frontmatter noise, use Russian owner-facing labels, open Sources directly, and render legacy Markdown as readable sections/lists/tables.
-- A small representative medical subset has been copied from the canonical Drive-native HealthDB into the new database.
-- The representative subset includes record text, source linkage, laboratory rows, a complete Case relation chain and current-state entities.
-- Required source material for the subset has been copied into the new private `HEALTH/Sources` storage.
-- Source copy verification included an independent SHA-256 recomputation.
-- Source-to-target fidelity checks PASS.
-- The representative import operation reached FINALIZED only after all active checks PASS.
-- Detailed migrated medical identifiers and acceptance evidence are stored only in the private target database, not in this public repository.
-- No source-system data was deleted or moved.
+- Owner visually verified imported data, Sources and navigation in the live PWA.
+- Representative migration subset is imported and source-to-target fidelity checks PASS.
+- Required MVP Source material is copied to primary HEALTH/Sources.
+- Independent Source backup exists on the second Drive account; size and independently recomputed SHA-256 match.
+- Independent logical database snapshot exists on the second Drive account and reads back exactly.
+- Restore test from the independent backup snapshot restored all included tables into an isolated PostgreSQL schema with exact per-table content matches; the test schema was deleted afterward.
+- MVP backup manifest exists on the independent backup Drive.
+- Covering indexes were added for all foreign keys previously reported as unindexed; the performance advisor now reports no unindexed-foreign-key findings.
+- No source-system medical data was deleted or moved.
 - No cutover has occurred.
 - Full migration has not begun.
 
-## Remaining MVP work
+## Scheduler bootstrap
 
-- Owner visual check of imported data in the live PWA.
-- Portable database backup.
-- Independent Sources backup to the second Drive account.
-- Backup manifest/count/checksum verification.
-- Restore test.
-- Final MVP acceptance decision.
+Committed to the private scheduler repository as manual-only workflows:
+- HEALTH database backup;
+- HEALTH Sources backup;
+- HEALTH backup verification;
+- HEALTH keepalive.
 
-## Known non-blocking infrastructure findings
+Schedules are intentionally not enabled until required repository secrets are configured and each workflow passes once manually.
 
-- Supabase Security Advisor reports leaked-password protection disabled; this is an Auth hardening item, not a data-fidelity failure.
-- Performance Advisor reports several unindexed foreign keys; acceptable for the tiny MVP but should be addressed before full migration.
+## Remaining owner-side setup
+
+- Configure private scheduler secrets required for Supabase database access and the two Google Drive remotes.
+- Enable Supabase Auth leaked-password protection.
+
+## Advisor status
+
+- Security: only intentional INFO notices for browser-hidden technical tables plus leaked-password protection WARN.
+- Performance: no unindexed foreign keys remain. Newly created indexes may appear as unused until production-sized traffic exists.
 
 ## Next gate
 
-Verify the imported subset in the live PWA, then complete backup/restore. Full migration remains blocked until explicit owner approval after final MVP review.
+After scheduler secrets are configured, run all four workflows manually once. If they PASS, enable schedules and complete final operational acceptance.
 
-
-- REC body presentation now hides legacy file wrappers, duplicated frontmatter/metadata and the repeated first H1 while preserving raw body_text unchanged.
-- Internal REC headings use compact spacing (1.5em above, 1em below) and normal whitespace rendering.
-
-
-- REC body heading spacing is compact and uses CSS margins only: no visual blank-line spacing, with pre-heading spacing 1.5× the post-heading spacing.
+Full migration remains blocked until the owner explicitly authorizes it after this gate.

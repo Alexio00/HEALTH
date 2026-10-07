@@ -1,6 +1,6 @@
 # Project State
 
-Status: MVP infrastructure ready for representative migration
+Status: MVP infrastructure ready; owner Auth/Pages toggles pending
 
 ## Confirmed
 
@@ -18,16 +18,31 @@ Status: MVP infrastructure ready for representative migration
 - `authenticated` has SELECT-only access to the explicit browser-facing allow-list.
 - Technical tables are not exposed to browser roles.
 - Secure default privileges for future `postgres`-owned public tables, sequences and functions are active.
-- Database security invariants are encoded in `scripts/validation/security_invariants.sql` and currently PASS.
+- Database security invariants are encoded and currently PASS.
+- Static read-only PWA shell is implemented in `frontend/`.
+- PWA contains login, Current State, Index, REC and Source routes.
+- Service worker does not cache cross-origin/Supabase/Google Drive responses.
+- GitHub Pages deployment workflow is committed.
 - No real medical data has been copied.
 - No cutover has occurred.
 
+## Owner actions pending
+
+- Create the sole Supabase Auth user with email/password and auto-confirm it.
+- Disable "Allow new users to sign up" and anonymous sign-ins in Supabase Auth.
+- In GitHub repository Settings -> Pages, set Source to GitHub Actions.
+
+## After owner actions
+
+- Register the sole active Auth user in `public.app_readers` using `scripts/auth/register_single_reader.sql`.
+- Run `scripts/validation/auth_invariants.sql` and database security invariants.
+- Verify anonymous denial, owner SELECT, and browser write denial end-to-end.
+- Verify GitHub Pages deployment and mobile/PWA shell.
+
 ## Remaining MVP work
 
-- Configure single-user authentication and register the approved reader identity.
 - Import a small representative subset only.
 - Copy only the source files needed by that subset.
-- Build the first read-only PWA path: Current State -> Index -> REC -> Source.
 - Validate content, navigation, mobile behavior and latency.
 - Implement portable database and Sources backup jobs.
 - Verify restore and backup manifests/checksums.
@@ -35,4 +50,4 @@ Status: MVP infrastructure ready for representative migration
 
 ## Next gate
 
-Move from infrastructure maintenance into the representative MVP import only when the import operation begins. Full migration remains blocked until explicit owner approval after MVP review.
+Complete the three owner-side Auth/Pages settings above, then finish end-to-end read-only verification. Full migration remains blocked until explicit owner approval after MVP review.

@@ -729,7 +729,9 @@ async function renderRecords({ initialTags = [] } = {}) {
     return {
       attrs: {
         "data-record-date": r.record_date || "",
-        "data-tags": (r.tags || []).map(normalizeFilter).join("||")
+        "data-tags": (r.tags || []).map(normalizeFilter).join("||"),
+        "data-record-type": r.record_type || r.type || "",
+        "data-confidence": r.confidence || ""
       },
       cells: [
         tableCell(recLink(r.record_id), r.record_id),

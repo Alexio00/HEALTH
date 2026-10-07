@@ -16,9 +16,11 @@ Status: Representative MVP import PASS; visual data check and backup/restore pen
 - Read-only PWA is deployed through GitHub Pages and owner authentication is confirmed.
 - PWA navigation now mirrors the useful reading structure of the legacy HealthDB: Current State, Closed Cases, Records Index, Case card, REC and Source.
 - Current State uses collapsible case blocks; Closed Cases has a separate collapsible register; Records is a linked table index.
-- All PWA tables use per-column header filters with empty defaults and immediate filtering.
-- Records also has global date and multi-tag filters; table tags are clickable filter controls.
+- All PWA tables sort by clicking column headers with ascending/descending indicators; the old separate text-filter row is removed.
+- Compact filter bars use live repeated categorical values and date ranges only where useful.
+- Records has date, tag, Record Type and Confirmation filters; tags are clickable deep links to an already-filtered Records view.
 - Current State questions use the same collapsible-detail pattern as chronic states and open cases.
+- REC pages hide migration/frontmatter noise, use Russian owner-facing labels, open Sources directly, and render legacy Markdown as readable sections/lists/tables.
 - A small representative medical subset has been copied from the canonical Drive-native HealthDB into the new database.
 - The representative subset includes record text, source linkage, laboratory rows, a complete Case relation chain and current-state entities.
 - Required source material for the subset has been copied into the new private `HEALTH/Sources` storage.

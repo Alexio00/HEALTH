@@ -462,7 +462,7 @@ function caseDetails(item, { closed = false, open = false } = {}) {
   const dateSuffix = closed && endDate ? ` <span class="summary-date">· закрыт ${esc(fmtDate(endDate))}</span>` : "";
 
   return `
-    <details class="case-card" ${open ? "open" : ""}>
+    <details class="case-card" data-category="${esc(item.category || "")}" data-end-date="${esc(item.closing_record?.record_date || item.metadata?.end_date || "")}" ${open ? "open" : ""}>
       <summary><strong>${esc(item.title)}</strong>${dateSuffix}</summary>
       <div class="case-body">
         ${item.summary ? `<p class="lead-small">${esc(item.summary)}</p>` : ""}
@@ -475,7 +475,6 @@ function caseDetails(item, { closed = false, open = false } = {}) {
         </dl>
         <h3>Все REC</h3>
         ${linked ? `<ul class="rec-links">${linked}</ul>` : empty("Связанные REC пока не импортированы")}
-        <p class="case-action">${caseLink(item.case_key, "Открыть карточку случая →")}</p>
       </div>
     </details>
   `;

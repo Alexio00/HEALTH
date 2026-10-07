@@ -49,3 +49,7 @@ Status: Representative MVP import PASS; visual data check and backup/restore pen
 ## Next gate
 
 Verify the imported subset in the live PWA, then complete backup/restore. Full migration remains blocked until explicit owner approval after final MVP review.
+
+
+- REC body presentation now hides legacy file wrappers, duplicated frontmatter/metadata and the repeated first H1 while preserving raw body_text unchanged.
+- Internal REC headings use compact spacing (1.5em above, 1em below) and normal whitespace rendering.

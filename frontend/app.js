@@ -938,9 +938,14 @@ async function renderRecord(recordId) {
 
   view.innerHTML = `
     <p><a href="#/records">← Записи</a></p>
-    <h1>${esc(record.title)}</h1>
-    <p class="muted">${esc(fmtDate(record.record_date))} · ${esc(record.record_id)}</p>
-    <p class="status-line">${chips([...(record.tags || []), record.record_type, record.confidence].filter(Boolean))}</p>
+    <h1>${esc(displayTitle)}</h1>
+    <dl class="record-meta">
+      <dt>Дата</dt><dd>${esc(fmtDate(record.record_date))}</dd>
+      <dt>ID записи</dt><dd class="mono">${esc(record.record_id)}</dd>
+      <dt>Тип записи</dt><dd>${esc(record.record_type || "")}</dd>
+      <dt>Подтверждение</dt><dd>${esc(record.confidence || "")}</dd>
+    </dl>
+    ${recordTags ? `<div class="record-tags" aria-label="Теги">${recordTags}</div>` : ""}
     ${record.summary ? `<p class="lead">${esc(record.summary)}</p>` : ""}
 
     <section>

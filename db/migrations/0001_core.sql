@@ -7,7 +7,7 @@ create table operations (
   operation text not null,
   mode text not null check (mode in ('maintenance','import')),
   scope text[] not null default '{}'::text[],
-  state text not null check (state in ('PREPARED','COMMITTED','VALIDATED','FINALIZED','FAILED')),
+  state text not null check (state in ('PREPARED','COMMITTED_REGISTRY','VALIDATED','FINALIZED','FAILED')),
   result text,
   notes text,
   created_at timestamptz not null default now(),
@@ -17,7 +17,7 @@ create table operations (
 
 create unique index operations_single_writer_idx
   on operations ((true))
-  where state in ('PREPARED','COMMITTED','VALIDATED');
+  where state in ('PREPARED','COMMITTED_REGISTRY','VALIDATED');
 
 create table app_readers (
   user_id uuid primary key,

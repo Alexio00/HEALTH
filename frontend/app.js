@@ -783,13 +783,33 @@ const recordTagLink = (tag) =>
 
 function cleanLegacyRecordText(text) {
   let value = String(text || "").trim();
-  value = value.replace(/^=====\s*REC[^\n]*\n?/, "");
-  value = value.replace(/\n?=====\s*END\s+REC[^\n]*$/i, "").trim();
 
+  // Remove legacy migration wrappers such as:
+  // ===== REC ... =====, ===== BEGIN FILE: ... =====, ===== END FILE ... =====.
+  value = value
+    .split(/\r?\n/)
+    .filter(line => !/^=+\s*(?:BEGIN\s+FILE:|END\s+FILE:|REC\b|END\s+REC\b).*?=+\s*$/i.test(line.trim()))
+    .join("\n")
+    .trim();
+
+  // Remove YAML/frontmatter when it is explicitly delimited.
   if (value.startsWith("---")) {
     const second = value.indexOf("\n---", 3);
     if (second >= 0) value = value.slice(second + 4).trim();
   }
+
+  // Some historical volumes contain flattened metadata without --- delimiters.
+  // If a medical H1 follows a metadata-looking prefix, keep the H1 and drop only
+  // the duplicated technical prefix. recordDisplayTitle() still uses this H1;
+  // renderRecordBody() removes the repeated H1 from the visible body.
+  const lines = value.split(/\r?\n/);
+  const firstH1 = lines.findIndex(line => /^#\s+\S/.test(line.trim()));
+  if (firstH1 > 0) {
+    const prefix = lines.slice(0, firstH1).join("\n");
+    const looksLikeMetadata = /(?:^|\n|\s)(?:type|record_id|date|tags|record_type|confidence|status|source|source_file|source_sha256|source_pages)\s*:/i.test(prefix);
+    if (looksLikeMetadata) value = lines.slice(firstH1).join("\n").trim();
+  }
+
   return value;
 }
 

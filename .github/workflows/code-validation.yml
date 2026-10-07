@@ -1,0 +1,32 @@
+name: HEALTH code validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "db/**"
+      - "supabase/**"
+      - ".github/workflows/code-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Python syntax
+        run: python3 -m py_compile scripts/migration/full_migration.py
+      - name: Migration runner self-test
+        run: python3 scripts/migration/full_migration.py self-test
+      - name: Public repository secret-pattern guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -RIE --exclude-dir=.git --exclude='*.md'             '(service_role|postgresql://[^[:space:]]+:[^[:space:]]+@|refresh_token[[:space:]]*[:=]|client_secret[[:space:]]*[:=])' .

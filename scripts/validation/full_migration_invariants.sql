@@ -10,6 +10,7 @@
 --     "domains": ...,
 --     "record_domains": ...,
 --     "sources": ...,
+--     "source_locations": ...,
 --     "record_sources": ...,
 --     "cases": ...,
 --     "case_links": ...,
@@ -54,6 +55,10 @@ count_checks as (
   select 'COUNT_SOURCES',
          (select count(*) from public.sources) =
          (select (counts->>'sources')::bigint from expected)
+  union all
+  select 'COUNT_SOURCE_LOCATIONS',
+         (select count(*) from public.source_locations) =
+         (select (counts->>'source_locations')::bigint from expected)
   union all
   select 'COUNT_RECORD_SOURCES',
          (select count(*) from public.record_sources) =
@@ -102,6 +107,14 @@ structural_checks as (
            where value->>'status' = 'CAPTURED'
              and jsonb_typeof(value->'expected_counts') = 'object'
          ) pass
+  union all
+  select 'SNAPSHOT_FINGERPRINTS_PRESENT',
+         exists (
+           select 1 from snapshot
+           where jsonb_typeof(value->'table_fingerprints') = 'object'
+             and jsonb_object_length(value->'table_fingerprints') = 15
+             and nullif(value->>'package_fingerprint','') is not null
+         )
   union all
   select 'HISTORICAL_SOURCE_MANIFEST_PRESENT',
          exists (

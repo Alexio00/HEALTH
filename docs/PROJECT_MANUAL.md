@@ -16,7 +16,7 @@ Use synthetic fixtures for tests.
 
 Medical writes must use one logical operation:
 
-`PREPARED -> COMMITTED -> VALIDATED -> FINALIZED`
+`PREPARED -> COMMITTED_REGISTRY -> VALIDATED -> FINALIZED`
 
 Interrupted work becomes `FAILED`.
 

@@ -221,7 +221,7 @@ h3 { margin: 1.4rem 0 .6rem; }
 .rich-record-body h2,
 .rich-record-body h3,
 .rich-record-body h4 {
-  margin: .75em 0 .5em;
+  margin: .75em 0 0;
   line-height: 1.25;
 }
 .rich-record-body > :first-child {

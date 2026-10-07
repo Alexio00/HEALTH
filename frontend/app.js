@@ -761,9 +761,9 @@ async function renderRecords({ initialTags = [] } = {}) {
         <input id="records-date-to" type="date">
       </label>
       <label>
-        Добавить тег
+        Тег
         <select id="records-tag-filter">
-          <option value="">Без фильтра</option>
+          <option value="">Все</option>
           ${allTags.map(tag => `<option value="${esc(tag)}">${esc(tag)}</option>`).join("")}
         </select>
       </label>

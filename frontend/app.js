@@ -683,7 +683,7 @@ async function renderCase(caseKey) {
   bindFilterableTables();
 }
 
-async function renderRecords() {
+async function renderRecords({ initialTags = [] } = {}) {
   const [{ data: records, error: recordsError }, { data: links, error: linksError }, { data: cases, error: casesError }] = await Promise.all([
     supabase
       .from("records")
@@ -771,7 +771,7 @@ async function renderRecords() {
     ${filterableTable(["REC","Дата","Домен / теги","Тип записи","Достоверность","Кратко","Кейс"], rows, { id: "records-index" })}
   `;
   bindFilterableTables();
-  setupRecordFilters();
+  setupRecordFilters(initialTags);
 }
 
 async function renderRecord(recordId) {

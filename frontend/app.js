@@ -910,6 +910,32 @@ async function renderRecord(recordId) {
     relatedCases = caseLinks.map(link => ({ ...link, case: map.get(link.case_key) }));
   }
 
+  let sourceViews = [];
+  if (sourceLinks?.length) {
+    const ids = [...new Set(sourceLinks.map(x => x.source_id))];
+    const [sourceResult, locationResult] = await Promise.all([
+      supabase.from("sources").select("source_id,original_filename").in("source_id", ids),
+      supabase.from("source_locations")
+        .select("source_id,provider,provider_object_id,location_role")
+        .in("source_id", ids)
+    ]);
+    if (sourceResult.error) throw sourceResult.error;
+    if (locationResult.error) throw locationResult.error;
+
+    const sourceMap = new Map((sourceResult.data || []).map(x => [x.source_id, x]));
+    sourceViews = sourceLinks.map(link => {
+      const locations = (locationResult.data || []).filter(x => x.source_id === link.source_id);
+      const location = locations.find(x => x.location_role === "PRIMARY" && x.provider === "google-drive")
+        || locations.find(x => x.provider === "google-drive");
+      return { ...link, source: sourceMap.get(link.source_id), location };
+    });
+  }
+
+  inlineTableSequence = 0;
+  const displayTitle = recordDisplayTitle(record);
+  const renderedBody = renderRecordBody(record.body_text);
+  const recordTags = (record.tags || []).map(recordTagLink).join("");
+
   view.innerHTML = `
     <p><a href="#/records">← Записи</a></p>
     <h1>${esc(record.title)}</h1>

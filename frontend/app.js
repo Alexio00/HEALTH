@@ -618,14 +618,24 @@ async function renderClosedCases() {
     const bd = b.closing_record?.record_date || b.metadata?.end_date || "";
     return bd.localeCompare(ad);
   });
+  const categories = uniqueValues(bundled.map(x => x.category));
 
   view.innerHTML = `
     <h1>Закрытые случаи</h1>
     <p class="intro">Завершённые клинические случаи. Внутри каждой карточки — начало, закрывающая REC и полная импортированная цепочка связей.</p>
-    <section class="case-stack">
+    ${bundled.length ? `
+      <div class="filter-bar">
+        <span class="filter-bar-title">Фильтр</span>
+        <label>Дата закрытия от<input id="closed-date-from" type="date"></label>
+        <label>Дата закрытия до<input id="closed-date-to" type="date"></label>
+        ${compactSelect("Категория", "closed-category", categories)}
+      </div>
+    ` : ""}
+    <section class="case-stack" id="closed-case-list">
       ${bundled.length ? bundled.map(x => caseDetails(x, { closed: true })).join("") : empty("Закрытых случаев пока нет")}
     </section>
   `;
+  setupClosedCaseFilters();
 }
 
 async function renderCase(caseKey) {

@@ -84,6 +84,21 @@ This creates/replaces only `health_migration_stage`, loads the complete package,
 
 No public medical-domain row is modified by `stage`.
 
+## Recommended executable chain
+
+For full migration, prefer the fail-closed orchestration command rather than invoking stage/commit/compare manually:
+
+```bash
+python scripts/migration/full_migration.py execute <private-package> \
+  --operation-id <health-operation-uuid> \
+  --source-freeze-operation-id <old-healthdb-freeze-uuid> \
+  --authorization FULL_MIGRATION_AUTHORIZED
+```
+
+`execute` requires the explicit authorization token and requires the operator-confirmed source-freeze operation ID to match the ID cryptographically bound into the sealed package. It then runs staging, exact staging comparison, guarded transactional commit, and exact post-commit comparison against `public`. It stops at `COMMITTED_REGISTRY`; validation and finalization remain separate gates.
+
+If exact post-commit comparison fails, the command fails and the operation is not promoted to `VALIDATED` or `FINALIZED`.
+
 ## Commit
 
 Commit is deliberately impossible without both:

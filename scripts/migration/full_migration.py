@@ -667,6 +667,29 @@ commit;
     print("PASS staging committed to public; operation=COMMITTED_REGISTRY; final validation still required")
 
 
+def execute_full_migration(
+    package: Path,
+    db_url_env: str,
+    schema: str,
+    operation_id: str,
+    source_freeze_operation_id: str,
+    authorization: str,
+) -> None:
+    if authorization != AUTHORIZATION:
+        fail("explicit full-migration authorization token missing")
+    manifest, _ = verify_package(package)
+    if source_freeze_operation_id != manifest["old_healthdb_freeze_operation_id"]:
+        fail("source freeze confirmation does not match sealed package")
+
+    stage_package(package, db_url_env, schema)
+    commit_stage(package, db_url_env, schema, operation_id, authorization)
+    compare_target(package, db_url_env, "public")
+    print(
+        "PASS full migration execution chain through exact public comparison; "
+        "operation remains COMMITTED_REGISTRY pending validations"
+    )
+
+
 def cleanup_stage(db_url_env: str, schema: str, authorization: str) -> None:
     if authorization != AUTHORIZATION:
         fail("explicit full-migration authorization token missing")
@@ -794,6 +817,14 @@ def main() -> None:
     p.add_argument("--operation-id", required=True)
     p.add_argument("--authorization", required=True)
 
+    p = sub.add_parser("execute")
+    p.add_argument("package", type=Path)
+    p.add_argument("--db-url-env", default="SUPABASE_DB_URL")
+    p.add_argument("--schema", default=DEFAULT_STAGE_SCHEMA)
+    p.add_argument("--operation-id", required=True)
+    p.add_argument("--source-freeze-operation-id", required=True)
+    p.add_argument("--authorization", required=True)
+
     p = sub.add_parser("cleanup-stage")
     p.add_argument("--db-url-env", default="SUPABASE_DB_URL")
     p.add_argument("--schema", default=DEFAULT_STAGE_SCHEMA)
@@ -812,6 +843,15 @@ def main() -> None:
         compare_target(args.package, args.db_url_env, args.schema)
     elif args.command == "commit":
         commit_stage(args.package, args.db_url_env, args.schema, args.operation_id, args.authorization)
+    elif args.command == "execute":
+        execute_full_migration(
+            args.package,
+            args.db_url_env,
+            args.schema,
+            args.operation_id,
+            args.source_freeze_operation_id,
+            args.authorization,
+        )
     elif args.command == "cleanup-stage":
         cleanup_stage(args.db_url_env, args.schema, args.authorization)
     elif args.command == "self-test":

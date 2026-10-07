@@ -35,3 +35,13 @@ Compact filter bars appear only when they add value:
 Record tags are clickable. A tag click immediately opens the Records index with that tag active. Filters default to All/empty, so no rows are hidden by default.
 
 REC presentation is owner-facing rather than migration-facing: legacy YAML/frontmatter is hidden, technical source roles/hashes are not shown, Sources open the primary Google Drive original directly, and source page numbers remain visible because they locate the evidence inside multi-page originals.
+
+
+## REC body cleanup
+
+REC pages show owner-facing medical content, not migration wrappers:
+- legacy BEGIN/END FILE and REC wrapper lines are hidden;
+- duplicated legacy metadata/frontmatter is hidden when the same values are already shown in the REC header;
+- the first H1 is used to derive the page title and is not repeated inside the Text Record section;
+- internal record headings use compact typography: 1.5em above and 1em below;
+- raw medical body_text remains unchanged in the database.

@@ -1,6 +1,6 @@
 # Project State
 
-Status: MVP technical acceptance PASS; scheduler bootstrap and one Auth hardening toggle pending
+Status: MVP technical acceptance PASS; scheduler bootstrap pending
 
 ## Confirmed
 
@@ -36,11 +36,10 @@ Schedules are intentionally not enabled until required repository secrets are co
 ## Remaining owner-side setup
 
 - Configure private scheduler secrets required for Supabase database access and the two Google Drive remotes.
-- Enable Supabase Auth leaked-password protection.
 
 ## Advisor status
 
-- Security: only intentional INFO notices for browser-hidden technical tables plus leaked-password protection WARN.
+- Security: intentional INFO notices for browser-hidden technical tables remain. The leaked-password-protection advisor warning is a current Free-plan limitation; Supabase documents this feature as Pro-and-above.
 - Performance: no unindexed foreign keys remain. Newly created indexes may appear as unused until production-sized traffic exists.
 
 ## Next gate

@@ -145,7 +145,7 @@ After commit:
 
 1. rerun all FORMULA validations;
 2. rerun all migration-impacted OPERATION_AUDIT checks;
-3. compare new HEALTH counts/hashes to the final Drive snapshot;
+3. run the migration runner exact table-fingerprint comparison against the sealed final Drive snapshot; counts alone are insufficient;
 4. verify source PRIMARY copies;
 5. verify independent backup state;
 6. keep the old Drive-native HealthDB unchanged and canonical until owner cutover.
@@ -176,3 +176,12 @@ Only after:
 may the owner authorize the new HEALTH platform as canonical.
 
 Until then, Google Drive HealthDB remains the source of truth.
+
+
+## Deployment-region gate
+
+Before owner authorization for full migration, the owner must explicitly accept the current Supabase primary region or authorize migration to another region.
+
+Region choice is intentionally not inferred by automation because changing regions requires a project migration and materially changes data residency/latency.
+
+The chosen region decision must be recorded in private HEALTH technical state before full migration begins.

@@ -972,40 +972,6 @@ async function renderRecord(recordId) {
   bindSortableTables();
 }
 
-async function renderSource(sourceId) {
-  const [{ data: source, error: sourceError }, { data: locations, error: locError }] = await Promise.all([
-    supabase.from("sources").select("source_id,logical_path,original_filename,mime_type,size_bytes,source_date,sha256").eq("source_id", sourceId).single(),
-    supabase.from("source_locations").select("provider,account_alias,provider_object_id,location_role,verified_at").eq("source_id", sourceId).order("location_role")
-  ]);
-
-  if (sourceError) throw sourceError;
-  if (locError) throw locError;
-
-  const locationHtml = list(locations, x => {
-    const isDrive = x.provider === "google-drive" && x.provider_object_id;
-    const href = isDrive ? `https://drive.google.com/open?id=${encodeURIComponent(x.provider_object_id)}` : null;
-    return `<li><strong>${esc(x.location_role)}</strong> · ${esc(x.provider)} · ${esc(x.account_alias)}
-      ${href ? `<p><a href="${href}" target="_blank" rel="noopener noreferrer">Открыть оригинал в Google Drive</a></p>` : ""}
-    </li>`;
-  });
-
-  view.innerHTML = `
-    <p><button class="link-button" type="button" id="back">← Назад</button></p>
-    <h1>${esc(source.original_filename)}</h1>
-    <dl>
-      <dt>ID</dt><dd>${esc(source.source_id)}</dd>
-      <dt>Дата</dt><dd>${esc(fmtDate(source.source_date || ""))}</dd>
-      <dt>MIME</dt><dd>${esc(source.mime_type || "")}</dd>
-      <dt>Размер</dt><dd>${esc(source.size_bytes ?? "")}</dd>
-      <dt>SHA-256</dt><dd class="mono">${esc(source.sha256 || "")}</dd>
-    </dl>
-    <h2>Хранилища</h2>
-    ${locationHtml}
-  `;
-
-  document.querySelector("#back")?.addEventListener("click", () => history.back());
-}
-
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
 }

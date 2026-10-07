@@ -1,6 +1,6 @@
 # Project State
 
-Status: MVP technical acceptance PASS; scheduler bootstrap pending
+Status: MVP operational acceptance PASS; full migration awaiting owner authorization
 
 ## Confirmed
 
@@ -29,17 +29,26 @@ Status: MVP technical acceptance PASS; scheduler bootstrap pending
 
 ## Scheduler bootstrap
 
-Committed to the private scheduler repository as manual-only workflows:
-- HEALTH database backup;
-- HEALTH Sources backup;
-- HEALTH backup verification;
-- HEALTH keepalive.
+Operational bootstrap is PASS.
 
-Schedules are intentionally not enabled until required repository secrets are configured and each workflow passes once manually.
+Independently verified:
+- database backup manual run PASS;
+- Sources backup manual run PASS;
+- backup verification manual run PASS;
+- keepalive manual run PASS;
+- sequential daily pipeline manual dispatch PASS in database → Sources → verification order;
+- repository secrets are functionally present because all secret-dependent jobs completed successfully;
+- GitHub artifacts are not used for backup payloads or inventories;
+- primary Sources remained unchanged across backup inventory checks;
+- independent backup Drive contains the expected database dump set and Sources copy;
+- downloaded database backup round-trip SHA-256 verification PASS;
+- daily backup and keepalive schedules are enabled.
+
+The first automatic cron event has not yet occurred. This is recorded as an observation, not an acceptance blocker, because the scheduled workflow definitions are active and the same daily chain has already passed by manual dispatch.
 
 ## Remaining owner-side setup
 
-- Configure private scheduler secrets required for Supabase database access and the two Google Drive remotes.
+None for MVP operational acceptance.
 
 ## Advisor status
 
@@ -48,8 +57,10 @@ Schedules are intentionally not enabled until required repository secrets are co
 
 ## Next gate
 
-After scheduler secrets are configured, run all four workflows manually once. If they PASS, enable schedules and complete final operational acceptance.
+MVP operational acceptance is complete.
 
-Full migration remains blocked until the owner explicitly authorizes it after this gate.
+Full migration is now blocked only on explicit owner authorization. No migration starts implicitly from this status update.
+
+When authorized, migration starts from a fresh live Drive-native snapshot and isolated staging validation; the representative MVP is replaced rather than treated as an incremental baseline. Cutover remains a separate owner decision.
 
 When authorized, migration starts from a fresh Drive-native snapshot and isolated staging validation; the representative MVP is replaced rather than treated as an incremental baseline. Cutover remains a separate owner decision.

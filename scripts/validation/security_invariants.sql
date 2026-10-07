@@ -6,6 +6,11 @@ declare
   bad text;
   missing text;
 begin
+  -- Make pg_policies / pg_get_expr rendering deterministic. Without this,
+  -- supabase_admin's default search_path includes auth and the exact same
+  -- auth.uid() policy can deparse as uid(), causing a false security failure.
+  perform set_config('search_path', 'pg_catalog,public', true);
+
   -- 1. Every public table must have RLS enabled.
   select string_agg(format('%I.%I', n.nspname, c.relname), ', ')
     into bad

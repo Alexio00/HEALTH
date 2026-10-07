@@ -1,5 +1,12 @@
 # Validation tooling
 
-Validation must fail closed and produce machine-readable results suitable for an MVP acceptance report.
+Validation is fail-closed and public-safe.
 
-At minimum validate record identity, case links, Labs integrity, source links, RLS behavior, backup/restore and old-to-new content equivalence for the selected subset.
+Executable validators:
+
+- `auth_invariants.sql` — single-owner Auth/database binding invariants;
+- `security_invariants.sql` — RLS, policy shape, browser grants, technical-table isolation, public view/function and default-privilege checks;
+- `full_migration_invariants.sql` — post-load snapshot/count/structural migration checks;
+- `public_secret_guard.py` — scans the public repository for secret-like values without flagging ordinary field names.
+
+Exact old-to-new full-migration fidelity is independently proven by canonical table fingerprints in `scripts/migration/full_migration.py`. Counts alone are never accepted as full-migration fidelity.

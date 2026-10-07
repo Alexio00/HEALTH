@@ -53,3 +53,6 @@ Verify the imported subset in the live PWA, then complete backup/restore. Full m
 
 - REC body presentation now hides legacy file wrappers, duplicated frontmatter/metadata and the repeated first H1 while preserving raw body_text unchanged.
 - Internal REC headings use compact spacing (1.5em above, 1em below) and normal whitespace rendering.
+
+
+- REC body heading spacing is compact and uses CSS margins only: no visual blank-line spacing, with pre-heading spacing 1.5× the post-heading spacing.

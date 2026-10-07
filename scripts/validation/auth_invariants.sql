@@ -6,6 +6,8 @@ declare
   v_auth_count integer;
   v_reader_count integer;
   v_mismatch_count integer;
+  v_unconfirmed_count integer;
+  v_anonymous_count integer;
 begin
   select count(*) into v_auth_count
   from auth.users
@@ -29,6 +31,24 @@ begin
 
   if v_mismatch_count <> 0 then
     raise exception 'AUTH: app_reader does not match the sole active auth user';
+  end if;
+
+  select count(*) into v_unconfirmed_count
+  from auth.users
+  where deleted_at is null
+    and email_confirmed_at is null;
+
+  if v_unconfirmed_count <> 0 then
+    raise exception 'AUTH: sole active user email is not confirmed';
+  end if;
+
+  select count(*) into v_anonymous_count
+  from auth.users
+  where deleted_at is null
+    and coalesce(is_anonymous, false);
+
+  if v_anonymous_count <> 0 then
+    raise exception 'AUTH: anonymous Auth user is not allowed for HEALTH';
   end if;
 end
 $$;

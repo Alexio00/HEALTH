@@ -21,14 +21,17 @@ The UI deliberately mirrors the useful reading patterns of the legacy HealthDB f
 - Google Drive object IDs are returned only after authenticated database access.
 
 
-## Table filtering rule
+## Table sorting and filtering
 
-Every table rendered on GitHub Pages must use the shared filterable-table pattern:
-- one filter field per column in the table header;
-- all filters empty by default, so the full dataset is visible;
-- filtering updates immediately while the user types;
-- no separate Apply button.
+All data tables use sortable column headers. Click a header to toggle ascending/descending order; there is no separate row of per-column text filters.
 
-The Records index additionally has global date-from/date-to filters and an exact multi-tag filter. Tags rendered in the Records table are clickable: clicking a tag immediately adds it to the active tag filter and refreshes the table. Active tag filters are removable individually.
+Compact filter bars appear only when they add value:
+- date ranges where relevant;
+- repeated categorical values as live select controls;
+- Records: date range, Tag, Record Type and Confirmation when available;
+- Future Plan: repeated Kind and Status values;
+- Closed Cases: closing date and Category when multiple categories are present.
 
-Questions in Current State use the same collapsible card pattern as chronic states and open cases.
+Record tags are clickable. A tag click immediately opens the Records index with that tag active. Filters default to All/empty, so no rows are hidden by default.
+
+REC presentation is owner-facing rather than migration-facing: legacy YAML/frontmatter is hidden, technical source roles/hashes are not shown, Sources open the primary Google Drive original directly, and source page numbers remain visible because they locate the evidence inside multi-page originals.

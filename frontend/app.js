@@ -158,7 +158,7 @@ function applyTableFilters(table) {
     ? normalizeFilter(document.querySelector("#records-record-type")?.value || "")
     : "";
   const confidence = table.id === "records-index"
-    ? normalizeFilter(document.querySelector("#records-confidence")?.value || "")
+    ? normalizeFilter(document.querySelector("#records-proof-filter")?.value || "")
     : "";
 
   const planKind = table.id === "future-plan-table"
@@ -245,7 +245,7 @@ function setupRecordFilters(initialTags = []) {
   for (const id of ["#records-date-from", "#records-date-to"]) {
     document.querySelector(id)?.addEventListener("input", () => applyTableFilters(table));
   }
-  for (const id of ["#records-record-type", "#records-confidence"]) {
+  for (const id of ["#records-record-type", "#records-proof-filter"]) {
     document.querySelector(id)?.addEventListener("change", () => applyTableFilters(table));
   }
 

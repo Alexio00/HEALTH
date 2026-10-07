@@ -47,3 +47,14 @@ Full migration is forbidden before owner approval of a working vertical slice wi
 ## Cutover
 
 The legacy/current health database stays authoritative until the owner explicitly approves cutover.
+
+
+## PWA table and navigation conventions
+
+- Every table shown on GitHub Pages must provide a filter field for every column in the table header.
+- Table filters are empty by default and must not hide any rows until the owner enters a filter.
+- Filtering is immediate; no separate Apply action is used.
+- The Records index additionally provides global date-from/date-to and multi-tag filters.
+- Tags in the Records table are interactive filter controls: selecting a tag immediately adds it to the active tag filter.
+- Current State questions use the same collapsible-detail reading pattern as chronic states and open cases.
+- These are presentation rules only; they must not weaken read-only browser access or embed medical data in the public repository.

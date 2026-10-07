@@ -664,7 +664,7 @@ async function renderCase(caseKey) {
     ])}</p>
     ${item.summary ? `<p class="lead">${esc(item.summary)}</p>` : ""}
     <dl>
-      <dt>Case key</dt><dd class="mono">${esc(item.case_key)}</dd>
+      <dt>ID случая</dt><dd class="mono">${esc(item.case_key)}</dd>
       <dt>Начало</dt><dd>${esc(fmtDate(item.opening_record?.record_date || item.metadata?.start_date || ""))} · ${recLink(item.opening_record_id)}</dd>
       ${item.closing_record_id ? `<dt>Закрытие</dt><dd>${esc(fmtDate(item.closing_record?.record_date || item.metadata?.end_date || ""))} · ${recLink(item.closing_record_id)}</dd>` : ""}
     </dl>
@@ -743,7 +743,7 @@ async function renderRecords({ initialTags = [] } = {}) {
 
   view.innerHTML = `
     <h1>Записи</h1>
-    <p class="intro">Индекс REC. Структура повторяет старый HealthDB: кликабельная REC, дата, домены/теги, тип, достоверность, краткое содержание и связь со случаем.</p>
+    <p class="intro">Индекс REC: дата, теги, тип записи, подтверждение, краткое содержание и связь со случаем. Нажмите на заголовок столбца для сортировки.</p>
     <div class="filter-bar" aria-label="Фильтр записей">
       <span class="filter-bar-title">Фильтр</span>
       <label>Дата от<input id="records-date-from" type="date"></label>

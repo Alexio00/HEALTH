@@ -1,64 +1,70 @@
 # Project State
 
-Status: MVP operational acceptance PASS; full migration awaiting owner authorization
+Status: PRE-MIGRATION HARDENING; MVP operational acceptance PASS; full migration NOT authorized
 
-## Confirmed
+## Canonical boundary
 
-- Public repository `Alexio00/HEALTH` is intentionally safe for public inspection.
-- Private scheduler repository `Alexio000/SHEDULLER` is connected and contains database backup, Sources backup, verification and keepalive workflows.
 - Existing Drive-native HealthDB remains the canonical source of truth until explicit cutover.
-- Supabase project `HEALTH` is connected and healthy.
-- Core schema, RLS, browser grants and secure default privileges are active.
-- Exactly one approved Auth reader is configured.
-- Read-only PWA is deployed through GitHub Pages and owner authentication is confirmed.
-- Owner visually verified imported data, Sources and navigation in the live PWA.
-- Representative migration subset is imported and source-to-target fidelity checks PASS.
-- Required MVP Source material is copied to primary HEALTH/Sources.
-- Independent Source backup exists on the second Drive account; size and independently recomputed SHA-256 match.
-- Independent logical database snapshot exists on the second Drive account and reads back exactly.
-- Restore test from the independent backup snapshot restored all included tables into an isolated PostgreSQL schema with exact per-table content matches; the test schema was deleted afterward.
-- MVP backup manifest exists on the independent backup Drive.
-- Covering indexes were added for all foreign keys previously reported as unindexed; the performance advisor now reports no unindexed-foreign-key findings.
-- No source-system medical data was deleted or moved.
-- No cutover has occurred.
 - Full migration has not begun.
-- Public-safe full migration procedure is documented in `docs/FULL_MIGRATION_PLAN.md`.
-- Lossless Drive-to-HEALTH transformation rules are documented in `docs/MIGRATION_FIELD_MAP.md`.
-- Full migration will use a fresh live Google Drive snapshot; legacy HealthDB GitHub repositories are excluded as migration inputs.
-- The HEALTH ID reservation ledger now has private JSON metadata capacity for preserving legacy ledger provenance without coercing old text operation IDs into new UUIDs.
+- No cutover has occurred.
+- Legacy HealthDB GitHub repositories are not migration inputs.
 
-## Scheduler bootstrap
+## MVP
 
-Operational bootstrap is PASS.
+MVP operational acceptance is PASS:
+- representative migration fidelity PASS;
+- owner PWA visual verification PASS;
+- read-only Auth/RLS PASS;
+- independent Sources backup PASS;
+- independent database snapshot/readback PASS;
+- isolated MVP restore PASS;
+- scheduler manual bootstrap and sequential daily-chain test PASS;
+- schedules enabled.
 
-Independently verified:
-- database backup manual run PASS;
-- Sources backup manual run PASS;
-- backup verification manual run PASS;
-- keepalive manual run PASS;
-- sequential daily pipeline manual dispatch PASS in database → Sources → verification order;
-- repository secrets are functionally present because all secret-dependent jobs completed successfully;
-- GitHub artifacts are not used for backup payloads or inventories;
-- primary Sources remained unchanged across backup inventory checks;
-- independent backup Drive contains the expected database dump set and Sources copy;
-- downloaded database backup round-trip SHA-256 verification PASS;
-- daily backup and keepalive schedules are enabled.
+## Pre-migration hardening completed in code
 
-The first automatic cron event has not yet occurred. This is recorded as an observation, not an acceptance blocker, because the scheduled workflow definitions are active and the same daily chain has already passed by manual dispatch.
+- PWA runtime JavaScript is first-party only; runtime jsDelivr dependency removed.
+- PWA CSP permits scripts only from self.
+- GitHub Pages Actions are pinned to immutable full commit SHAs.
+- Browser security validation checks exact required SELECT grants, policy shape, app_readers/auth.uid gating, technical-table isolation, default privileges, public views and SECURITY DEFINER functions.
+- Auth validation requires exactly one active confirmed non-anonymous owner and matching app_reader.
+- `supabase/migrations/` mirrors the live timestamped migration ledger and is canonical for schema reconstruction.
+- secure default privileges are now represented in the live migration history.
+- full migration has an executable private-package runner: seal -> verify -> stage -> exact fingerprints -> guarded commit -> exact public compare.
+- full migration commit requires a PREPARED HEALTH operation plus the explicit authorization token `FULL_MIGRATION_AUTHORIZED`.
+- old Drive-native HealthDB freeze is defined through its own PREPARED maintenance Change Log row occupying the single-writer slot.
+- Auth recovery is explicit: create the replacement sole owner and rebind app_readers; medical IDs do not depend on the Auth UUID.
+- recovery documentation requires real restore drills; checksum round-trip alone is not called a restore.
+- scheduler code pins Ubuntu 24.04 and checksum-verifies exact rclone v1.75.1.
+- new scheduler database backups include the Supabase migration-history schema/data.
 
-## Remaining owner-side setup
+## Current validation
 
-None for MVP operational acceptance.
+- Live Auth invariants: PASS after hardening.
+- Live browser/database security invariants: PASS after hardening.
+- Public code CI synthetic migration package seal/verify: PASS.
+- Hardened private scheduler execution test: IN PROGRESS at the time of this state update.
 
-## Advisor status
+## Remaining pre-migration owner gates
 
-- Security: intentional INFO notices for browser-hidden technical tables remain. The leaked-password-protection advisor warning is a current Free-plan limitation; Supabase documents this feature as Pro-and-above.
-- Performance: no unindexed foreign keys remain. Newly created indexes may appear as unused until production-sized traffic exists.
+1. **Supabase region decision** — current project primary region is `us-west-1`. Owner must explicitly accept that region for the full medical dataset or authorize migration to a chosen replacement region before full migration.
+2. **Supabase Auth dashboard** — confirm public self-signup/new-user creation is disabled. SQL validation cannot prove this dashboard-only setting.
+3. **Public Git commit email privacy** — connector-generated public commits expose the configured GitHub author email in commit metadata. Decide whether to accept existing history or perform a separate history/privacy cleanup; configure future Git author privacy outside this repository workflow.
+4. **Owner PWA login smoke after first-party Auth-client hardening** — deployment succeeded, but the owner session should be exercised once before the full-migration gate.
+5. **Final pre-migration audit** — rerun after scheduler validation and owner gates.
 
-## Next gate
+## Non-blocking advisor status
 
-MVP operational acceptance is complete.
+- Technical public tables intentionally have RLS with no browser policies.
+- Leaked-password protection is unavailable on the current Free plan.
+- Newly created covering indexes can remain reported as unused until traffic exercises them.
 
-Full migration is now blocked only on explicit owner authorization. No migration starts implicitly from this status update.
+## Full-migration gate
 
-When authorized, migration starts from a fresh live Drive-native snapshot and isolated staging validation; the representative MVP is replaced rather than treated as an incremental baseline. Cutover remains a separate owner decision.
+Full migration remains forbidden until:
+- hardened scheduler execution test PASS;
+- remaining owner gates resolved;
+- final pre-migration audit PASS;
+- explicit owner authorization.
+
+Cutover remains a separate later owner decision.

@@ -374,7 +374,7 @@ window.addEventListener("hashchange", () => {
 });
 
 async function route() {
-  const raw = location.hash.replace(/^#\\/?/, "") || "";
+  const raw = location.hash.replace(/^#\/?/, "") || "";
   const [pathPart, queryString = ""] = raw.split("?");
   const parts = pathPart.split("/").filter(Boolean);
   const params = new URLSearchParams(queryString);

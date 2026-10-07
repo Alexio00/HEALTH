@@ -1,31 +1,21 @@
 # Frontend
 
-The HEALTH frontend is a static read-only PWA deployed through GitHub Pages.
+The frontend is a static, read-only PWA deployed through GitHub Pages.
 
-## Security model
+## Navigation
 
-- Supabase publishable key only; no secret/service-role key.
-- No sign-up UI.
-- Login uses Supabase Auth email/password.
-- A signed-in user must also exist in public.app_readers.
-- Browser access is SELECT-only and enforced again by PostgreSQL grants + RLS.
-- Service worker caches only same-origin application-shell files.
-- Supabase/Google Drive/API responses are never cached by the service worker.
-- No medical data is committed to this public repository.
+- **Состояние** — current state with questions, chronic states, open cases, medications, monitoring and future plan.
+- **Закрытые случаи** — collapsible closed-case register with opening/closing REC links and the imported case chain.
+- **Записи** — table index with REC, date, tags, type, confidence, summary and case links.
+- **Карточка случая** — chronology of OPEN / CONTINUES / CLOSES relations.
+- **REC** — full record text, related cases and Sources.
+- **Source** — provider-neutral metadata and owner-only Google Drive locator.
 
-## Routes
+The UI deliberately mirrors the useful reading patterns of the legacy HealthDB files while reading live structured data from Supabase.
 
-- #/ — current state
-- #/records — record index
-- #/records/<record_id> — REC
-- #/sources/<source_id> — source metadata and authenticated Drive locator
+## Security boundary
 
-## Runtime
-
-The browser uses @supabase/supabase-js 2.117.2 from a version-pinned CDN URL.
-
-
-## Deployment
-
-GitHub Pages is configured to deploy this directory through `.github/workflows/deploy-pages.yml`.
-The repository Pages source must be set to GitHub Actions.
+- Browser access is SELECT-only.
+- Anonymous users cannot read medical tables.
+- Medical data is never embedded into the public repository or static Pages assets.
+- Google Drive object IDs are returned only after authenticated database access.

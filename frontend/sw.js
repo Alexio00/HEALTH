@@ -1,9 +1,9 @@
-const CACHE = "health-shell-v7";
+const CACHE = "health-shell-v8";
 const SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./app.js",
+  "./app.js",\n  "./supabase-client.js",
   "./config.js",
   "./manifest.webmanifest",
   "./icon.svg"

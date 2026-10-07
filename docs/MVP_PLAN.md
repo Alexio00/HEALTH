@@ -22,49 +22,66 @@ Completed:
 ## Phase 2 — representative migration subset — PASS
 
 Completed:
-- selected a small dependency-safe subset from the canonical Drive-native HealthDB;
-- included ordinary records, source-linked records, laboratory data, a complete Case relation chain and current-state entities;
-- added deterministic random standalone records to reduce cherry-picking bias;
-- preserved existing record IDs;
-- preserved exact source-derived laboratory literals;
-- compared source and target exactly;
-- finalized the import only after validation PASS.
+- dependency-safe representative subset imported from the canonical Drive-native HealthDB;
+- ordinary records, source links, laboratory data, a complete Case chain and current-state entities covered;
+- deterministic random standalone records included;
+- existing record IDs preserved;
+- exact source-derived laboratory literals preserved;
+- source and target compared;
+- import finalized only after validation PASS.
 
-Detailed medical identifiers are retained privately in the target database and are intentionally not committed to this public repository.
+Detailed medical identifiers remain private.
 
 ## Phase 3 — source copy — PASS
 
 Completed:
-- copied only source material required by the representative subset;
-- created provider-neutral source metadata and a physical primary location;
-- verified target file size;
-- independently recomputed SHA-256 and matched the canonical source;
-- preserved provenance links.
+- required representative Source material copied;
+- provider-neutral logical source metadata and physical PRIMARY/BACKUP locations created;
+- target size/checksum verified;
+- provenance links preserved.
 
-## Phase 4 — read-only PWA with real MVP data — IN PROGRESS
+## Phase 4 — read-only PWA — PASS
 
-Implemented:
+Completed:
 - Current State;
-- Index;
-- Record;
-- Source opening.
+- Closed Cases;
+- Records index;
+- Case chronology;
+- REC body;
+- direct authenticated Source opening;
+- sorting/filtering/navigation;
+- owner visual verification;
+- installable static PWA;
+- first-party frontend JavaScript boundary with no runtime third-party JS CDN.
 
-Pending:
-- owner visual verification of imported content and source navigation on the live site;
-- mobile/installability check.
+## Phase 5 — backup / restore — PASS
 
-## Phase 5 — backup / restore — NEXT
+Completed:
+- independent database backup;
+- independent Sources backup;
+- checksums/manifests;
+- backup readback;
+- isolated MVP restore test;
+- scheduler bootstrap;
+- sequential daily backup pipeline;
+- enabled schedules.
 
-- create a portable MVP database dump;
-- copy MVP source files to independent backup storage;
-- create manifest with counts/checksums;
-- verify the backup;
-- restore the dump into an empty PostgreSQL target;
-- verify restored IDs and relations.
+Post-MVP hardening also preserves the live Supabase migration history in future database backups.
 
-## Phase 6 — acceptance report
+## Phase 6 — operational acceptance — PASS
 
-The public repository contains only a non-sensitive template.
-The populated acceptance evidence belongs in the private target database.
+MVP operational acceptance is complete.
 
-Full migration begins only after explicit owner approval.
+## Pre-full-migration hardening
+
+The project now has:
+- canonical timestamped `supabase/migrations/`;
+- exact security/Auth invariant scripts;
+- a private-package full-migration runner with seal/verify/stage/compare/guarded commit;
+- explicit old-HealthDB freeze semantics;
+- Auth recovery documentation;
+- hardened scheduler tooling.
+
+Remaining owner gates are recorded in `docs/PROJECT_STATE.md`.
+
+Full migration begins only after explicit owner approval after the final pre-migration audit.

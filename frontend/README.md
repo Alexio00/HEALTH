@@ -23,3 +23,9 @@ The HEALTH frontend is a static read-only PWA deployed through GitHub Pages.
 ## Runtime
 
 The browser uses @supabase/supabase-js 2.117.2 from a version-pinned CDN URL.
+
+
+## Deployment
+
+GitHub Pages is configured to deploy this directory through `.github/workflows/deploy-pages.yml`.
+The repository Pages source must be set to GitHub Actions.

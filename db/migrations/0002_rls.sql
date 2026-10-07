@@ -95,7 +95,10 @@ create policy questions_reader_select
 
 revoke all on app_readers, domains, records, record_domains, sources,
   source_locations, record_sources, cases, case_links, analytes, labs,
-  medications, monitoring, plan_items, questions from anon;
+  medications, monitoring, plan_items, questions,
+  operations, id_reservations, validation_checks, validation_results, system_state from anon;
+
+revoke all on operations, id_reservations, validation_checks, validation_results, system_state from authenticated;
 
 revoke insert, update, delete on app_readers, domains, records, record_domains,
   sources, source_locations, record_sources, cases, case_links, analytes, labs,

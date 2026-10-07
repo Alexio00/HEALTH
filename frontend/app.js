@@ -585,10 +585,22 @@ async function renderCurrentState() {
 
     <section>
       <h2>Будущий план</h2>
+      ${planKinds.length > 1 || planStatuses.length > 1 ? `
+        <div class="filter-bar">
+          <span class="filter-bar-title">Фильтр</span>
+          ${compactSelect("Вид", "plan-kind-filter", planKinds)}
+          ${compactSelect("Статус", "plan-status-filter", planStatuses)}
+        </div>
+      ` : ""}
       ${filterableTable(["Срок или условие","Вид","Действие","Статус","REC"], planRows, { id: "future-plan-table" })}
     </section>
   `;
   bindFilterableTables();
+  ["#plan-kind-filter", "#plan-status-filter"].forEach(id => {
+    document.querySelector(id)?.addEventListener("change", () => {
+      applyTableFilters(document.querySelector("#future-plan-table"));
+    });
+  });
 }
 
 async function renderClosedCases() {

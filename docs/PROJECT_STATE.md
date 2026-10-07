@@ -43,12 +43,12 @@ MVP operational acceptance is PASS:
 - Live Auth invariants: PASS after hardening.
 - Live browser/database security invariants: PASS after hardening.
 - Public code CI synthetic migration package seal/verify: PASS.
-- Hardened private scheduler execution test: IN PROGRESS at the time of this state update.
+- Hardened private scheduler execution test: PASS (revision 6). Database backup, Sources copy, database/source verification and five-file database round-trip SHA-256 all PASS.
 
 ## Remaining pre-migration owner gates
 
 1. **Supabase region decision** — current project primary region is `us-west-1`. Owner must explicitly accept that region for the full medical dataset or authorize migration to a chosen replacement region before full migration.
-2. **Supabase Auth dashboard** — confirm public self-signup/new-user creation is disabled. SQL validation cannot prove this dashboard-only setting.
+2. **Supabase Auth dashboard** — RESOLVED by prior owner confirmation: public self-signup/new-user creation and anonymous sign-ins were disabled; subsequent hardening did not modify Auth dashboard configuration.
 3. **Public Git commit email privacy** — connector-generated public commits expose the configured GitHub author email in commit metadata. Decide whether to accept existing history or perform a separate history/privacy cleanup; configure future Git author privacy outside this repository workflow.
 4. **Owner PWA login smoke after first-party Auth-client hardening** — deployment succeeded, but the owner session should be exercised once before the full-migration gate.
 5. **Final pre-migration audit** — rerun after scheduler validation and owner gates.

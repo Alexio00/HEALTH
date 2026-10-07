@@ -17,16 +17,31 @@ Detailed medical identifiers, source object IDs, checksums and populated accepta
 - Backup readback integrity: PASS
 - Restore test: PASS
 - Foreign-key performance hardening: PASS
-- Scheduler workflows committed: PASS
-- Scheduler secrets/manual bootstrap: PENDING OWNER SETUP
+- Scheduler manual bootstrap: PASS
+- Scheduler sequential daily-chain test: PASS
+- Scheduler schedules enabled: PASS
+- MVP operational acceptance: PASS
 - Leaked-password protection: NOT AVAILABLE ON CURRENT FREE PLAN (non-blocking)
 - Full migration authorized: NO
 - Cutover: NO
 
+## Post-acceptance hardening
+
+Before full migration the project additionally hardened:
+
+- frontend runtime dependency boundary: first-party JavaScript only, no third-party runtime JS CDN;
+- GitHub Pages actions pinned to immutable full commit SHAs;
+- exact browser grants/RLS policy validation;
+- canonical timestamped Supabase migration history;
+- fail-closed full-migration package/staging/fingerprint runner;
+- explicit Auth recovery procedure;
+- source-system migration freeze procedure;
+- migration-history backup.
+
+These changes do not themselves authorize full migration.
+
 ## Acceptance interpretation
 
-The technical MVP architecture and recovery path are proven.
+The MVP architecture, read-only frontend, backup path and operational scheduler are proven.
 
-Operational acceptance remains conditional on one successful manual run of each scheduler workflow after secrets are configured. Leaked-password protection is not an MVP blocker because it is unavailable on the current Free plan.
-
-Full migration requires a separate explicit owner command.
+Full migration requires a separate explicit owner command after the remaining pre-migration owner gates and final audit.

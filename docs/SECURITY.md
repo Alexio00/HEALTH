@@ -48,3 +48,21 @@ Source files remain private. Browser source opening relies on the owner's authen
 ## Logging
 
 Do not log medical payloads, raw source contents or secrets into public CI logs.
+
+
+## Default privileges
+
+HEALTH uses deny-by-default browser exposure for future Postgres objects created by `postgres`:
+
+- future public tables do not automatically grant privileges to `anon` or `authenticated`;
+- future public sequences do not automatically grant privileges to `anon` or `authenticated`;
+- future public functions do not automatically grant `EXECUTE` to `anon`, `authenticated` or `PUBLIC`;
+- `service_role` retains server-side access and must never be exposed to the browser.
+
+The desired SQL state is recorded in `db/migrations/0003_default_privileges.sql`.
+
+After schema or security changes, run `scripts/validation/security_invariants.sql`. It verifies:
+- RLS on every public table;
+- no public-table privileges for `anon`;
+- SELECT-only access for `authenticated` on the explicit browser allow-list;
+- safe default privileges for future `postgres`-owned objects.

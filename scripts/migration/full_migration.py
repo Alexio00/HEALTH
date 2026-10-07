@@ -649,6 +649,72 @@ def self_test() -> None:
         fail("self-test canonical order failed")
     if pg_array(["a", 'b"c']) != '{"a","b\\\"c"}':
         fail("self-test array encoding failed")
+
+    with tempfile.TemporaryDirectory(prefix="health-migration-selftest-") as raw:
+        package = Path(raw)
+        manifest = {
+            "schema_version": 1,
+            "status": "CAPTURED",
+            "captured_at": "2026-01-01T00:00:00Z",
+            "old_healthdb_validation_pass": True,
+            "old_healthdb_unfinished_operations": 0,
+            "historical_sources_manifest_sha256": "0" * 64,
+            "tables": {},
+        }
+        (package / MANIFEST).write_text(canonical_json(manifest) + "\n", encoding="utf-8")
+        synthetic = {
+            "domains": [{"domain_code":"general","label":"General","active":True,"aliases":[],"metadata":{}}],
+            "analytes": [{"analyte_key":"synthetic","display_name":"Synthetic","aliases":[],"metadata":{}}],
+            "records": [{
+                "record_id":"REC-20260101-001","nnn":1,"record_date":"2026-01-01","title":"Synthetic",
+                "type":"medical-record","record_type":"synthetic","confidence":"test","status":"active",
+                "tags":["general"],"summary":"Synthetic only","body_text":"# Synthetic\nTest body",
+                "provenance_status":"not-applicable","source_label":None,"source_request_id":None,
+                "source_pages":None,"metadata":{}
+            }],
+            "record_domains": [{"record_id":"REC-20260101-001","domain_code":"general"}],
+            "sources": [{
+                "source_id":"SRC-20260101-001","logical_path":"synthetic/source","original_filename":"synthetic.txt",
+                "mime_type":"text/plain","size_bytes":1,"sha256":"a"*64,"source_date":"2026-01-01","metadata":{}
+            }],
+            "source_locations": [{
+                "source_id":"SRC-20260101-001","provider":"synthetic","account_alias":"TEST",
+                "provider_object_id":"synthetic-object","location_role":"PRIMARY","verified_at":"2026-01-01T00:00:00Z"
+            }],
+            "record_sources": [{
+                "record_id":"REC-20260101-001","source_id":"SRC-20260101-001","role":"evidence",
+                "source_pages":None,"provenance":{}
+            }],
+            "cases": [{
+                "case_key":"REC-20260101-001","opening_record_id":"REC-20260101-001","closing_record_id":None,
+                "category":"episode","status":"open","title":"Synthetic","summary":None,"metadata":{}
+            }],
+            "case_links": [{
+                "case_key":"REC-20260101-001","record_id":"REC-20260101-001","relation":"OPEN",
+                "relation_date":"2026-01-01","note":None
+            }],
+            "labs": [{
+                "record_id":"REC-20260101-001","analyte_key":"synthetic","value":"1.0","unit":None,
+                "reference_range":None,"flag":None,"observed_at":None,"observed_on":"2026-01-01",
+                "source_id":"SRC-20260101-001","source_locator":None,"source_name":"Synthetic","note":None,
+                "metadata":{"literal_preserved":True}
+            }],
+            "medications": [],
+            "monitoring": [],
+            "plan_items": [],
+            "questions": [],
+            "id_reservations": [{
+                "nnn":1,"state":"used","record_id":"REC-20260101-001","operation_id":None,
+                "reserved_at":None,"metadata":{}
+            }],
+        }
+        for table in LOAD_ORDER:
+            with (package / f"{table}.jsonl").open("w", encoding="utf-8") as out:
+                for row in synthetic[table]:
+                    out.write(canonical_json(row) + "\n")
+        seal_package(package)
+        verify_package(package)
+
     print("PASS migration runner self-test")
 
 

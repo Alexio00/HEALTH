@@ -961,7 +961,7 @@ async function renderRecord(recordId) {
 
     <section>
       <h2>Текст записи</h2>
-      <article class="record-body">${esc(record.body_text)}</article>
+      <article class="record-body rich-record-body">${renderedBody}</article>
     </section>
 
     <section>
@@ -969,6 +969,7 @@ async function renderRecord(recordId) {
       ${list(sources, x => `<li><a href="#/sources/${encodeURIComponent(x.source_id)}">${esc(x.source_id)}</a><p class="muted">${esc(x.role)} ${esc(x.source_pages || "")}</p></li>`)}
     </section>
   `;
+  bindFilterableTables();
 }
 
 async function renderSource(sourceId) {

@@ -155,6 +155,24 @@ def table_fingerprint(table: str, rows: list[dict[str, Any]]) -> str:
     return sha256_bytes(payload)
 
 
+def sealed_package_fingerprint(manifest: dict[str, Any], tables: dict[str, Any]) -> str:
+    control = {
+        "schema_version": manifest.get("schema_version"),
+        "status": manifest.get("status"),
+        "captured_at": manifest.get("captured_at"),
+        "old_healthdb_validation_pass": manifest.get("old_healthdb_validation_pass"),
+        "old_healthdb_freeze_operation_id": manifest.get("old_healthdb_freeze_operation_id"),
+        "old_healthdb_freeze_state": manifest.get("old_healthdb_freeze_state"),
+        "old_healthdb_other_unfinished_operations": manifest.get("old_healthdb_other_unfinished_operations"),
+        "historical_sources_manifest_sha256": manifest.get("historical_sources_manifest_sha256"),
+    }
+    descriptor = {
+        "control": control,
+        "tables": {name: tables[name]["fingerprint"] for name in sorted(LOAD_ORDER)},
+    }
+    return sha256_bytes(canonical_json(descriptor).encode("utf-8"))
+
+
 def read_manifest(package: Path) -> dict[str, Any]:
     path = package / MANIFEST
     if not path.is_file():
@@ -188,6 +206,8 @@ def read_package(package: Path, require_sealed: bool = True) -> tuple[dict[str, 
     table_meta = manifest.get("tables")
     if require_sealed and not isinstance(table_meta, dict):
         fail("sealed manifest tables are missing")
+    if require_sealed and set(table_meta) != set(LOAD_ORDER):
+        fail("sealed manifest table set mismatch")
 
     data: dict[str, list[dict[str, Any]]] = {}
     for table in LOAD_ORDER:
@@ -209,6 +229,12 @@ def read_package(package: Path, require_sealed: bool = True) -> tuple[dict[str, 
                 fail(f"{table}: file SHA-256 mismatch")
             if meta.get("fingerprint") != table_fingerprint(table, rows):
                 fail(f"{table}: canonical fingerprint mismatch")
+    if require_sealed:
+        if manifest.get("sealed") is not True:
+            fail("sealed manifest flag missing")
+        expected_package_fingerprint = sealed_package_fingerprint(manifest, table_meta)
+        if manifest.get("package_fingerprint") != expected_package_fingerprint:
+            fail("sealed package fingerprint mismatch")
     return manifest, data
 
 
@@ -427,9 +453,7 @@ def seal_package(package: Path) -> None:
         }
     manifest["tables"] = tables
     manifest["sealed"] = True
-    manifest["package_fingerprint"] = sha256_bytes(
-        canonical_json({k: tables[k]["fingerprint"] for k in sorted(tables)}).encode("utf-8")
-    )
+    manifest["package_fingerprint"] = sealed_package_fingerprint(manifest, tables)
     (package / MANIFEST).write_text(canonical_json(manifest) + "\n", encoding="utf-8")
     print(f"PASS package sealed; tables={len(tables)}; rows={sum(x['count'] for x in tables.values())}")
 
@@ -591,6 +615,10 @@ def commit_stage(package: Path, db_url_env: str, schema: str, operation_id: str,
     snapshot = {
         "status": "CAPTURED",
         "captured_at": manifest["captured_at"],
+        "old_healthdb_validation_pass": manifest["old_healthdb_validation_pass"],
+        "old_healthdb_freeze_operation_id": manifest["old_healthdb_freeze_operation_id"],
+        "old_healthdb_freeze_state": manifest["old_healthdb_freeze_state"],
+        "old_healthdb_other_unfinished_operations": manifest["old_healthdb_other_unfinished_operations"],
         "expected_counts": {t: manifest["tables"][t]["count"] for t in LOAD_ORDER},
         "table_fingerprints": {t: manifest["tables"][t]["fingerprint"] for t in LOAD_ORDER},
         "package_fingerprint": manifest.get("package_fingerprint"),
@@ -720,6 +748,20 @@ def self_test() -> None:
                 for row in synthetic[table]:
                     out.write(canonical_json(row) + "\n")
         seal_package(package)
+        verify_package(package)
+
+        sealed = read_manifest(package)
+        original_freeze = sealed["old_healthdb_freeze_operation_id"]
+        sealed["old_healthdb_freeze_operation_id"] = "00000000-0000-4000-8000-000000000002"
+        (package / MANIFEST).write_text(canonical_json(sealed) + "\n", encoding="utf-8")
+        try:
+            verify_package(package)
+            fail("self-test control-metadata tamper was not detected")
+        except MigrationError as exc:
+            if str(exc) != "sealed package fingerprint mismatch":
+                raise
+        sealed["old_healthdb_freeze_operation_id"] = original_freeze
+        (package / MANIFEST).write_text(canonical_json(sealed) + "\n", encoding="utf-8")
         verify_package(package)
 
     print("PASS migration runner self-test")

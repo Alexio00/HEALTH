@@ -63,9 +63,14 @@ python scripts/migration/full_migration.py verify <private-package>
 - SHA-256 of the JSONL file
 - order-independent SHA-256 of canonical target rows
 
-It also writes a package fingerprint.
+It also writes a package fingerprint that binds both:
 
-`verify` is fail-closed and checks referential/domain invariants, ID ledger exactness, case lifecycle shape, literal Labs, source PRIMARY shape, removal of MVP markers, and all recorded hashes.
+- every canonical table fingerprint;
+- the capture control metadata: schema/status, capture timestamp, old-HealthDB validation PASS, freeze operation ID/state, zero other unfinished operations, and the historical Sources manifest SHA-256.
+
+Changing either medical content or freeze/capture control metadata after sealing invalidates the package.
+
+`verify` is fail-closed and checks referential/domain invariants, ID ledger exactness, case lifecycle shape, literal Labs, source PRIMARY shape, removal of MVP markers, the exact table set, all recorded hashes, and the sealed package fingerprint.
 
 ## Staging
 
@@ -99,7 +104,8 @@ The commit:
 3. rejects any competing unfinished HEALTH operation;
 4. replaces the medical-domain tables in one PostgreSQL transaction;
 5. writes private snapshot counts/fingerprints into `system_state/full_migration_snapshot`;
-6. advances only the supplied operation to `COMMITTED_REGISTRY`.
+6. stores the source freeze operation ID/state and control metadata in `system_state/full_migration_snapshot`;
+7. advances only the supplied operation to `COMMITTED_REGISTRY`.
 
 It does **not** set VALIDATED or FINALIZED.
 

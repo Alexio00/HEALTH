@@ -128,7 +128,7 @@ No OPEN/CLOSES decision may be inferred during migration.
 | Drive | HEALTH | Rule |
 |---|---|---|
 | record_id | labs.record_id | exact |
-| date | labs.observed_on | parse exact source date |
+| date | labs.observed_on | parse an unambiguous D.M.YYYY / DD.MM.YYYY source date; preserve raw text |
 | analyte | labs.analyte_key | exact |
 | value | labs.value | literal text, exact |
 | unit | labs.unit | exact/null |
@@ -177,7 +177,7 @@ Set `basis_record_id` only when unambiguous.
 
 ## Plan
 
-Current Drive plan due values are free text, not exact ISO dates.
+Current Drive plan due values are mixed: some are exact D.M.YYYY dates and others are free-text scheduling expressions. Only exact dates populate `due_on`; every raw value is preserved.
 
 | Drive | HEALTH | Rule |
 |---|---|---|
@@ -215,12 +215,13 @@ The new table includes `metadata jsonb` specifically to preserve old ledger prov
 |---|---|---|
 | nnn | id_reservations.nnn | exact integer |
 | state | id_reservations.state | exact |
-| record_id | id_reservations.record_id | exact for used |
+| record_id | id_reservations.record_id | exact for used; null for retired |
+| retired record_id | metadata.legacy_record_id | preserve exact old identifier because HEALTH retired rows require record_id=null |
 | reserved_at | id_reservations.reserved_at | parse exact timestamp/null |
 | operation_id text | metadata.legacy_operation_id | exact/null |
 | note | metadata.legacy_note | exact/null |
 
-Old text operation IDs MUST NOT be coerced into the new UUID `operation_id`.
+Old text operation IDs MUST NOT be coerced into the new UUID `operation_id`. Old retired record IDs MUST NOT be recreated as active/fake REC rows; they are retained only in metadata while the retired NNN remains unavailable.
 
 At the full-migration snapshot gate there should be no old `reserved` rows because the old single-writer gate must be clear. If a reserved row exists, migration is blocked until the old operation is finalized or failed.
 

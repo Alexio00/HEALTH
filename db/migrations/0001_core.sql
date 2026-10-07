@@ -1,7 +1,5 @@
 begin;
 
-create extension if not exists pgcrypto;
-
 create table operations (
   operation_id uuid primary key default gen_random_uuid(),
   operation text not null,

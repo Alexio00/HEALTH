@@ -234,15 +234,19 @@ function addRecordTagFilter(tag) {
   applyTableFilters(document.querySelector("#records-index"));
 }
 
-function setupRecordFilters() {
+function setupRecordFilters(initialTags = []) {
   const table = document.querySelector("#records-index");
   if (!table) return;
 
   recordTagFilters.clear();
+  initialTags.filter(Boolean).forEach(tag => recordTagFilters.add(tag));
   renderActiveRecordTags();
 
   for (const id of ["#records-date-from", "#records-date-to"]) {
     document.querySelector(id)?.addEventListener("input", () => applyTableFilters(table));
+  }
+  for (const id of ["#records-record-type", "#records-confidence"]) {
+    document.querySelector(id)?.addEventListener("change", () => applyTableFilters(table));
   }
 
   const tagSelect = document.querySelector("#records-tag-filter");
@@ -254,6 +258,51 @@ function setupRecordFilters() {
   document.querySelectorAll(".tag-filter-button").forEach(button => {
     button.addEventListener("click", () => addRecordTagFilter(button.dataset.tag));
   });
+
+  applyTableFilters(table);
+}
+
+function setupClosedCaseFilters() {
+  const cards = [...document.querySelectorAll("#closed-case-list .case-card")];
+  if (!cards.length) return;
+
+  const apply = () => {
+    const dateFrom = document.querySelector("#closed-date-from")?.value || "";
+    const dateTo = document.querySelector("#closed-date-to")?.value || "";
+    const category = normalizeFilter(document.querySelector("#closed-category")?.value || "");
+
+    cards.forEach(card => {
+      const endDate = card.dataset.endDate || "";
+      const dateOk = (!dateFrom || !endDate || endDate >= dateFrom) &&
+        (!dateTo || !endDate || endDate <= dateTo);
+      const categoryOk = !category || normalizeFilter(card.dataset.category) === category;
+      card.hidden = !(dateOk && categoryOk);
+    });
+  };
+
+  ["#closed-date-from", "#closed-date-to"].forEach(id => {
+    document.querySelector(id)?.addEventListener("input", apply);
+  });
+  document.querySelector("#closed-category")?.addEventListener("change", apply);
+  apply();
+}
+
+const uniqueValues = (values) =>
+  [...new Set((values || []).map(value => String(value ?? "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "ru", { numeric: true }));
+
+function compactSelect(label, id, values, allLabel = "Все") {
+  const unique = uniqueValues(values);
+  if (unique.length <= 1) return "";
+  return `
+    <label>
+      ${esc(label)}
+      <select id="${esc(id)}">
+        <option value="">${esc(allLabel)}</option>
+        ${unique.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join("")}
+      </select>
+    </label>
+  `;
 }
 
 async function assertReader(userId) {
@@ -328,16 +377,20 @@ window.addEventListener("hashchange", () => {
 });
 
 async function route() {
-  const parts = (location.hash.replace(/^#\/?/, "") || "").split("/").filter(Boolean);
+  const raw = location.hash.replace(/^#\/?/, "") || "";
+  const [pathPart, queryString = ""] = raw.split("?");
+  const parts = pathPart.split("/").filter(Boolean);
+  const params = new URLSearchParams(queryString);
   view.innerHTML = '<p class="muted">Загрузка…</p>';
 
   try {
     if (parts.length === 0) return renderCurrentState();
     if (parts[0] === "closed-cases") return renderClosedCases();
     if (parts[0] === "cases" && parts[1]) return renderCase(decodeURIComponent(parts[1]));
-    if (parts[0] === "records" && parts.length === 1) return renderRecords();
+    if (parts[0] === "records" && parts.length === 1) {
+      return renderRecords({ initialTags: params.getAll("tag") });
+    }
     if (parts[0] === "records" && parts[1]) return renderRecord(decodeURIComponent(parts[1]));
-    if (parts[0] === "sources" && parts[1]) return renderSource(decodeURIComponent(parts[1]));
     view.innerHTML = "<h1>Не найдено</h1>";
   } catch (error) {
     console.error(error);

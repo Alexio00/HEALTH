@@ -767,6 +767,7 @@ async function renderRecords({ initialTags = [] } = {}) {
           ${allTags.map(tag => `<option value="${esc(tag)}">${esc(tag)}</option>`).join("")}
         </select>
       </label>
+      ${compactSelect("Тип записи", "records-record-type", recordTypes)}
       <div class="active-filter-block">
         <span class="muted">Активные теги</span>
         <div id="records-active-tags" class="active-filter-tags"></div>

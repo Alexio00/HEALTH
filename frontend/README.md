@@ -43,5 +43,5 @@ REC pages show owner-facing medical content, not migration wrappers:
 - legacy BEGIN/END FILE and REC wrapper lines are hidden;
 - duplicated legacy metadata/frontmatter is hidden when the same values are already shown in the REC header;
 - the first H1 is used to derive the page title and is not repeated inside the Text Record section;
-- internal record headings use compact typography: 1.5em above and 1em below;
+- internal record headings have spacing before the heading and no extra spacing after it;
 - raw medical body_text remains unchanged in the database.

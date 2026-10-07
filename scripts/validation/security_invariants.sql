@@ -48,23 +48,36 @@ begin
     raise exception 'SECURITY: authenticated has unexpected public privileges: %', bad;
   end if;
 
-  -- 4. postgres defaults for future public tables/sequences/functions
-  -- must not grant anon/authenticated automatically.
-  select string_agg(format('%s/%s=%s', coalesce(n.nspname,'GLOBAL'), d.defaclobjtype, d.defaclacl::text), '; ')
+  -- 4. Future postgres-owned public objects must not auto-grant
+  -- privileges to anon/authenticated, and PUBLIC must not receive
+  -- global EXECUTE on newly created functions.
+  select string_agg(
+           format('%s/%s grantee=%s privilege=%s',
+             coalesce(n.nspname,'GLOBAL'),
+             d.defaclobjtype,
+             coalesce(r.rolname,'PUBLIC'),
+             x.privilege_type
+           ),
+           '; '
+         )
     into bad
   from pg_default_acl d
   left join pg_namespace n on n.oid = d.defaclnamespace
+  cross join lateral aclexplode(d.defaclacl) x
+  left join pg_roles r on r.oid = x.grantee
   where d.defaclrole = (select oid from pg_roles where rolname = 'postgres')
     and (
-      (n.nspname = 'public' and d.defaclobjtype in ('r','S','f')
-        and (
-          d.defaclacl::text like '%anon=%'
-          or d.defaclacl::text like '%authenticated=%'
-        )
+      (
+        n.nspname = 'public'
+        and d.defaclobjtype in ('r','S','f')
+        and r.rolname in ('anon','authenticated')
       )
       or
-      (n.nspname is null and d.defaclobjtype = 'f'
-        and d.defaclacl::text like '%=X/%'
+      (
+        n.nspname is null
+        and d.defaclobjtype = 'f'
+        and x.grantee = 0
+        and x.privilege_type = 'EXECUTE'
       )
     );
 

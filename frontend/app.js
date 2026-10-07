@@ -110,9 +110,18 @@ function sortableTable(headers, rows, { id, emptyLabel = "Пока нет дан
 }
 
 function compareSortValues(a, b) {
+  const normalizeDate = (value) => {
+    const text = String(value ?? "").trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+    const m = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+  };
+
   const av = String(a ?? "").trim();
   const bv = String(b ?? "").trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(av) && /^\d{4}-\d{2}-\d{2}/.test(bv)) return av.localeCompare(bv);
+  const ad = normalizeDate(av);
+  const bd = normalizeDate(bv);
+  if (ad && bd) return ad.localeCompare(bd);
 
   const an = Number(av.replace(",", "."));
   const bn = Number(bv.replace(",", "."));

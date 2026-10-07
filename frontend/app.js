@@ -271,6 +271,28 @@ function setupRecordFilters(initialTags = []) {
   applyRecordFilters();
 }
 
+function setupClosedCaseFilters() {
+  const cards = [...document.querySelectorAll("#closed-case-list .case-card")];
+  if (!cards.length) return;
+
+  const apply = () => {
+    const dateFrom = document.querySelector("#closed-date-from")?.value || "";
+    const dateTo = document.querySelector("#closed-date-to")?.value || "";
+    const category = normalizeFilter(document.querySelector("#closed-category")?.value || "");
+
+    cards.forEach(card => {
+      const endDate = card.dataset.endDate || "";
+      const dateOk = (!dateFrom || !endDate || endDate >= dateFrom) && (!dateTo || !endDate || endDate <= dateTo);
+      const categoryOk = !category || normalizeFilter(card.dataset.category) === category;
+      card.hidden = !(dateOk && categoryOk);
+    });
+  };
+
+  ["#closed-date-from", "#closed-date-to"].forEach(id => document.querySelector(id)?.addEventListener("input", apply));
+  document.querySelector("#closed-category")?.addEventListener("change", apply);
+  apply();
+}
+
 async function assertReader(userId) {
   const { data, error } = await supabase
     .from("app_readers")
@@ -343,16 +365,18 @@ window.addEventListener("hashchange", () => {
 });
 
 async function route() {
-  const parts = (location.hash.replace(/^#\/?/, "") || "").split("/").filter(Boolean);
+  const raw = location.hash.replace(/^#\\/?/, "") || "";
+  const [pathPart, queryString = ""] = raw.split("?");
+  const parts = pathPart.split("/").filter(Boolean);
+  const params = new URLSearchParams(queryString);
   view.innerHTML = '<p class="muted">Загрузка…</p>';
 
   try {
     if (parts.length === 0) return renderCurrentState();
     if (parts[0] === "closed-cases") return renderClosedCases();
     if (parts[0] === "cases" && parts[1]) return renderCase(decodeURIComponent(parts[1]));
-    if (parts[0] === "records" && parts.length === 1) return renderRecords();
+    if (parts[0] === "records" && parts.length === 1) return renderRecords({ initialTags: params.getAll("tag") });
     if (parts[0] === "records" && parts[1]) return renderRecord(decodeURIComponent(parts[1]));
-    if (parts[0] === "sources" && parts[1]) return renderSource(decodeURIComponent(parts[1]));
     view.innerHTML = "<h1>Не найдено</h1>";
   } catch (error) {
     console.error(error);
@@ -424,7 +448,7 @@ function caseDetails(item, { closed = false, open = false } = {}) {
   const dateSuffix = closed && endDate ? ` <span class="summary-date">· закрыт ${esc(fmtDate(endDate))}</span>` : "";
 
   return `
-    <details class="case-card" ${open ? "open" : ""}>
+    <details class="case-card" data-category="${esc(item.category || "")}" data-end-date="${esc(item.closing_record?.record_date || item.metadata?.end_date || "")}" ${open ? "open" : ""}>
       <summary><strong>${esc(item.title)}</strong>${dateSuffix}</summary>
       <div class="case-body">
         ${item.summary ? `<p class="lead-small">${esc(item.summary)}</p>` : ""}
@@ -437,7 +461,6 @@ function caseDetails(item, { closed = false, open = false } = {}) {
         </dl>
         <h3>Все REC</h3>
         ${linked ? `<ul class="rec-links">${linked}</ul>` : empty("Связанные REC пока не импортированы")}
-        <p class="case-action">${caseLink(item.case_key, "Открыть карточку случая →")}</p>
       </div>
     </details>
   `;
@@ -503,14 +526,19 @@ async function renderCurrentState() {
     const due = x.metadata?.due_text || fmtDate(x.due_on) || "";
     const kind = x.metadata?.kind || "";
     const status = x.metadata?.source_status || "запланировано";
-    return [
-      tableCell(esc(due), due),
-      tableCell(esc(kind), kind),
-      tableCell(esc(x.title), x.title),
-      tableCell(esc(status), status),
-      tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
-    ];
+    return {
+      attrs: { "data-kind": kind, "data-status": status },
+      cells: [
+        tableCell(esc(due), due),
+        tableCell(esc(kind), kind),
+        tableCell(esc(x.title), x.title),
+        tableCell(esc(status), status),
+        tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
+      ]
+    };
   });
+  const planKinds = uniqueValues((plan.data || []).map(x => x.metadata?.kind || ""));
+  const planStatuses = uniqueValues((plan.data || []).map(x => x.metadata?.source_status || "запланировано"));
 
   view.innerHTML = `
     <h1>Текущее состояние</h1>
@@ -543,10 +571,21 @@ async function renderCurrentState() {
 
     <section>
       <h2>Будущий план</h2>
+      ${planKinds.length > 1 || planStatuses.length > 1 ? `
+        <div class="filter-bar" aria-label="Фильтр будущего плана">
+          <span class="filter-bar-title">Фильтр</span>
+          ${compactSelect("Вид", "plan-kind-filter", planKinds)}
+          ${compactSelect("Статус", "plan-status-filter", planStatuses)}
+        </div>
+      ` : ""}
       ${filterableTable(["Срок или условие","Вид","Действие","Статус","REC"], planRows, { id: "future-plan-table" })}
     </section>
   `;
   bindFilterableTables();
+  bindAttributeFilters("future-plan-table", [
+    { id: "plan-kind-filter", attr: "kind" },
+    { id: "plan-status-filter", attr: "status" }
+  ]);
 }
 
 async function renderClosedCases() {
@@ -565,13 +604,31 @@ async function renderClosedCases() {
     return bd.localeCompare(ad);
   });
 
+  const categories = uniqueValues(bundled.map(x => x.category));
+
   view.innerHTML = `
     <h1>Закрытые случаи</h1>
     <p class="intro">Завершённые клинические случаи. Внутри каждой карточки — начало, закрывающая REC и полная импортированная цепочка связей.</p>
-    <section class="case-stack">
+    ${bundled.length ? `
+      <div class="filter-bar" aria-label="Фильтр закрытых случаев">
+        <span class="filter-bar-title">Фильтр</span>
+        <label>Дата закрытия от<input id="closed-date-from" type="date"></label>
+        <label>Дата закрытия до<input id="closed-date-to" type="date"></label>
+        ${categories.length > 1 ? `
+          <label>Категория
+            <select id="closed-category">
+              <option value="">Все</option>
+              ${categories.map(value => `<option value="${esc(value)}">${esc(value === "chronic" ? "Хроническое состояние" : "Случай / эпизод")}</option>`).join("")}
+            </select>
+          </label>
+        ` : ""}
+      </div>
+    ` : ""}
+    <section class="case-stack" id="closed-case-list">
       ${bundled.length ? bundled.map(x => caseDetails(x, { closed: true })).join("") : empty("Закрытых случаев пока нет")}
     </section>
   `;
+  setupClosedCaseFilters();
 }
 
 async function renderCase(caseKey) {
@@ -619,7 +676,7 @@ async function renderCase(caseKey) {
   bindFilterableTables();
 }
 
-async function renderRecords() {
+async function renderRecords({ initialTags = [] } = {}) {
   const [{ data: records, error: recordsError }, { data: links, error: linksError }, { data: cases, error: casesError }] = await Promise.all([
     supabase
       .from("records")
@@ -647,6 +704,8 @@ async function renderRecords() {
   }
 
   const allTags = [...new Set((records || []).flatMap(r => r.tags || []))].sort((a, b) => a.localeCompare(b, "ru"));
+  const recordTypes = uniqueValues((records || []).map(r => r.record_type || r.type || ""));
+  const confidences = uniqueValues((records || []).map(r => r.confidence || ""));
 
   const rows = (records || []).map(r => {
     const caseCell = (linksByRecord.get(r.record_id) || []).map(link => {
@@ -663,7 +722,9 @@ async function renderRecords() {
     return {
       attrs: {
         "data-record-date": r.record_date || "",
-        "data-tags": (r.tags || []).map(normalizeFilter).join("||")
+        "data-tags": (r.tags || []).map(normalizeFilter).join("||"),
+        "data-record-type": r.record_type || r.type || "",
+        "data-confidence": r.confidence || ""
       },
       cells: [
         tableCell(recLink(r.record_id), r.record_id),
@@ -683,31 +744,27 @@ async function renderRecords() {
   view.innerHTML = `
     <h1>Записи</h1>
     <p class="intro">Индекс REC. Структура повторяет старый HealthDB: кликабельная REC, дата, домены/теги, тип, достоверность, краткое содержание и связь со случаем.</p>
-    <div class="global-filters" aria-label="Общие фильтры записей">
-      <label>
-        Дата от
-        <input id="records-date-from" type="date">
-      </label>
-      <label>
-        Дата до
-        <input id="records-date-to" type="date">
-      </label>
-      <label>
-        Добавить тег
+    <div class="filter-bar" aria-label="Фильтр записей">
+      <span class="filter-bar-title">Фильтр</span>
+      <label>Дата от<input id="records-date-from" type="date"></label>
+      <label>Дата до<input id="records-date-to" type="date"></label>
+      <label>Тег
         <select id="records-tag-filter">
-          <option value="">Без фильтра</option>
+          <option value="">Все</option>
           ${allTags.map(tag => `<option value="${esc(tag)}">${esc(tag)}</option>`).join("")}
         </select>
       </label>
+      ${compactSelect("Тип записи", "records-record-type", recordTypes)}
+      ${compactSelect("Подтверждение", "records-confidence", confidences)}
       <div class="active-filter-block">
-        <span class="muted">Активные теги</span>
+        <span class="filter-bar-label">Активные теги</span>
         <div id="records-active-tags" class="active-filter-tags"></div>
       </div>
     </div>
-    ${filterableTable(["REC","Дата","Домен / теги","Тип записи","Достоверность","Кратко","Кейс"], rows, { id: "records-index" })}
+    ${filterableTable(["REC","Дата","Домен / теги","Тип записи","Подтверждение","Кратко","Кейс"], rows, { id: "records-index" })}
   `;
   bindFilterableTables();
-  setupRecordFilters();
+  setupRecordFilters(initialTags);
 }
 
 async function renderRecord(recordId) {

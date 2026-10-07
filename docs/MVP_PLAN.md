@@ -7,78 +7,64 @@ Build a small vertical slice that proves the new architecture before any full mi
 ## Phase 1 — live target bootstrap — PASS
 
 Completed:
-- Supabase project connected.
-- Core schema applied.
-- RLS and browser grants hardened.
-- secure default privileges activated.
-- exactly one allowed Auth reader registered.
-- anonymous table access denied.
-- authenticated owner SELECT verified.
-- authenticated INSERT/UPDATE/DELETE denied.
-- technical tables hidden from browser roles.
-- read-only PWA deployed through GitHub Pages.
-- owner verified the login screen and successful browser authentication.
+- Supabase project connected;
+- core schema applied;
+- RLS and browser grants hardened;
+- secure default privileges activated;
+- exactly one allowed Auth reader registered;
+- anonymous table access denied;
+- authenticated owner SELECT verified;
+- authenticated INSERT/UPDATE/DELETE denied;
+- technical tables hidden from browser roles;
+- read-only PWA deployed through GitHub Pages;
+- owner verified successful browser authentication.
 
-## Phase 2 — representative migration subset — NEXT, REQUIRES OWNER IMPORT COMMAND
+## Phase 2 — representative migration subset — PASS
 
-Select the minimum subset that covers:
-- ordinary REC;
-- source-linked REC;
-- Labs;
-- Case relation;
-- Plan/Question/Monitoring when practical;
-- random REC samples.
+Completed:
+- selected a small dependency-safe subset from the canonical Drive-native HealthDB;
+- included ordinary records, source-linked records, laboratory data, a complete Case relation chain and current-state entities;
+- added deterministic random standalone records to reduce cherry-picking bias;
+- preserved existing record IDs;
+- preserved exact source-derived laboratory literals;
+- compared source and target exactly;
+- finalized the import only after validation PASS.
 
-Selection rules:
-- use only the canonical Drive-native HealthDB as the source;
-- preserve existing RECORD_ID values;
-- do not allocate replacement IDs for migrated records;
-- do not infer missing provenance or medical facts;
-- keep Labs value, precision, unit, reference range and source flag literal;
-- treat empty, absent and explicit negative values as different states;
-- read only Sources required by selected REC;
-- record a reproducible selection manifest before import.
+Detailed medical identifiers are retained privately in the target database and are intentionally not committed to this public repository.
 
-## Phase 3 — source copy
+## Phase 3 — source copy — PASS
 
-Copy only source files required by the MVP into primary target source storage.
+Completed:
+- copied only source material required by the representative subset;
+- created provider-neutral source metadata and a physical primary location;
+- verified target file size;
+- independently recomputed SHA-256 and matched the canonical source;
+- preserved provenance links.
 
-For each source:
-- create provider-neutral source metadata;
-- store physical provider location separately;
-- verify the copied object can be opened;
-- preserve available checksum/size/provenance metadata.
+## Phase 4 — read-only PWA with real MVP data — IN PROGRESS
 
-## Phase 4 — read-only PWA with real MVP data
-
-Verify:
+Implemented:
 - Current State;
 - Index;
 - Record;
 - Source opening.
 
-Render record text from PostgreSQL, not from the legacy document store.
+Pending:
+- owner visual verification of imported content and source navigation on the live site;
+- mobile/installability check.
 
-## Phase 5 — backup / restore
+## Phase 5 — backup / restore — NEXT
 
-- create an MVP database dump;
+- create a portable MVP database dump;
 - copy MVP source files to independent backup storage;
-- verify checksums/counts;
+- create manifest with counts/checksums;
+- verify the backup;
 - restore the dump into an empty PostgreSQL target;
 - verify restored IDs and relations.
 
 ## Phase 6 — acceptance report
 
-Report:
-- migrated REC;
-- created entities/tables;
-- copied sources;
-- old -> new comparison;
-- validation results;
-- auth/RLS results;
-- source-link results;
-- latency;
-- backup/restore result;
-- known limitations.
+The public repository contains only a non-sensitive template.
+The populated acceptance evidence belongs in the private target database.
 
 Full migration begins only after explicit owner approval.

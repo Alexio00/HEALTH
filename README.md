@@ -19,11 +19,11 @@ This repository contains only application code, database schema/migrations, API 
 ## Repository layout
 
 - `docs/` — architecture, data model, security, migration, recovery and project state.
-- `db/migrations/` — portable PostgreSQL migrations.
+- `supabase/migrations/` — canonical timestamped Supabase migration history.\n- `db/migrations/` — earlier aggregated migration snapshots retained for reference.
 - `db/tests/` — schema/invariant tests.
 - `api/` — Health API implementation/contracts.
 - `frontend/` — read-only PWA.
-- `scripts/migration/` — migration tooling.
+- `scripts/migration/` — fail-closed full-migration package/staging/fingerprint tooling.
 - `scripts/validation/` — validation tooling.
 - `tests/` — integration/e2e tests.
 - `.github/workflows/` — public-repository workflows that are safe without medical data.

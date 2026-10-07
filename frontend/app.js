@@ -56,16 +56,156 @@ function chips(items) {
   return `<span class="chips">${values.map(x => `<span class="chip">${esc(x)}</span>`).join("")}</span>`;
 }
 
-function table(headers, rows, emptyLabel = "Пока нет данных") {
+const tableCell = (html, filterValue = "") => ({
+  html,
+  filterValue: String(filterValue ?? "")
+});
+
+const normalizeFilter = (value) => String(value ?? "").trim().toLocaleLowerCase("ru");
+const recordTagFilters = new Set();
+
+function filterableTable(headers, rows, { id, emptyLabel = "Пока нет данных" } = {}) {
   if (!rows?.length) return empty(emptyLabel);
+  if (!id) throw new Error("filterableTable requires a stable id");
+
+  const body = rows.map(rowSpec => {
+    const spec = Array.isArray(rowSpec) ? { cells: rowSpec, attrs: {} } : rowSpec;
+    const attrs = Object.entries(spec.attrs || {})
+      .map(([key, value]) => `${esc(key)}="${esc(value)}"`)
+      .join(" ");
+
+    const cells = spec.cells.map(cellSpec => {
+      const cell = typeof cellSpec === "object" && cellSpec !== null && "html" in cellSpec
+        ? cellSpec
+        : tableCell(esc(cellSpec), cellSpec);
+      return `<td data-filter-value="${esc(cell.filterValue)}">${cell.html}</td>`;
+    }).join("");
+
+    return `<tr ${attrs}>${cells}</tr>`;
+  }).join("");
+
   return `
     <div class="table-wrap">
-      <table class="data-table">
-        <thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead>
-        <tbody>${rows.join("")}</tbody>
+      <table class="data-table" id="${esc(id)}" data-filterable>
+        <thead>
+          <tr>${headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr>
+          <tr class="column-filters">
+            ${headers.map((h, index) => `
+              <th>
+                <input type="search"
+                  class="column-filter"
+                  data-column="${index}"
+                  placeholder="Фильтр"
+                  aria-label="Фильтр: ${esc(h)}"
+                  autocomplete="off">
+              </th>
+            `).join("")}
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
       </table>
     </div>
+    <p class="table-count muted" id="${esc(id)}-count"></p>
   `;
+}
+
+function applyTableFilters(table) {
+  if (!table) return;
+
+  const columnFilters = [...table.querySelectorAll(".column-filter")].map(input => ({
+    column: Number(input.dataset.column),
+    value: normalizeFilter(input.value)
+  }));
+
+  const dateFrom = table.id === "records-index" ? document.querySelector("#records-date-from")?.value || "" : "";
+  const dateTo = table.id === "records-index" ? document.querySelector("#records-date-to")?.value || "" : "";
+
+  let visible = 0;
+  const rows = [...table.tBodies[0].rows];
+
+  for (const row of rows) {
+    const columnMatch = columnFilters.every(filter => {
+      if (!filter.value) return true;
+      const cell = row.cells[filter.column];
+      return normalizeFilter(cell?.dataset.filterValue || cell?.textContent).includes(filter.value);
+    });
+
+    let globalMatch = true;
+    if (table.id === "records-index") {
+      const rowDate = row.dataset.recordDate || "";
+      if (dateFrom && rowDate && rowDate < dateFrom) globalMatch = false;
+      if (dateTo && rowDate && rowDate > dateTo) globalMatch = false;
+
+      const rowTags = (row.dataset.tags || "").split("||").filter(Boolean);
+      if ([...recordTagFilters].some(tag => !rowTags.includes(normalizeFilter(tag)))) {
+        globalMatch = false;
+      }
+    }
+
+    row.hidden = !(columnMatch && globalMatch);
+    if (!row.hidden) visible += 1;
+  }
+
+  const count = document.querySelector(`#${CSS.escape(table.id)}-count`);
+  if (count) count.textContent = `Показано: ${visible} из ${rows.length}`;
+}
+
+function bindFilterableTables() {
+  document.querySelectorAll("table[data-filterable]").forEach(table => {
+    table.querySelectorAll(".column-filter").forEach(input => {
+      input.addEventListener("input", () => applyTableFilters(table));
+    });
+    applyTableFilters(table);
+  });
+}
+
+function renderActiveRecordTags() {
+  const holder = document.querySelector("#records-active-tags");
+  if (!holder) return;
+
+  holder.innerHTML = [...recordTagFilters].map(tag => `
+    <button type="button" class="active-filter-tag" data-remove-tag="${esc(tag)}" title="Убрать фильтр">
+      ${esc(tag)} ×
+    </button>
+  `).join("");
+
+  holder.querySelectorAll("[data-remove-tag]").forEach(button => {
+    button.addEventListener("click", () => {
+      recordTagFilters.delete(button.dataset.removeTag);
+      renderActiveRecordTags();
+      applyTableFilters(document.querySelector("#records-index"));
+    });
+  });
+}
+
+function addRecordTagFilter(tag) {
+  const value = String(tag || "").trim();
+  if (!value) return;
+  recordTagFilters.add(value);
+  renderActiveRecordTags();
+  applyTableFilters(document.querySelector("#records-index"));
+}
+
+function setupRecordFilters() {
+  const table = document.querySelector("#records-index");
+  if (!table) return;
+
+  recordTagFilters.clear();
+  renderActiveRecordTags();
+
+  for (const id of ["#records-date-from", "#records-date-to"]) {
+    document.querySelector(id)?.addEventListener("input", () => applyTableFilters(table));
+  }
+
+  const tagSelect = document.querySelector("#records-tag-filter");
+  tagSelect?.addEventListener("change", () => {
+    if (tagSelect.value) addRecordTagFilter(tagSelect.value);
+    tagSelect.value = "";
+  });
+
+  document.querySelectorAll(".tag-filter-button").forEach(button => {
+    button.addEventListener("click", () => addRecordTagFilter(button.dataset.tag));
+  });
 }
 
 async function assertReader(userId) {
@@ -240,13 +380,39 @@ function caseDetails(item, { closed = false, open = false } = {}) {
   `;
 }
 
+
+function questionDetails(item) {
+  const meta = item.metadata || {};
+  const created = meta.created_date || "";
+  const note = meta.note || "";
+  const related = Array.isArray(meta.source_record_ids) ? meta.source_record_ids : [];
+
+  return `
+    <details class="case-card question-card">
+      <summary><strong>${esc(item.question)}</strong></summary>
+      <div class="case-body">
+        <dl class="meta-list">
+          <dt>Статус</dt><dd>Открыт</dd>
+          ${created ? `<dt>Создан</dt><dd>${esc(created)}</dd>` : ""}
+          ${item.basis_record_id ? `<dt>Основание REC</dt><dd>${recLink(item.basis_record_id)}</dd>` : ""}
+        </dl>
+        ${note ? `<p class="lead-small">${esc(note)}</p>` : ""}
+        ${related.length ? `
+          <h3>Связанные REC</h3>
+          <p class="rec-inline">${related.map(id => recLink(id)).join(", ")}</p>
+        ` : ""}
+      </div>
+    </details>
+  `;
+}
+
 async function renderCurrentState() {
   const [cases, meds, monitoring, plan, questions] = await Promise.all([
     supabase.from("cases").select("case_key,title,summary,status,category,opening_record_id,closing_record_id,metadata").eq("status","open").order("title"),
     supabase.from("medications").select("medication_id,name,dose,schedule,status,basis_record_id").eq("status","active").order("name"),
     supabase.from("monitoring").select("monitoring_id,title,cadence_text,status,basis_record_id").eq("status","active").order("title"),
     supabase.from("plan_items").select("plan_item_id,title,due_on,status,basis_record_id,metadata").eq("status","planned").order("due_on",{ascending:true,nullsFirst:false}),
-    supabase.from("questions").select("question_id,question,status,basis_record_id").eq("status","open").order("question_id")
+    supabase.from("questions").select("question_id,question,status,basis_record_id,metadata").eq("status","open").order("question_id")
   ]);
 
   for (const result of [cases, meds, monitoring, plan, questions]) {
@@ -257,32 +423,31 @@ async function renderCurrentState() {
   const chronic = bundled.filter(x => x.category === "chronic");
   const episodes = bundled.filter(x => x.category !== "chronic");
 
-  const medsRows = (meds.data || []).map(x => `
-    <tr>
-      <td><strong>${esc(x.name)}</strong></td>
-      <td>${esc(x.dose || "")}</td>
-      <td>${esc(x.schedule || "")}</td>
-      <td>${x.basis_record_id ? recLink(x.basis_record_id) : ""}</td>
-    </tr>
-  `);
+  const medsRows = (meds.data || []).map(x => [
+    tableCell(`<strong>${esc(x.name)}</strong>`, x.name),
+    tableCell(esc(x.dose || ""), x.dose || ""),
+    tableCell(esc(x.schedule || ""), x.schedule || ""),
+    tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
+  ]);
 
-  const monitoringRows = (monitoring.data || []).map(x => `
-    <tr>
-      <td><strong>${esc(x.title)}</strong></td>
-      <td>${esc(x.cadence_text || "")}</td>
-      <td>${x.basis_record_id ? recLink(x.basis_record_id) : ""}</td>
-    </tr>
-  `);
+  const monitoringRows = (monitoring.data || []).map(x => [
+    tableCell(`<strong>${esc(x.title)}</strong>`, x.title),
+    tableCell(esc(x.cadence_text || ""), x.cadence_text || ""),
+    tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
+  ]);
 
-  const planRows = (plan.data || []).map(x => `
-    <tr>
-      <td>${esc(x.metadata?.due_text || fmtDate(x.due_on) || "")}</td>
-      <td>${esc(x.metadata?.kind || "")}</td>
-      <td>${esc(x.title)}</td>
-      <td>${esc(x.metadata?.source_status || "запланировано")}</td>
-      <td>${x.basis_record_id ? recLink(x.basis_record_id) : ""}</td>
-    </tr>
-  `);
+  const planRows = (plan.data || []).map(x => {
+    const due = x.metadata?.due_text || fmtDate(x.due_on) || "";
+    const kind = x.metadata?.kind || "";
+    const status = x.metadata?.source_status || "запланировано";
+    return [
+      tableCell(esc(due), due),
+      tableCell(esc(kind), kind),
+      tableCell(esc(x.title), x.title),
+      tableCell(esc(status), status),
+      tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
+    ];
+  });
 
   view.innerHTML = `
     <h1>Текущее состояние</h1>
@@ -290,12 +455,7 @@ async function renderCurrentState() {
 
     <section>
       <h2>Вопросы по медкарте</h2>
-      ${list(questions.data, x => `
-        <li>
-          <p>${esc(x.question)}</p>
-          ${x.basis_record_id ? `<p class="muted">Основание: ${recLink(x.basis_record_id)}</p>` : ""}
-        </li>
-      `)}
+      ${questions.data?.length ? questions.data.map(questionDetails).join("") : empty("Открытых вопросов нет")}
     </section>
 
     <section>
@@ -310,19 +470,20 @@ async function renderCurrentState() {
 
     <section>
       <h2>Текущие лекарственные средства</h2>
-      ${table(["Препарат","Дозировка","Режим","REC"], medsRows)}
+      ${filterableTable(["Препарат","Дозировка","Режим","REC"], medsRows, { id: "medications-table" })}
     </section>
 
     <section>
       <h2>Мониторинг</h2>
-      ${table(["Что контролировать","Периодичность","REC"], monitoringRows)}
+      ${filterableTable(["Что контролировать","Периодичность","REC"], monitoringRows, { id: "monitoring-table" })}
     </section>
 
     <section>
       <h2>Будущий план</h2>
-      ${table(["Срок или условие","Вид","Действие","Статус","REC"], planRows)}
+      ${filterableTable(["Срок или условие","Вид","Действие","Статус","REC"], planRows, { id: "future-plan-table" })}
     </section>
   `;
+  bindFilterableTables();
 }
 
 async function renderClosedCases() {
@@ -365,14 +526,13 @@ async function renderCase(caseKey) {
 
   const rows = item.links.map(link => {
     const r = item.record_map.get(link.record_id);
-    return `
-      <tr>
-        <td><span class="relation">${esc(link.relation)}</span></td>
-        <td>${esc(fmtDate(link.relation_date || r?.record_date || ""))}</td>
-        <td>${recLink(link.record_id)}</td>
-        <td>${esc(r?.title || "")}</td>
-      </tr>
-    `;
+    const date = fmtDate(link.relation_date || r?.record_date || "");
+    return [
+      tableCell(`<span class="relation">${esc(link.relation)}</span>`, link.relation),
+      tableCell(esc(date), date),
+      tableCell(recLink(link.record_id), link.record_id),
+      tableCell(esc(r?.title || ""), r?.title || "")
+    ];
   });
 
   view.innerHTML = `
@@ -390,9 +550,10 @@ async function renderCase(caseKey) {
     </dl>
     <section>
       <h2>Хронология REC</h2>
-      ${table(["Связь","Дата","REC","Запись"], rows)}
+      ${filterableTable(["Связь","Дата","REC","Запись"], rows, { id: "case-chronology-table" })}
     </section>
   `;
+  bindFilterableTables();
 }
 
 async function renderRecords() {
@@ -422,30 +583,68 @@ async function renderRecords() {
     linksByRecord.set(link.record_id, bucket);
   }
 
+  const allTags = [...new Set((records || []).flatMap(r => r.tags || []))].sort((a, b) => a.localeCompare(b, "ru"));
+
   const rows = (records || []).map(r => {
     const caseCell = (linksByRecord.get(r.record_id) || []).map(link => {
       const c = caseMap.get(link.case_key);
       return `<div><span class="relation">${esc(link.relation)}</span> ${caseLink(link.case_key, c?.title || link.case_key)}</div>`;
     }).join("");
 
-    return `
-      <tr>
-        <td class="nowrap">${recLink(r.record_id)}</td>
-        <td class="nowrap">${esc(fmtDate(r.record_date))}</td>
-        <td>${chips(r.tags || [])}</td>
-        <td>${esc(r.record_type || r.type || "")}</td>
-        <td>${esc(r.confidence || "")}</td>
-        <td class="summary-cell">${esc(r.summary || r.title || "")}</td>
-        <td>${caseCell}</td>
-      </tr>
-    `;
+    const tagHtml = (r.tags || []).map(tag => `
+      <button type="button" class="chip tag-filter-button" data-tag="${esc(tag)}" title="Фильтровать по тегу ${esc(tag)}">
+        ${esc(tag)}
+      </button>
+    `).join("");
+
+    return {
+      attrs: {
+        "data-record-date": r.record_date || "",
+        "data-tags": (r.tags || []).map(normalizeFilter).join("||")
+      },
+      cells: [
+        tableCell(recLink(r.record_id), r.record_id),
+        tableCell(esc(fmtDate(r.record_date)), fmtDate(r.record_date)),
+        tableCell(`<span class="chips">${tagHtml}</span>`, (r.tags || []).join(" ")),
+        tableCell(esc(r.record_type || r.type || ""), r.record_type || r.type || ""),
+        tableCell(esc(r.confidence || ""), r.confidence || ""),
+        tableCell(esc(r.summary || r.title || ""), r.summary || r.title || ""),
+        tableCell(caseCell, (linksByRecord.get(r.record_id) || []).map(link => {
+          const c = caseMap.get(link.case_key);
+          return `${link.relation} ${c?.title || link.case_key}`;
+        }).join(" "))
+      ]
+    };
   });
 
   view.innerHTML = `
     <h1>Записи</h1>
     <p class="intro">Индекс REC. Структура повторяет старый HealthDB: кликабельная REC, дата, домены/теги, тип, достоверность, краткое содержание и связь со случаем.</p>
-    ${table(["REC","Дата","Домен / теги","Тип записи","Достоверность","Кратко","Кейс"], rows)}
+    <div class="global-filters" aria-label="Общие фильтры записей">
+      <label>
+        Дата от
+        <input id="records-date-from" type="date">
+      </label>
+      <label>
+        Дата до
+        <input id="records-date-to" type="date">
+      </label>
+      <label>
+        Добавить тег
+        <select id="records-tag-filter">
+          <option value="">Без фильтра</option>
+          ${allTags.map(tag => `<option value="${esc(tag)}">${esc(tag)}</option>`).join("")}
+        </select>
+      </label>
+      <div class="active-filter-block">
+        <span class="muted">Активные теги</span>
+        <div id="records-active-tags" class="active-filter-tags"></div>
+      </div>
+    </div>
+    ${filterableTable(["REC","Дата","Домен / теги","Тип записи","Достоверность","Кратко","Кейс"], rows, { id: "records-index" })}
   `;
+  bindFilterableTables();
+  setupRecordFilters();
 }
 
 async function renderRecord(recordId) {

@@ -710,7 +710,9 @@ async function renderRecords({ initialTags = [] } = {}) {
     linksByRecord.set(link.record_id, bucket);
   }
 
-  const allTags = [...new Set((records || []).flatMap(r => r.tags || []))].sort((a, b) => a.localeCompare(b, "ru"));
+  const allTags = uniqueValues((records || []).flatMap(r => r.tags || []));
+  const recordTypes = uniqueValues((records || []).map(r => r.record_type || r.type || ""));
+  const confidences = uniqueValues((records || []).map(r => r.confidence || ""));
 
   const rows = (records || []).map(r => {
     const caseCell = (linksByRecord.get(r.record_id) || []).map(link => {

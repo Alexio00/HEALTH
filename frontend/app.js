@@ -64,9 +64,13 @@ const tableCell = (html, filterValue = "") => ({
 const normalizeFilter = (value) => String(value ?? "").trim().toLocaleLowerCase("ru");
 const recordTagFilters = new Set();
 
-function filterableTable(headers, rows, { id, emptyLabel = "Пока нет данных" } = {}) {
+const uniqueValues = (values) =>
+  [...new Set((values || []).map(x => String(x ?? "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "ru", { numeric: true }));
+
+function sortableTable(headers, rows, { id, emptyLabel = "Пока нет данных" } = {}) {
   if (!rows?.length) return empty(emptyLabel);
-  if (!id) throw new Error("filterableTable requires a stable id");
+  if (!id) throw new Error("sortableTable requires a stable id");
 
   const body = rows.map(rowSpec => {
     const spec = Array.isArray(rowSpec) ? { cells: rowSpec, attrs: {} } : rowSpec;
@@ -78,7 +82,7 @@ function filterableTable(headers, rows, { id, emptyLabel = "Пока нет да
       const cell = typeof cellSpec === "object" && cellSpec !== null && "html" in cellSpec
         ? cellSpec
         : tableCell(esc(cellSpec), cellSpec);
-      return `<td data-filter-value="${esc(cell.filterValue)}">${cell.html}</td>`;
+      return `<td data-sort-value="${esc(cell.filterValue)}">${cell.html}</td>`;
     }).join("");
 
     return `<tr ${attrs}>${cells}</tr>`;
@@ -86,18 +90,14 @@ function filterableTable(headers, rows, { id, emptyLabel = "Пока нет да
 
   return `
     <div class="table-wrap">
-      <table class="data-table" id="${esc(id)}" data-filterable>
+      <table class="data-table sortable-table" id="${esc(id)}" data-sortable>
         <thead>
-          <tr>${headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr>
-          <tr class="column-filters">
+          <tr>
             ${headers.map((h, index) => `
               <th>
-                <input type="search"
-                  class="column-filter"
-                  data-column="${index}"
-                  placeholder="Фильтр"
-                  aria-label="Фильтр: ${esc(h)}"
-                  autocomplete="off">
+                <button type="button" class="sort-button" data-column="${index}" aria-label="Сортировать: ${esc(h)}">
+                  <span>${esc(h)}</span><span class="sort-indicator" aria-hidden="true">↕</span>
+                </button>
               </th>
             `).join("")}
           </tr>
@@ -109,54 +109,93 @@ function filterableTable(headers, rows, { id, emptyLabel = "Пока нет да
   `;
 }
 
-function applyTableFilters(table) {
-  if (!table) return;
+function compareSortValues(a, b) {
+  const av = String(a ?? "").trim();
+  const bv = String(b ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(av) && /^\d{4}-\d{2}-\d{2}/.test(bv)) return av.localeCompare(bv);
 
-  const columnFilters = [...table.querySelectorAll(".column-filter")].map(input => ({
-    column: Number(input.dataset.column),
-    value: normalizeFilter(input.value)
-  }));
+  const an = Number(av.replace(",", "."));
+  const bn = Number(bv.replace(",", "."));
+  if (av && bv && Number.isFinite(an) && Number.isFinite(bn)) return an - bn;
 
-  const dateFrom = table.id === "records-index" ? document.querySelector("#records-date-from")?.value || "" : "";
-  const dateTo = table.id === "records-index" ? document.querySelector("#records-date-to")?.value || "" : "";
+  return av.localeCompare(bv, "ru", { numeric: true, sensitivity: "base" });
+}
 
-  let visible = 0;
+function sortTable(table, column, button) {
+  const sameColumn = Number(table.dataset.sortColumn) === column;
+  const direction = sameColumn && table.dataset.sortDirection === "asc" ? "desc" : "asc";
+  table.dataset.sortColumn = String(column);
+  table.dataset.sortDirection = direction;
+
   const rows = [...table.tBodies[0].rows];
+  rows.sort((a, b) => {
+    const av = a.cells[column]?.dataset.sortValue || a.cells[column]?.textContent || "";
+    const bv = b.cells[column]?.dataset.sortValue || b.cells[column]?.textContent || "";
+    const cmp = compareSortValues(av, bv);
+    return direction === "asc" ? cmp : -cmp;
+  });
+  rows.forEach(row => table.tBodies[0].appendChild(row));
 
-  for (const row of rows) {
-    const columnMatch = columnFilters.every(filter => {
-      if (!filter.value) return true;
-      const cell = row.cells[filter.column];
-      return normalizeFilter(cell?.dataset.filterValue || cell?.textContent).includes(filter.value);
-    });
+  table.querySelectorAll(".sort-button").forEach(item => {
+    const indicator = item.querySelector(".sort-indicator");
+    const active = item === button;
+    item.classList.toggle("active", active);
+    if (indicator) indicator.textContent = active ? (direction === "asc" ? "↑" : "↓") : "↕";
+  });
+}
 
-    let globalMatch = true;
-    if (table.id === "records-index") {
-      const rowDate = row.dataset.recordDate || "";
-      if (dateFrom && rowDate && rowDate < dateFrom) globalMatch = false;
-      if (dateTo && rowDate && rowDate > dateTo) globalMatch = false;
-
-      const rowTags = (row.dataset.tags || "").split("||").filter(Boolean);
-      if ([...recordTagFilters].some(tag => !rowTags.includes(normalizeFilter(tag)))) {
-        globalMatch = false;
-      }
-    }
-
-    row.hidden = !(columnMatch && globalMatch);
-    if (!row.hidden) visible += 1;
-  }
-
+function updateTableCount(table) {
+  if (!table) return;
+  const rows = [...table.tBodies[0].rows];
+  const visible = rows.filter(row => !row.hidden).length;
   const count = document.querySelector(`#${CSS.escape(table.id)}-count`);
   if (count) count.textContent = `Показано: ${visible} из ${rows.length}`;
 }
 
-function bindFilterableTables() {
-  document.querySelectorAll("table[data-filterable]").forEach(table => {
-    table.querySelectorAll(".column-filter").forEach(input => {
-      input.addEventListener("input", () => applyTableFilters(table));
+function bindSortableTables() {
+  document.querySelectorAll("table[data-sortable]").forEach(table => {
+    table.querySelectorAll(".sort-button").forEach(button => {
+      button.addEventListener("click", () => sortTable(table, Number(button.dataset.column), button));
     });
-    applyTableFilters(table);
+    updateTableCount(table);
   });
+}
+
+const filterableTable = sortableTable;
+const bindFilterableTables = bindSortableTables;
+
+function compactSelect(label, id, values, allLabel = "Все") {
+  const unique = uniqueValues(values);
+  if (unique.length <= 1) return "";
+  return `
+    <label>
+      ${esc(label)}
+      <select id="${esc(id)}">
+        <option value="">${esc(allLabel)}</option>
+        ${unique.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function bindAttributeFilters(tableId, specs) {
+  const table = document.querySelector(`#${CSS.escape(tableId)}`);
+  if (!table) return;
+
+  const apply = () => {
+    [...table.tBodies[0].rows].forEach(row => {
+      row.hidden = specs.some(spec => {
+        const control = document.querySelector(`#${CSS.escape(spec.id)}`);
+        const wanted = normalizeFilter(control?.value || "");
+        if (!wanted) return false;
+        return normalizeFilter(row.dataset[spec.attr] || "") !== wanted;
+      });
+    });
+    updateTableCount(table);
+  };
+
+  specs.forEach(spec => document.querySelector(`#${CSS.escape(spec.id)}`)?.addEventListener("change", apply));
+  apply();
 }
 
 function renderActiveRecordTags() {
@@ -164,7 +203,7 @@ function renderActiveRecordTags() {
   if (!holder) return;
 
   holder.innerHTML = [...recordTagFilters].map(tag => `
-    <button type="button" class="active-filter-tag" data-remove-tag="${esc(tag)}" title="Убрать фильтр">
+    <button type="button" class="active-filter-tag" data-remove-tag="${esc(tag)}" title="Убрать тег из фильтра">
       ${esc(tag)} ×
     </button>
   `).join("");
@@ -173,7 +212,7 @@ function renderActiveRecordTags() {
     button.addEventListener("click", () => {
       recordTagFilters.delete(button.dataset.removeTag);
       renderActiveRecordTags();
-      applyTableFilters(document.querySelector("#records-index"));
+      applyRecordFilters();
     });
   });
 }
@@ -183,19 +222,41 @@ function addRecordTagFilter(tag) {
   if (!value) return;
   recordTagFilters.add(value);
   renderActiveRecordTags();
-  applyTableFilters(document.querySelector("#records-index"));
+  applyRecordFilters();
 }
 
-function setupRecordFilters() {
+function applyRecordFilters() {
   const table = document.querySelector("#records-index");
   if (!table) return;
 
+  const dateFrom = document.querySelector("#records-date-from")?.value || "";
+  const dateTo = document.querySelector("#records-date-to")?.value || "";
+  const recordType = normalizeFilter(document.querySelector("#records-record-type")?.value || "");
+  const confidence = normalizeFilter(document.querySelector("#records-confidence")?.value || "");
+
+  [...table.tBodies[0].rows].forEach(row => {
+    const rowDate = row.dataset.recordDate || "";
+    const rowTags = (row.dataset.tags || "").split("||").filter(Boolean);
+    const tagsOk = [...recordTagFilters].every(tag => rowTags.includes(normalizeFilter(tag)));
+    const dateOk = (!dateFrom || !rowDate || rowDate >= dateFrom) && (!dateTo || !rowDate || rowDate <= dateTo);
+    const typeOk = !recordType || normalizeFilter(row.dataset.recordType) === recordType;
+    const confidenceOk = !confidence || normalizeFilter(row.dataset.confidence) === confidence;
+    row.hidden = !(tagsOk && dateOk && typeOk && confidenceOk);
+  });
+  updateTableCount(table);
+}
+
+function setupRecordFilters(initialTags = []) {
   recordTagFilters.clear();
+  initialTags.filter(Boolean).forEach(tag => recordTagFilters.add(tag));
   renderActiveRecordTags();
 
-  for (const id of ["#records-date-from", "#records-date-to"]) {
-    document.querySelector(id)?.addEventListener("input", () => applyTableFilters(table));
-  }
+  ["#records-date-from", "#records-date-to"].forEach(id => {
+    document.querySelector(id)?.addEventListener("input", applyRecordFilters);
+  });
+  ["#records-record-type", "#records-confidence"].forEach(id => {
+    document.querySelector(id)?.addEventListener("change", applyRecordFilters);
+  });
 
   const tagSelect = document.querySelector("#records-tag-filter");
   tagSelect?.addEventListener("change", () => {
@@ -206,6 +267,8 @@ function setupRecordFilters() {
   document.querySelectorAll(".tag-filter-button").forEach(button => {
     button.addEventListener("click", () => addRecordTagFilter(button.dataset.tag));
   });
+
+  applyRecordFilters();
 }
 
 async function assertReader(userId) {

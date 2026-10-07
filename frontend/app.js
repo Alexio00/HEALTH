@@ -88,16 +88,13 @@ function filterableTable(headers, rows, { id, emptyLabel = "Пока нет да
     <div class="table-wrap">
       <table class="data-table" id="${esc(id)}" data-filterable>
         <thead>
-          <tr>${headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr>
-          <tr class="column-filters">
+          <tr>
             ${headers.map((h, index) => `
               <th>
-                <input type="search"
-                  class="column-filter"
-                  data-column="${index}"
-                  placeholder="Фильтр"
-                  aria-label="Фильтр: ${esc(h)}"
-                  autocomplete="off">
+                <button type="button" class="sort-button" data-column="${index}" aria-label="Сортировать: ${esc(h)}">
+                  <span>${esc(h)}</span>
+                  <span class="sort-indicator" aria-hidden="true">↕</span>
+                </button>
               </th>
             `).join("")}
           </tr>
@@ -109,41 +106,92 @@ function filterableTable(headers, rows, { id, emptyLabel = "Пока нет да
   `;
 }
 
+function compareSortValues(a, b) {
+  const av = String(a ?? "").trim();
+  const bv = String(b ?? "").trim();
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(av) && /^\d{4}-\d{2}-\d{2}/.test(bv)) {
+    return av.localeCompare(bv);
+  }
+
+  const an = Number(av.replace(",", "."));
+  const bn = Number(bv.replace(",", "."));
+  if (av !== "" && bv !== "" && Number.isFinite(an) && Number.isFinite(bn)) {
+    return an - bn;
+  }
+
+  return av.localeCompare(bv, "ru", { numeric: true, sensitivity: "base" });
+}
+
+function sortTable(table, column, button) {
+  const currentColumn = Number(table.dataset.sortColumn);
+  const direction = currentColumn === column && table.dataset.sortDirection === "asc"
+    ? "desc"
+    : "asc";
+
+  table.dataset.sortColumn = String(column);
+  table.dataset.sortDirection = direction;
+
+  const rows = [...table.tBodies[0].rows];
+  rows.sort((a, b) => {
+    const av = a.cells[column]?.dataset.filterValue || a.cells[column]?.textContent || "";
+    const bv = b.cells[column]?.dataset.filterValue || b.cells[column]?.textContent || "";
+    const result = compareSortValues(av, bv);
+    return direction === "asc" ? result : -result;
+  });
+  rows.forEach(row => table.tBodies[0].appendChild(row));
+
+  table.querySelectorAll(".sort-button").forEach(item => {
+    const active = item === button;
+    item.classList.toggle("active", active);
+    const indicator = item.querySelector(".sort-indicator");
+    if (indicator) indicator.textContent = active ? (direction === "asc" ? "↑" : "↓") : "↕";
+  });
+}
+
 function applyTableFilters(table) {
   if (!table) return;
 
-  const columnFilters = [...table.querySelectorAll(".column-filter")].map(input => ({
-    column: Number(input.dataset.column),
-    value: normalizeFilter(input.value)
-  }));
-
   const dateFrom = table.id === "records-index" ? document.querySelector("#records-date-from")?.value || "" : "";
   const dateTo = table.id === "records-index" ? document.querySelector("#records-date-to")?.value || "" : "";
+  const recordType = table.id === "records-index"
+    ? normalizeFilter(document.querySelector("#records-record-type")?.value || "")
+    : "";
+  const confidence = table.id === "records-index"
+    ? normalizeFilter(document.querySelector("#records-confidence")?.value || "")
+    : "";
+
+  const planKind = table.id === "future-plan-table"
+    ? normalizeFilter(document.querySelector("#plan-kind-filter")?.value || "")
+    : "";
+  const planStatus = table.id === "future-plan-table"
+    ? normalizeFilter(document.querySelector("#plan-status-filter")?.value || "")
+    : "";
 
   let visible = 0;
   const rows = [...table.tBodies[0].rows];
 
   for (const row of rows) {
-    const columnMatch = columnFilters.every(filter => {
-      if (!filter.value) return true;
-      const cell = row.cells[filter.column];
-      return normalizeFilter(cell?.dataset.filterValue || cell?.textContent).includes(filter.value);
-    });
+    let visibleRow = true;
 
-    let globalMatch = true;
     if (table.id === "records-index") {
       const rowDate = row.dataset.recordDate || "";
-      if (dateFrom && rowDate && rowDate < dateFrom) globalMatch = false;
-      if (dateTo && rowDate && rowDate > dateTo) globalMatch = false;
-
       const rowTags = (row.dataset.tags || "").split("||").filter(Boolean);
-      if ([...recordTagFilters].some(tag => !rowTags.includes(normalizeFilter(tag)))) {
-        globalMatch = false;
-      }
+
+      if (dateFrom && rowDate && rowDate < dateFrom) visibleRow = false;
+      if (dateTo && rowDate && rowDate > dateTo) visibleRow = false;
+      if ([...recordTagFilters].some(tag => !rowTags.includes(normalizeFilter(tag)))) visibleRow = false;
+      if (recordType && normalizeFilter(row.dataset.recordType) !== recordType) visibleRow = false;
+      if (confidence && normalizeFilter(row.dataset.confidence) !== confidence) visibleRow = false;
     }
 
-    row.hidden = !(columnMatch && globalMatch);
-    if (!row.hidden) visible += 1;
+    if (table.id === "future-plan-table") {
+      if (planKind && normalizeFilter(row.dataset.kind) !== planKind) visibleRow = false;
+      if (planStatus && normalizeFilter(row.dataset.planStatus) !== planStatus) visibleRow = false;
+    }
+
+    row.hidden = !visibleRow;
+    if (visibleRow) visible += 1;
   }
 
   const count = document.querySelector(`#${CSS.escape(table.id)}-count`);
@@ -152,8 +200,8 @@ function applyTableFilters(table) {
 
 function bindFilterableTables() {
   document.querySelectorAll("table[data-filterable]").forEach(table => {
-    table.querySelectorAll(".column-filter").forEach(input => {
-      input.addEventListener("input", () => applyTableFilters(table));
+    table.querySelectorAll(".sort-button").forEach(button => {
+      button.addEventListener("click", () => sortTable(table, Number(button.dataset.column), button));
     });
     applyTableFilters(table);
   });

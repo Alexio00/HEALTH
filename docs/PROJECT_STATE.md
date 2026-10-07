@@ -54,20 +54,23 @@ MVP operational acceptance is PASS:
 
 ## Final pre-migration audit
 
-Current verdict: **NO-GO**.
+Current verdict: **PASS**.
 
-Resolved during the rerun:
-- source-freeze/package contract mismatch fixed and then strengthened so the sealed package fingerprint binds freeze/capture control metadata; latest hardening commit `89bbaa0882330016c623090559301cc952694313`;
-- code validation run `37685406167` PASS;
-- live Auth invariants PASS;
-- live browser/database security invariants PASS;
-- scheduler hardened database -> Sources -> verification chain PASS;
-- schema migration ledger matches the nine canonical timestamped migration files.
+Final evidence:
+- owner gates resolved: keep `us-west-1`; existing public Git commit email accepted; post-hardening PWA smoke PASS;
+- source-freeze/package contract hardened so the sealed package fingerprint binds freeze/capture control metadata; hardening commit `89bbaa0882330016c623090559301cc952694313`;
+- live migration ledger and public timestamped migration SQL are exact 9/9 after drift repair commit `3c72cbd950836ce3086b75d2ceaaed8b1527d89d`;
+- full-migration runner has one fail-closed execute path requiring both the matching old-HealthDB freeze operation ID and literal owner token `FULL_MIGRATION_AUTHORIZED`, chaining seal/verify/stage/exact compare/guarded commit/exact public compare; hardening commit `46af6eef8b3dae0000c48b49f53fd216ae0d4957`;
+- browser/database security validation is search-path invariant; commit `e63a40f1326a9e8628c0aaa7b5df2c04abc1cb95`, code validation run `37690027154` PASS;
+- live Auth invariants PASS and live browser/database security invariants PASS;
+- GitHub Actions in HEALTH and SHEDULLER use immutable full-SHA external action refs; no floating external action refs remain;
+- hardened scheduler database -> Sources -> verification chain run `37676153947` PASS;
+- real isolated five-file restore drill run `37690089948` SUCCESS: backup SHA-256 PASS, fresh local Supabase restore PASS, exact 15-table medical-domain comparison PASS, migration history 9/9 PASS, replacement-owner Auth recovery PASS, restored Auth/security invariants PASS, and restored record/source integrity PASS;
+- current remediation validation stamps `PRE_MIGRATION_HARDENED_RESTORE` and `PRE_MIGRATION_FINAL_AUDIT` are PASS.
 
-Remaining blocker:
-- the hardened five-file database backup format now includes `supabase_migrations` schema/data, but a **real isolated restore drill** has not yet passed after that backup-format/tooling change. The private scheduler now runs that drill against a fresh local Supabase stack; checksum/round-trip verification remains PASS but is not a restore.
+No pre-migration technical blocker remains from this remediation.
 
-Full migration remains forbidden until that restore drill passes and the final audit is rerun to PASS.
+**Full migration remains forbidden until the owner gives a separate explicit authorization.** Cutover remains a later, separate owner decision.
 
 ## Non-blocking advisor status
 
@@ -77,10 +80,10 @@ Full migration remains forbidden until that restore drill passes and the final a
 
 ## Full-migration gate
 
-Full migration remains forbidden until:
-- hardened scheduler execution test PASS;
-- remaining owner gates resolved;
-- final pre-migration audit PASS;
-- explicit owner authorization.
+Pre-migration hardening and independent audit are PASS.
 
-Cutover remains a separate later owner decision.
+Full migration may begin only after a **separate explicit owner authorization**. The runner still requires the literal `FULL_MIGRATION_AUTHORIZED` token and the matching old-HealthDB PREPARED freeze operation ID at execution time.
+
+Before any full migration commit, capture a fresh frozen Drive-native snapshot and revalidate the source freeze. The old Drive-native HealthDB remains canonical until a later explicit cutover authorization.
+
+Cutover remains a separate owner decision and is not authorized by pre-migration audit PASS.

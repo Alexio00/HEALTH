@@ -768,6 +768,7 @@ async function renderRecords({ initialTags = [] } = {}) {
         </select>
       </label>
       ${compactSelect("Тип записи", "records-record-type", recordTypes)}
+      ${compactSelect("Подтверждение", "records-proof-filter", confidences)}
       <div class="active-filter-block">
         <span class="muted">Активные теги</span>
         <div id="records-active-tags" class="active-filter-tags"></div>

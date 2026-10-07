@@ -683,6 +683,35 @@ async function renderCase(caseKey) {
   bindFilterableTables();
 }
 
+const recordTagLink = (tag) =>
+  `<a class="chip record-tag-link" href="#/records?tag=${encodeURIComponent(tag)}">${esc(tag)}</a>`;
+
+function cleanLegacyRecordText(text) {
+  let value = String(text || "").trim();
+  value = value.replace(/^=====\s*REC[^\n]*\n?/, "");
+  value = value.replace(/\n?=====\s*END\s+REC[^\n]*$/i, "").trim();
+
+  if (value.startsWith("---")) {
+    const second = value.indexOf("\n---", 3);
+    if (second >= 0) value = value.slice(second + 4).trim();
+  }
+  return value;
+}
+
+function recordDisplayTitle(record) {
+  const cleaned = cleanLegacyRecordText(record.body_text);
+  const heading = cleaned.match(/^#\s+(.+)$/m)?.[1]?.trim();
+  if (heading && /[\u0400-\u04FF]/u.test(heading)) return heading;
+
+  if (record.summary && /[\u0400-\u04FF]/u.test(record.summary)) {
+    const first = record.summary.split(/[.;]/)[0]?.trim();
+    if (first) return first.charAt(0).toUpperCase() + first.slice(1);
+  }
+
+  const fallback = String(record.title || "Запись").replace(/[-_]+/g, " ").trim();
+  return fallback.charAt(0).toUpperCase() + fallback.slice(1);
+}
+
 async function renderRecords({ initialTags = [] } = {}) {
   const [{ data: records, error: recordsError }, { data: links, error: linksError }, { data: cases, error: casesError }] = await Promise.all([
     supabase

@@ -26,8 +26,4 @@ jobs:
       - name: Migration runner self-test
         run: python3 scripts/migration/full_migration.py self-test
       - name: Public repository secret-pattern guard
-        shell: bash
-        run: |
-          set -euo pipefail
-          ! grep -RIE --exclude-dir=.git --exclude='*.md' --exclude='code-validation.yml' \
-            '(sb_secret_[A-Za-z0-9_-]{20,}|postgres(ql)?://[^:[:space:]]+:[^@/[:space:]]{8,}@|client_secret[[:space:]]*[:=][[:space:]]*["'"']?[A-Za-z0-9_-]{20,}|refresh_token[[:space:]]*[:=][[:space:]]*["'"']?(1//|[A-Za-z0-9_-]{40,}))' .
+        run: python3 scripts/validation/public_secret_guard.py

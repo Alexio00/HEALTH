@@ -1,6 +1,6 @@
 # Project State
 
-Status: MVP infrastructure ready; owner Auth/Pages toggles pending
+Status: MVP read-only infrastructure ready; Pages visual verification pending
 
 ## Confirmed
 
@@ -15,39 +15,35 @@ Status: MVP infrastructure ready; owner Auth/Pages toggles pending
 - Core PostgreSQL schema is applied to the live MVP database.
 - Row Level Security is enabled on every public table.
 - `anon` has no public-table privileges.
-- `authenticated` has SELECT-only access to the explicit browser-facing allow-list.
+- Exactly one active Supabase Auth user exists.
+- Exactly one `app_readers` row exists and maps to that sole active Auth user.
+- Auth invariants PASS.
+- Database security invariants PASS.
+- Simulated authenticated-owner access confirms browser-facing SELECT is allowed.
+- Simulated authenticated-owner access confirms INSERT/UPDATE/DELETE are denied.
 - Technical tables are not exposed to browser roles.
 - Secure default privileges for future `postgres`-owned public tables, sequences and functions are active.
-- Database security invariants are encoded and currently PASS.
 - Static read-only PWA shell is implemented in `frontend/`.
 - PWA contains login, Current State, Index, REC and Source routes.
 - Service worker does not cache cross-origin/Supabase/Google Drive responses.
-- GitHub Pages deployment workflow is committed.
+- GitHub Pages deployment workflow is committed and a frontend push has triggered the configured workflow path.
 - No real medical data has been copied.
 - No cutover has occurred.
 
-## Owner actions pending
+## Owner-configured settings
 
-- Create the sole Supabase Auth user with email/password and auto-confirm it.
-- Disable "Allow new users to sign up" and anonymous sign-ins in Supabase Auth.
-- In GitHub repository Settings -> Pages, set Source to GitHub Actions.
+- Supabase owner user created.
+- Public signup disabled.
+- Anonymous sign-ins disabled.
+- GitHub Pages source set to GitHub Actions.
 
-## After owner actions
+The current connector cannot independently read the dashboard-only Auth toggles or list push-triggered GitHub Actions runs. Those settings are owner-confirmed; database-side Auth/RLS behavior is independently verified.
 
-- Register the sole active Auth user in `public.app_readers` using `scripts/auth/register_single_reader.sql`.
-- Run `scripts/validation/auth_invariants.sql` and database security invariants.
-- Verify anonymous denial, owner SELECT, and browser write denial end-to-end.
-- Verify GitHub Pages deployment and mobile/PWA shell.
+## Pending verification
 
-## Remaining MVP work
-
-- Import a small representative subset only.
-- Copy only the source files needed by that subset.
-- Validate content, navigation, mobile behavior and latency.
-- Implement portable database and Sources backup jobs.
-- Verify restore and backup manifests/checksums.
-- Produce the MVP acceptance report for owner review.
+- Open the public GitHub Pages URL and confirm that the HEALTH login screen renders.
+- If it does not, inspect the latest `Deploy HEALTH PWA` GitHub Actions run.
 
 ## Next gate
 
-Complete the three owner-side Auth/Pages settings above, then finish end-to-end read-only verification. Full migration remains blocked until explicit owner approval after MVP review.
+After Pages renders, begin the representative MVP import only under explicit owner authorization for medical-data import. The representative import will be copy-first and limited to a small subset. Full migration remains blocked until explicit owner approval after MVP review.

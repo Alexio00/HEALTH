@@ -767,15 +767,125 @@ async function renderRecords({ initialTags = [] } = {}) {
   setupRecordFilters(initialTags);
 }
 
+let inlineTableSequence = 0;
+
+const recordTagLink = (tag) =>
+  `<a class="chip record-tag-link" href="#/records?tag=${encodeURIComponent(tag)}">${esc(tag)}</a>`;
+
+function cleanLegacyRecordText(text) {
+  let value = String(text || "").trim();
+  value = value.replace(/^=====\s*REC[^\n]*\n?/, "");
+  value = value.replace(/\n?=====\s*END\s+REC[^\n]*$/i, "").trim();
+
+  if (value.startsWith("---")) {
+    const second = value.indexOf("\n---", 3);
+    if (second >= 0) value = value.slice(second + 4).trim();
+  }
+  return value;
+}
+
+function recordDisplayTitle(record) {
+  const cleaned = cleanLegacyRecordText(record.body_text);
+  const heading = cleaned.match(/^#\s+(.+)$/m)?.[1]?.trim();
+  if (heading && /[А-Яа-яЁё]/.test(heading)) return heading;
+
+  const summary = String(record.summary || "").trim();
+  if (summary && /[А-Яа-яЁё]/.test(summary)) {
+    const first = summary.split(/[.;]/)[0].trim();
+    if (first) return first.charAt(0).toUpperCase() + first.slice(1);
+  }
+
+  const fallback = String(record.title || "Запись").replace(/[-_]+/g, " ").trim();
+  return fallback.charAt(0).toUpperCase() + fallback.slice(1);
+}
+
+function inlineRecordMarkdown(value) {
+  let html = esc(value);
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\`([^\`]+)\`/g, "<code>$1</code>");
+  html = html.replace(/\[(REC-\d{8}-\d{3})\]/g, (_, id) => recLink(id));
+  return html;
+}
+
+function parseMarkdownTableRow(line) {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(x => x.trim());
+}
+
+function renderRecordBody(text) {
+  const cleaned = cleanLegacyRecordText(text);
+  const lines = cleaned.split(/\r?\n/);
+  if (lines[0]?.startsWith("# ")) lines.shift();
+
+  const blocks = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+
+    if (!line || /^---+$/.test(line)) {
+      i += 1;
+      continue;
+    }
+
+    if (line.startsWith("|") && i + 1 < lines.length && /^\|?\s*:?-+/.test(lines[i + 1].trim())) {
+      const headers = parseMarkdownTableRow(lines[i]);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        const cells = parseMarkdownTableRow(lines[i]);
+        rows.push(cells.map(cell => tableCell(inlineRecordMarkdown(cell), cell.replace(/\*\*/g, ""))));
+        i += 1;
+      }
+      blocks.push(sortableTable(headers, rows, { id: `record-inline-table-${++inlineTableSequence}` }));
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      const level = Math.min(4, heading[1].length + 1);
+      blocks.push(`<h${level}>${inlineRecordMarkdown(heading[2])}</h${level}>`);
+      i += 1;
+      continue;
+    }
+
+    if (/^-\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^-\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^-\s+/, ""));
+        i += 1;
+      }
+      blocks.push(`<ul class="record-list">${items.map(item => `<li>${inlineRecordMarkdown(item)}</li>`).join("")}</ul>`);
+      continue;
+    }
+
+    const paragraph = [line];
+    i += 1;
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !/^(#{1,4})\s+/.test(lines[i].trim()) &&
+      !/^-\s+/.test(lines[i].trim()) &&
+      !lines[i].trim().startsWith("|") &&
+      !/^---+$/.test(lines[i].trim())
+    ) {
+      paragraph.push(lines[i].trim());
+      i += 1;
+    }
+    blocks.push(`<p>${inlineRecordMarkdown(paragraph.join(" "))}</p>`);
+  }
+
+  return blocks.join("\n");
+}
+
 async function renderRecord(recordId) {
-  const [{ data: record, error: recordError }, { data: sources, error: sourcesError }, { data: caseLinks, error: caseLinksError }] = await Promise.all([
+  const [{ data: record, error: recordError }, { data: sourceLinks, error: sourceLinksError }, { data: caseLinks, error: caseLinksError }] = await Promise.all([
     supabase.from("records").select("*").eq("record_id", recordId).single(),
     supabase.from("record_sources").select("source_id,role,source_pages").eq("record_id", recordId),
     supabase.from("case_links").select("case_key,relation,relation_date").eq("record_id", recordId)
   ]);
 
   if (recordError) throw recordError;
-  if (sourcesError) throw sourcesError;
+  if (sourceLinksError) throw sourceLinksError;
   if (caseLinksError) throw caseLinksError;
 
   let relatedCases = [];
@@ -787,11 +897,42 @@ async function renderRecord(recordId) {
     relatedCases = caseLinks.map(link => ({ ...link, case: map.get(link.case_key) }));
   }
 
+  let sourceViews = [];
+  if (sourceLinks?.length) {
+    const ids = [...new Set(sourceLinks.map(x => x.source_id))];
+    const [sourceResult, locationResult] = await Promise.all([
+      supabase.from("sources").select("source_id,original_filename").in("source_id", ids),
+      supabase.from("source_locations").select("source_id,provider,provider_object_id,location_role").in("source_id", ids)
+    ]);
+    if (sourceResult.error) throw sourceResult.error;
+    if (locationResult.error) throw locationResult.error;
+
+    const sourceMap = new Map((sourceResult.data || []).map(x => [x.source_id, x]));
+    sourceViews = sourceLinks.map(link => {
+      const locations = (locationResult.data || []).filter(x => x.source_id === link.source_id);
+      const preferred = locations.find(x => x.location_role === "PRIMARY" && x.provider === "google-drive")
+        || locations.find(x => x.provider === "google-drive");
+      return { ...link, source: sourceMap.get(link.source_id), location: preferred };
+    });
+  }
+
+  inlineTableSequence = 0;
+  const title = recordDisplayTitle(record);
+  const body = renderRecordBody(record.body_text);
+  const tags = (record.tags || []).map(recordTagLink).join("");
+
   view.innerHTML = `
     <p><a href="#/records">← Записи</a></p>
-    <h1>${esc(record.title)}</h1>
-    <p class="muted">${esc(fmtDate(record.record_date))} · ${esc(record.record_id)}</p>
-    <p class="status-line">${chips([...(record.tags || []), record.record_type, record.confidence].filter(Boolean))}</p>
+    <h1>${esc(title)}</h1>
+
+    <dl class="record-meta">
+      <dt>Дата</dt><dd>${esc(fmtDate(record.record_date))}</dd>
+      <dt>ID записи</dt><dd class="mono">${esc(record.record_id)}</dd>
+      <dt>Тип записи</dt><dd>${esc(record.record_type || "")}</dd>
+      <dt>Подтверждение</dt><dd>${esc(record.confidence || "")}</dd>
+    </dl>
+
+    ${tags ? `<div class="record-tags" aria-label="Теги">${tags}</div>` : ""}
     ${record.summary ? `<p class="lead">${esc(record.summary)}</p>` : ""}
 
     <section>
@@ -807,14 +948,28 @@ async function renderRecord(recordId) {
 
     <section>
       <h2>Текст записи</h2>
-      <article class="record-body">${esc(record.body_text)}</article>
+      <article class="record-body rich-record-body">${body}</article>
     </section>
 
     <section>
       <h2>Источники</h2>
-      ${list(sources, x => `<li><a href="#/sources/${encodeURIComponent(x.source_id)}">${esc(x.source_id)}</a><p class="muted">${esc(x.role)} ${esc(x.source_pages || "")}</p></li>`)}
+      ${sourceViews.length ? list(sourceViews, item => {
+        const driveId = item.location?.provider_object_id;
+        const href = driveId ? `https://drive.google.com/open?id=${encodeURIComponent(driveId)}` : "";
+        return `
+          <li>
+            ${href
+              ? `<a href="${href}" target="_blank" rel="noopener noreferrer"><strong>Открыть оригинал</strong></a>`
+              : `<strong>${esc(item.source?.original_filename || "Оригинал")}</strong>`}
+            ${record.source_label ? `<p>${esc(record.source_label)}</p>` : ""}
+            ${item.source_pages ? `<p class="muted">Страницы в источнике: ${esc(item.source_pages)}</p>` : ""}
+          </li>
+        `;
+      }) : empty("Источники не привязаны")}
     </section>
   `;
+
+  bindSortableTables();
 }
 
 async function renderSource(sourceId) {

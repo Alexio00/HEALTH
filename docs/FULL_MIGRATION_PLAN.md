@@ -29,14 +29,17 @@ Cutover requires a second explicit owner decision after full migration validatio
 Immediately before full migration:
 
 1. Read the active Project State and Project Manual.
-2. Require the old Drive-native single-writer gate to be clear.
-3. Require all live FORMULA validations to PASS.
-4. Capture a fresh Registry snapshot and a fresh recursive Sources manifest.
-5. Record the snapshot timestamp and all entity counts privately.
-6. Recompute the migration set from that snapshot. Never rely on an earlier MVP or planning count.
-7. Prevent a concurrent old-HealthDB write for the duration of the logical migration operation.
+2. Require the old Drive-native single-writer gate to be clear: zero unfinished mutating operations.
+3. Create one dedicated old-HealthDB maintenance Change Log row for the migration freeze in state `PREPARED`; it creates no ID reservation.
+4. Reread the old Change Log and require that freeze row to be the sole unfinished operation.
+5. Require all live FORMULA validations to PASS while the freeze is held.
+6. Capture a fresh Registry snapshot and a fresh recursive Sources manifest under that freeze.
+7. Record the snapshot timestamp, all entity counts, the freeze operation ID/state, and zero **other** unfinished operations privately in the package manifest.
+8. Recompute the migration set from that snapshot. Never rely on an earlier MVP or planning count.
+9. Keep the same freeze row `PREPARED` through staging and until the target HEALTH commit gate.
+10. Immediately before target commit, reread the old Change Log and require the same freeze operation to still be `PREPARED` and the sole unfinished operation.
 
-If the old HealthDB changes before commit, discard the staged result and rebuild from a fresh snapshot.
+If the freeze is missing, changed, no longer sole, or the old HealthDB changes before commit, abort the target commit, discard the staged result and rebuild from a fresh frozen snapshot. Release/finalize the old freeze only after the target exact post-commit comparison and required validation have completed.
 
 ## Representative MVP handling
 

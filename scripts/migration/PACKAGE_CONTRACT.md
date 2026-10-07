@@ -35,13 +35,19 @@ Before sealing:
   "status": "CAPTURED",
   "captured_at": "<UTC ISO timestamp>",
   "old_healthdb_validation_pass": true,
-  "old_healthdb_unfinished_operations": 0,
+  "old_healthdb_freeze_operation_id": "<UUID of old HealthDB PREPARED freeze operation>",
+  "old_healthdb_freeze_state": "PREPARED",
+  "old_healthdb_other_unfinished_operations": 0,
   "historical_sources_manifest_sha256": "<64 hex>",
   "tables": {}
 }
 ```
 
 The extractor must capture the Registry and record/source evidence under one migration freeze and must recompute all values from the live Drive-native HealthDB. Planning/MVP counts are forbidden as snapshot inputs.
+
+The freeze is a dedicated old-HealthDB maintenance Change Log row in state `PREPARED`. The freeze row itself is not counted by `old_healthdb_other_unfinished_operations`; that field must be exactly `0`. The package records the freeze operation ID and `PREPARED` state so a sealed package cannot represent an unfrozen capture.
+
+Immediately before the target HEALTH commit, the operator must reread the old Drive-native Change Log and prove that the same freeze operation is still `PREPARED` and is the sole unfinished old-HealthDB operation. If that check fails, the staged package is stale and must not be committed.
 
 ## Seal and verify
 

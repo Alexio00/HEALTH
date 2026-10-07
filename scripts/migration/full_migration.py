@@ -175,8 +175,13 @@ def read_package(package: Path, require_sealed: bool = True) -> tuple[dict[str, 
         fail("manifest captured_at is required")
     if manifest.get("old_healthdb_validation_pass") is not True:
         fail("old HealthDB Validation PASS is required")
-    if int(manifest.get("old_healthdb_unfinished_operations", -1)) != 0:
-        fail("old HealthDB must have zero unfinished operations")
+    freeze_operation_id = str(manifest.get("old_healthdb_freeze_operation_id", ""))
+    if not UUID_RE.fullmatch(freeze_operation_id):
+        fail("old HealthDB migration freeze operation_id is required")
+    if manifest.get("old_healthdb_freeze_state") != "PREPARED":
+        fail("old HealthDB migration freeze must be PREPARED at capture")
+    if int(manifest.get("old_healthdb_other_unfinished_operations", -1)) != 0:
+        fail("old HealthDB must have zero unfinished operations other than the migration freeze")
     if not SHA_RE.fullmatch(str(manifest.get("historical_sources_manifest_sha256", ""))):
         fail("historical_sources_manifest_sha256 is required")
 
@@ -657,7 +662,9 @@ def self_test() -> None:
             "status": "CAPTURED",
             "captured_at": "2026-01-01T00:00:00Z",
             "old_healthdb_validation_pass": True,
-            "old_healthdb_unfinished_operations": 0,
+            "old_healthdb_freeze_operation_id": "00000000-0000-4000-8000-000000000001",
+            "old_healthdb_freeze_state": "PREPARED",
+            "old_healthdb_other_unfinished_operations": 0,
             "historical_sources_manifest_sha256": "0" * 64,
             "tables": {},
         }

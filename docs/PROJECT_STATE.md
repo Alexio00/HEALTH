@@ -14,6 +14,8 @@ Status: Representative MVP import PASS; visual data check and backup/restore pen
 - Exactly one approved Auth reader is configured.
 - Auth and database security invariants PASS.
 - Read-only PWA is deployed through GitHub Pages and owner authentication is confirmed.
+- PWA navigation now mirrors the useful reading structure of the legacy HealthDB: Current State, Closed Cases, Records Index, Case card, REC and Source.
+- Current State uses collapsible case blocks; Closed Cases has a separate collapsible register; Records is a linked table index.
 - A small representative medical subset has been copied from the canonical Drive-native HealthDB into the new database.
 - The representative subset includes record text, source linkage, laboratory rows, a complete Case relation chain and current-state entities.
 - Required source material for the subset has been copied into the new private `HEALTH/Sources` storage.

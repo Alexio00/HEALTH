@@ -891,14 +891,14 @@ async function renderRecords({ initialTags = [] } = {}) {
 }
 
 async function renderRecord(recordId) {
-  const [{ data: record, error: recordError }, { data: sources, error: sourcesError }, { data: caseLinks, error: caseLinksError }] = await Promise.all([
+  const [{ data: record, error: recordError }, { data: sourceLinks, error: sourceLinksError }, { data: caseLinks, error: caseLinksError }] = await Promise.all([
     supabase.from("records").select("*").eq("record_id", recordId).single(),
-    supabase.from("record_sources").select("source_id,role,source_pages").eq("record_id", recordId),
+    supabase.from("record_sources").select("source_id,source_pages").eq("record_id", recordId),
     supabase.from("case_links").select("case_key,relation,relation_date").eq("record_id", recordId)
   ]);
 
   if (recordError) throw recordError;
-  if (sourcesError) throw sourcesError;
+  if (sourceLinksError) throw sourceLinksError;
   if (caseLinksError) throw caseLinksError;
 
   let relatedCases = [];

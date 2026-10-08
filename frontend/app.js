@@ -204,6 +204,14 @@ function stickyOffsets() {
   return { headerHeight, titleHeight, filterHeight, tableTop: headerHeight + titleHeight + filterHeight };
 }
 
+function shouldPinTableHeader(head, wrapper, offset, viewportHeight) {
+  return head.height > 0
+    && head.bottom <= offset
+    && wrapper.bottom > offset + head.height
+    && wrapper.width > 0
+    && offset + head.height < viewportHeight;
+}
+
 function updatePinnedHeaders() {
   const offset = stickyOffsets().tableTop;
   for (const entry of pinnedHeaders) {
@@ -214,11 +222,7 @@ function updatePinnedHeaders() {
     }
     const rect = wrapper.getBoundingClientRect();
     const head = table.tHead.getBoundingClientRect();
-    const show = head.height > 0
-      && head.bottom <= offset
-      && rect.bottom > offset + head.height
-      && rect.width > 0
-      && offset + head.height < window.innerHeight;
+    const show = shouldPinTableHeader(head, rect, offset, window.innerHeight);
     if (!show) {
       floating.hidden = true;
       continue;

@@ -1,6 +1,6 @@
 # Project State
 
-Status: B-04 THREE MAJOR REMEDIATIONS MERGED; RE-AUDIT PENDING; FULL MIGRATION NO-GO; CUTOVER NO-GO
+Status: B-04 FOLLOW-UP INTEGRATION FIXES MERGED; INDEPENDENT B ACCEPTANCE PENDING; FULL MIGRATION NO-GO; CUTOVER NO-GO
 
 ## Canonical boundary
 
@@ -87,6 +87,12 @@ The independent 2026-10-08 follow-up audits disagreed: audit A gave technical GO
 
 **Important scope:** the SHA values above identify the newly merged code, not evidence that a complete production migration was run. Actual post-full-migration operation-bound backup/restore and original Sources acceptance are only possible after owner-approved commit and are mandatory before `FINALIZED`. A-05 replacement PRIMARY plus PWA acceptance remains cutover-only. Nonblocking audit observations about REC whitespace, stale planning counts, MVP restore attestation labeling, producer SHA allowlisting and incomplete failure-mode test enumeration remain tracked as Minor, not accepted production recovery proof.
 
+**Independent B control-audit follow-up (2026-10-08):** the second auditor found two new integration Major findings on SHEDULLER `380c964d`, despite the earlier three fixes:
+- **B04-R-01:** `.github/workflows/finalize-migration.yml` had pinned outdated HEALTH `c423d4a4`, bypassing the audited atomically locked finalizer. Fixed by [SHEDULLER PR #12](https://github.com/Alexio000/SHEDULLER/pull/12): checkout now pins independently tested HEALTH `ad04d6136178086a60ef47cd31dabbc83b71d6ff`; production workflow and CI check the actual checkout SHA and presence/use of `locked_finalization_sql`.
+- **B04-R-02:** `restore_drill.verify_migrated_sources()` shadowed `source_manifest_path` with a Historical relative file path. Fixed in PR #12: separate `historical_relative` variable, positive exact locator check, and synthetic `publish_restore_evidence → get_private_evidence` consumer bridge with tampered locator rejected. CI `37825117450` PASS; merged as `0a06e0a7`.
+- **Linked private finalization integration:** [SHEDULLER PR #13](https://github.com/Alexio000/SHEDULLER/pull/13), merged as `98e7d850709449f6b367c1752f78352725233458`, executes the actual private finalizer against disposable PostgreSQL 17 with scoped read-only backup fingerprint queries, actual evidence INSERT, authenticated-proof acceptance stub, and locked `COMMITTED_REGISTRY → VALIDATED → FINALIZED`. The test also mutates a medical row after private preflight, verifies finalization rejects it without state advancement, restores the synthetic record and verifies success (CI `37826365607` PASS). External Drive/GitHub transport is mocked in this particular PG test and verified separately by GitHub Actions synthetic artifact CI.
+- These changes are **implementation fixes and synthetic integration evidence only**. No post-full-migration production restoration has occurred; the old Drive-native HealthDB remains canonical. Repeat independent B acceptance of new exact SHAs is still required before declaring technical GO. Cutover remains separately blocked by real full-set B-04 recovery and A-05/PWA/write-path criteria.
+
 The executable private recovery evidence contract, fail-closed finalization
 workflow and remaining A-05 recovery/PWA acceptance are documented in
 [SHEDULLER — B-04/A-05 audit recovery guide](https://github.com/Alexio000/SHEDULLER/blob/main/docs/AUDIT_B04_A05_RECOVERY.md)
@@ -114,7 +120,7 @@ Full migration readiness is not the same as cutover readiness.
 
 ## Full-migration gate
 
-Historic passes are retained. B-04 three Major fixes and synthetic real-Actions plus two-session PostgreSQL tests are merged with CI PASS. Independent repeat A/B audit acceptance on current SHAs and the owner's separate full-migration authorization remain necessary before execution. B-04 full-dataset backup/restore proof cannot be produced until after the separately authorized full migration commits; this proof is mandatory **before FINALIZED**, not a prerequisite to starting a controlled owner-authorized migration. No full migration or cutover is authorized.
+Historic passes are retained. B-04 three original Major plus two subsequent integration Major are remediated and tested at synthetic integration level, including private finalization against isolated PostgreSQL. Repeat independent B acceptance of the new frozen SHEDULLER and HEALTH runner versions, and the owner's separate full-migration authorization, remain necessary before execution. B-04 full-dataset backup/restore proof cannot be produced until after the separately authorized full migration commits; this proof is mandatory **before FINALIZED**, not a prerequisite to starting a controlled owner-authorized migration. No full migration or cutover is authorized.
 
 Full migration may begin only after a **separate explicit owner authorization**. The private migration path requires the literal `FULL_MIGRATION_AUTHORIZED` token, a new HEALTH PREPARED target operation UUID and the matching old-HealthDB PREPARED legacy freeze operation ID.
 

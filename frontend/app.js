@@ -84,7 +84,7 @@ const uniqueValues = (values) =>
 function formatTableHeader(label) {
   return String(label ?? "").replace(
     /(^|[^\p{L}])количество(?=$|[^\p{L}])/giu,
-    "$1K-V"
+    "$1К-во"
   );
 }
 
@@ -181,14 +181,137 @@ function updateTableCount(table) {
   if (count) count.textContent = `Показано: ${visible} из ${rows.length}`;
 }
 
+// A table with overflow-x:auto cannot use CSS sticky <th> relative to the
+// page viewport: the overflow wrapper becomes the sticky scroll container.
+// A synchronized, fixed header copy provides both vertical pinning and normal
+// horizontal scrolling without changing the source table or its sorting.
+let pinnedHeaders = [];
+let stickyFrame = 0;
+let stickyChromeObserver = null;
+
+function clearPinnedHeaders() {
+  for (const entry of pinnedHeaders) entry.floating.remove();
+  pinnedHeaders = [];
+}
+
+function stickyOffsets() {
+  const topbar = document.querySelector(".topbar");
+  const title = view.querySelector(":scope > h1");
+  const filter = view.querySelector(".filter-bar[data-sticky-filter]");
+  const headerHeight = Math.ceil(topbar?.getBoundingClientRect().height || 0);
+  const titleHeight = Math.ceil(title?.getBoundingClientRect().height || 0);
+  const filterHeight = Math.ceil(filter?.getBoundingClientRect().height || 0);
+  return { headerHeight, titleHeight, filterHeight, tableTop: headerHeight + titleHeight + filterHeight };
+}
+
+function shouldPinTableHeader(head, wrapper, offset, viewportHeight) {
+  return head.height > 0
+    && head.bottom <= offset
+    && wrapper.bottom > offset + head.height
+    && wrapper.width > 0
+    && offset + head.height < viewportHeight;
+}
+
+function updatePinnedHeaders() {
+  const offset = stickyOffsets().tableTop;
+  for (const entry of pinnedHeaders) {
+    const { table, wrapper, floating, cloneTable } = entry;
+    if (!wrapper.isConnected || !table.tHead) {
+      floating.hidden = true;
+      continue;
+    }
+    const rect = wrapper.getBoundingClientRect();
+    const head = table.tHead.getBoundingClientRect();
+    const show = shouldPinTableHeader(head, rect, offset, window.innerHeight);
+    if (!show) {
+      floating.hidden = true;
+      continue;
+    }
+    const width = table.getBoundingClientRect().width;
+    cloneTable.style.width = `${width}px`;
+    cloneTable.style.minWidth = `${width}px`;
+    const sourceCells = table.tHead.rows[0]?.cells || [];
+    const cloneCells = cloneTable.tHead.rows[0]?.cells || [];
+    for (let i = 0; i < sourceCells.length; i++) {
+      const size = sourceCells[i].getBoundingClientRect().width;
+      cloneCells[i].style.width = `${size}px`;
+      cloneCells[i].style.minWidth = `${size}px`;
+      cloneCells[i].style.maxWidth = `${size}px`;
+      const originalIndicator = sourceCells[i].querySelector(".sort-indicator");
+      const copyIndicator = cloneCells[i].querySelector(".sort-indicator");
+      if (originalIndicator && copyIndicator) copyIndicator.textContent = originalIndicator.textContent;
+      const originalButton = sourceCells[i].querySelector(".sort-button");
+      const copyButton = cloneCells[i].querySelector(".sort-button");
+      if (originalButton && copyButton) copyButton.classList.toggle("active", originalButton.classList.contains("active"));
+    }
+    floating.style.top = `${offset}px`;
+    floating.style.left = `${rect.left}px`;
+    floating.style.width = `${rect.width}px`;
+    floating.style.height = `${head.height}px`;
+    cloneTable.style.marginLeft = `${-wrapper.scrollLeft}px`;
+    floating.hidden = false;
+  }
+}
+function queuePinnedHeaderUpdate() {
+  if (stickyFrame) return;
+  stickyFrame = requestAnimationFrame(() => {
+    stickyFrame = 0;
+    updatePinnedHeaders();
+  });
+}
+function setupStickyChrome() {
+  stickyChromeObserver?.disconnect();
+  const topbar = document.querySelector(".topbar");
+  const title = view.querySelector(":scope > h1");
+  const filter = view.querySelector(".filter-bar[data-sticky-filter]");
+  const sync = () => {
+    const { headerHeight, titleHeight } = stickyOffsets();
+    document.documentElement.style.setProperty("--topbar-height", `${headerHeight}px`);
+    document.documentElement.style.setProperty("--page-title-height", `${titleHeight}px`);
+    queuePinnedHeaderUpdate();
+  };
+  if (typeof ResizeObserver !== "undefined") {
+    stickyChromeObserver = new ResizeObserver(sync);
+    for (const el of [topbar, title, filter]) if (el) stickyChromeObserver.observe(el);
+  }
+  sync();
+}
 function bindSortableTables() {
   document.querySelectorAll("table[data-sortable]").forEach(table => {
     table.querySelectorAll(".sort-button").forEach(button => {
-      button.addEventListener("click", () => sortTable(table, Number(button.dataset.column), button));
+      button.addEventListener("click", () => {
+        sortTable(table, Number(button.dataset.column), button);
+        queuePinnedHeaderUpdate();
+      });
     });
     updateTableCount(table);
+    const wrapper = table.closest(".table-wrap");
+    if (!wrapper || !table.tHead) return;
+    const floating = document.createElement("div");
+    floating.className = "pinned-table-header";
+    floating.hidden = true;
+    const cloneTable = document.createElement("table");
+    cloneTable.className = "data-table sortable-table";
+    cloneTable.style.tableLayout = "fixed";
+    cloneTable.appendChild(table.tHead.cloneNode(true));
+    floating.appendChild(cloneTable);
+    document.body.appendChild(floating);
+    floating.addEventListener("click", event => {
+      const copy = event.target.closest(".sort-button");
+      if (!copy) return;
+      const original = table.tHead.querySelector(`.sort-button[data-column="${copy.dataset.column}"]`);
+      original?.click();
+    });
+    wrapper.addEventListener("scroll", queuePinnedHeaderUpdate, { passive: true });
+    pinnedHeaders.push({ table, wrapper, floating, cloneTable });
   });
+  queuePinnedHeaderUpdate();
 }
+window.addEventListener("scroll", queuePinnedHeaderUpdate, { passive: true });
+window.addEventListener("resize", () => {
+  const topbar = document.querySelector(".topbar");
+  if (topbar && view.querySelector(":scope > h1")) setupStickyChrome();
+});
 
 const filterableTable = sortableTable;
 const bindFilterableTables = bindSortableTables;
@@ -300,28 +423,6 @@ function setupRecordFilters(initialTags = []) {
   applyRecordFilters();
 }
 
-function setupClosedCaseFilters() {
-  const cards = [...document.querySelectorAll("#closed-case-list .case-card")];
-  if (!cards.length) return;
-
-  const apply = () => {
-    const dateFrom = document.querySelector("#closed-date-from")?.value || "";
-    const dateTo = document.querySelector("#closed-date-to")?.value || "";
-    const category = normalizeFilter(document.querySelector("#closed-category")?.value || "");
-
-    cards.forEach(card => {
-      const endDate = card.dataset.endDate || "";
-      const dateOk = (!dateFrom || !endDate || endDate >= dateFrom) && (!dateTo || !endDate || endDate <= dateTo);
-      const categoryOk = !category || normalizeFilter(card.dataset.category) === category;
-      card.hidden = !(dateOk && categoryOk);
-    });
-  };
-
-  ["#closed-date-from", "#closed-date-to"].forEach(id => document.querySelector(id)?.addEventListener("input", apply));
-  document.querySelector("#closed-category")?.addEventListener("change", apply);
-  apply();
-}
-
 async function assertReader(userId) {
   const { data, error } = await supabase
     .from("app_readers")
@@ -384,6 +485,7 @@ loginForm.addEventListener("submit", async (event) => {
 });
 
 logoutButton.addEventListener("click", async () => {
+  clearPinnedHeaders();
   await supabase.auth.signOut();
   location.hash = "#/";
   showOnly(login);
@@ -411,30 +513,36 @@ window.addEventListener("hashchange", () => {
 });
 
 async function route() {
-  const raw = location.hash.replace(/^#\/?/, "") || "";
+  clearPinnedHeaders();
+  const raw = location.hash.startsWith("#/") ? location.hash.slice(2) : location.hash.replace(/^#/, "");
   const [pathPart, queryString = ""] = raw.split("?");
   const parts = pathPart.split("/").filter(Boolean);
   const params = new URLSearchParams(queryString);
   view.innerHTML = '<p class="muted">Загрузка…</p>';
 
   try {
-    if (parts.length === 0) return renderCurrentState();
-    if (["chronic", "open-cases", "medications", "monitoring", "visit-preparation", "future-plan"].includes(parts[0])) {
-      return renderCurrentState(parts[0]);
-    }
-    if (parts[0] === "vaccination") {
+    if (parts.length === 0) {
+      await renderCurrentState();
+    } else if (["chronic", "open-cases", "medications", "monitoring", "visit-preparation", "future-plan"].includes(parts[0])) {
+      await renderCurrentState(parts[0]);
+    } else if (parts[0] === "vaccination") {
       view.innerHTML = '<h1>Вакцинация</h1><p class="empty">Раздел пока не заполнен</p>';
-      return;
+    } else if (parts[0] === "closed-cases") {
+      await renderClosedCases();
+    } else if (parts[0] === "cases" && parts[1]) {
+      await renderCase(decodeURIComponent(parts[1]));
+    } else if (parts[0] === "records" && parts.length === 1) {
+      await renderRecords({ initialTags: params.getAll("tag") });
+    } else if (parts[0] === "records" && parts[1]) {
+      await renderRecord(decodeURIComponent(parts[1]));
+    } else {
+      view.innerHTML = "<h1>Не найдено</h1>";
     }
-    if (parts[0] === "closed-cases") return renderClosedCases();
-    if (parts[0] === "cases" && parts[1]) return renderCase(decodeURIComponent(parts[1]));
-    if (parts[0] === "records" && parts.length === 1) return renderRecords({ initialTags: params.getAll("tag") });
-    if (parts[0] === "records" && parts[1]) return renderRecord(decodeURIComponent(parts[1]));
-    view.innerHTML = "<h1>Не найдено</h1>";
   } catch (error) {
     console.error(error);
     view.innerHTML = '<h1>Ошибка</h1><p class="error">Не удалось загрузить данные.</p>';
   }
+  setupStickyChrome();
 }
 
 async function fetchCaseBundles(cases) {
@@ -716,24 +824,24 @@ async function renderCurrentState(mode = "all") {
     "medical-card": `<section><h2>Вопросы по медкарте</h2>
       ${medicalQuestions.length ? medicalQuestions.map(questionDetails).join("") : empty("Открытых вопросов по медкарте нет")}
     </section>`,
-    "chronic": `<section><h2>Хронические состояния</h2>
+    "chronic": `<section>${mode === "all" ? "<h2>Хронические состояния</h2>" : ""}
       ${chronic.length ? chronic.map(x => caseDetails(x)).join("") : empty()}
     </section>`,
-    "open-cases": `<section><h2>Открытые случаи</h2>
+    "open-cases": `<section>${mode === "all" ? "<h2>Открытые случаи</h2>" : ""}
       ${episodes.length ? episodes.map(x => caseDetails(x)).join("") : empty()}
     </section>`,
-    "medications": `<section><h2>Принимаемые препараты</h2>
+    "medications": `<section>${mode === "all" ? "<h2>Принимаемые препараты</h2>" : ""}
       ${filterableTable(["Препарат","Дозировка","Режим","REC"], medsRows, { id: "medications-table" })}
     </section>`,
-    "monitoring": `<section><h2>Мониторинг</h2>
+    "monitoring": `<section>${mode === "all" ? "<h2>Мониторинг</h2>" : ""}
       ${filterableTable(["Что контролировать","Периодичность","REC"], monitoringRows, { id: "monitoring-table" })}
     </section>`,
-    "visit-preparation": `<section><h2>Подготовка к визиту</h2>
+    "visit-preparation": `<section>${mode === "all" ? "<h2>Подготовка к визиту</h2>" : ""}
       ${visitPreparation(plan.data || [], questions.data || [])}
     </section>`,
-    "future-plan": `<section><h2>Будущий план</h2>
+    "future-plan": `<section>${mode === "all" ? "<h2>Будущий план</h2>" : ""}
       ${planKinds.length > 1 || planStatuses.length > 1 ? `
-        <div class="filter-bar" aria-label="Фильтр будущего плана">
+        <div class="filter-bar" ${mode === "future-plan" ? "data-sticky-filter" : ""} aria-label="Фильтр будущего плана">
           <span class="filter-bar-title">Фильтр</span>
           ${compactSelect("Вид", "plan-kind-filter", planKinds)}
           ${compactSelect("Статус", "plan-status-filter", planStatuses)}
@@ -756,7 +864,6 @@ async function renderCurrentState(mode = "all") {
     : sections[mode] || empty();
   view.innerHTML = `
     <h1>${esc(sectionNames[mode] || "Текущее состояние")}</h1>
-    ${mode === "all" ? '<p class="intro">Сводная информация и подготовка к визитам. Все медицинские сведения связаны с REC.</p>' : ""}
     ${content}
   `;
   bindFilterableTables();
@@ -782,31 +889,12 @@ async function renderClosedCases() {
     return bd.localeCompare(ad);
   });
 
-  const categories = uniqueValues(bundled.map(x => x.category));
-
   view.innerHTML = `
     <h1>Закрытые случаи</h1>
-    <p class="intro">Завершённые клинические случаи. Внутри каждой карточки — начало, закрывающая REC и полная импортированная цепочка связей.</p>
-    ${bundled.length ? `
-      <div class="filter-bar" aria-label="Фильтр закрытых случаев">
-        <span class="filter-bar-title">Фильтр</span>
-        <label>Дата закрытия от<input id="closed-date-from" type="date"></label>
-        <label>Дата закрытия до<input id="closed-date-to" type="date"></label>
-        ${categories.length > 1 ? `
-          <label>Категория
-            <select id="closed-category">
-              <option value="">Все</option>
-              ${categories.map(value => `<option value="${esc(value)}">${esc(value === "chronic" ? "Хроническое состояние" : "Случай / эпизод")}</option>`).join("")}
-            </select>
-          </label>
-        ` : ""}
-      </div>
-    ` : ""}
     <section class="case-stack" id="closed-case-list">
       ${bundled.length ? bundled.map(x => caseDetails(x, { closed: true })).join("") : empty("Закрытых случаев пока нет")}
     </section>
   `;
-  setupClosedCaseFilters();
 }
 
 async function renderCase(caseKey) {
@@ -921,8 +1009,7 @@ async function renderRecords({ initialTags = [] } = {}) {
 
   view.innerHTML = `
     <h1>Записи</h1>
-    <p class="intro">Индекс REC: дата, теги, тип записи, подтверждение, краткое содержание и связь со случаем. Нажмите на заголовок столбца для сортировки.</p>
-    <div class="filter-bar" aria-label="Фильтр записей">
+    <div class="filter-bar" data-sticky-filter aria-label="Фильтр записей">
       <span class="filter-bar-title">Фильтр</span>
       <label>Дата от<input id="records-date-from" type="date"></label>
       <label>Дата до<input id="records-date-to" type="date"></label>

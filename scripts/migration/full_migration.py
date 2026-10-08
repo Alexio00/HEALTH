@@ -869,6 +869,16 @@ def mark_interrupted_migration_failed(db_url_env: str, operation_id: str, confir
         fail("invalid failed-operation ID")
     sql = f"""
 begin;
+do $
+begin
+  if not exists (
+    select 1 from public.operations
+    where operation_id='{operation_id}'::uuid
+      and state in ('PREPARED','COMMITTED_REGISTRY','VALIDATED')
+  ) then
+    raise exception 'no unfinished target operation to mark FAILED';
+  end if;
+end $;
 update public.operations
 set state='FAILED', result='FAIL', updated_at=now(),
     notes=coalesce(notes,'') || ' Target migration interrupted; old source remains canonical; freeze requires separate review.'

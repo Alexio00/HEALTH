@@ -98,6 +98,7 @@ REC_RE = re.compile(r"^REC-(\d{8})-(\d{3})$")
 SRC_RE = re.compile(r"^SRC-[0-9]{8}-[0-9]{3,}$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
+OLD_OPERATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 class MigrationError(RuntimeError):
@@ -159,6 +160,8 @@ def sealed_package_fingerprint(manifest: dict[str, Any], tables: dict[str, Any])
     control = {
         "schema_version": manifest.get("schema_version"),
         "status": manifest.get("status"),
+        "capture_mode": manifest.get("capture_mode"),
+        "source_location_mode": manifest.get("source_location_mode"),
         "captured_at": manifest.get("captured_at"),
         "old_healthdb_validation_pass": manifest.get("old_healthdb_validation_pass"),
         "old_healthdb_freeze_operation_id": manifest.get("old_healthdb_freeze_operation_id"),
@@ -185,17 +188,21 @@ def read_manifest(package: Path) -> dict[str, Any]:
 
 def read_package(package: Path, require_sealed: bool = True) -> tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]:
     manifest = read_manifest(package)
-    if manifest.get("schema_version") != 1:
-        fail("manifest schema_version must be 1")
+    if manifest.get("schema_version") != 2:
+        fail("manifest schema_version must be 2")
     if manifest.get("status") != "CAPTURED":
         fail("manifest status must be CAPTURED")
+    if manifest.get("capture_mode") != "migration":
+        fail("manifest capture_mode must be migration")
+    if manifest.get("source_location_mode") != "new-health-primary":
+        fail("manifest source_location_mode must be new-health-primary")
     if not manifest.get("captured_at"):
         fail("manifest captured_at is required")
     if manifest.get("old_healthdb_validation_pass") is not True:
         fail("old HealthDB Validation PASS is required")
     freeze_operation_id = str(manifest.get("old_healthdb_freeze_operation_id", ""))
-    if not UUID_RE.fullmatch(freeze_operation_id):
-        fail("old HealthDB migration freeze operation_id is required")
+    if not OLD_OPERATION_ID_RE.fullmatch(freeze_operation_id):
+        fail("old HealthDB migration freeze operation_id is missing or unsafe")
     if manifest.get("old_healthdb_freeze_state") != "PREPARED":
         fail("old HealthDB migration freeze must be PREPARED at capture")
     if int(manifest.get("old_healthdb_other_unfinished_operations", -1)) != 0:
@@ -323,6 +330,8 @@ def validate_data(data: dict[str, list[dict[str, Any]]]) -> None:
         location_keys.add(key)
         if role == "PRIMARY":
             primary_count[sid] += 1
+            if row.get("provider") != "google-drive" or row.get("account_alias") != "HEALTH_PRIMARY":
+                fail("source_locations: PRIMARY must be the new HEALTH Google Drive")
             if not row.get("verified_at"):
                 fail("source_locations: PRIMARY must be verified")
     if any(count != 1 for count in primary_count.values()):
@@ -709,11 +718,13 @@ def self_test() -> None:
     with tempfile.TemporaryDirectory(prefix="health-migration-selftest-") as raw:
         package = Path(raw)
         manifest = {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "CAPTURED",
+            "capture_mode": "migration",
+            "source_location_mode": "new-health-primary",
             "captured_at": "2026-01-01T00:00:00Z",
             "old_healthdb_validation_pass": True,
-            "old_healthdb_freeze_operation_id": "00000000-0000-4000-8000-000000000001",
+            "old_healthdb_freeze_operation_id": "MAINT-999",
             "old_healthdb_freeze_state": "PREPARED",
             "old_healthdb_other_unfinished_operations": 0,
             "historical_sources_manifest_sha256": "0" * 64,
@@ -736,7 +747,7 @@ def self_test() -> None:
                 "mime_type":"text/plain","size_bytes":1,"sha256":"a"*64,"source_date":"2026-01-01","metadata":{}
             }],
             "source_locations": [{
-                "source_id":"SRC-20260101-001","provider":"synthetic","account_alias":"TEST",
+                "source_id":"SRC-20260101-001","provider":"google-drive","account_alias":"HEALTH_PRIMARY",
                 "provider_object_id":"synthetic-object","location_role":"PRIMARY","verified_at":"2026-01-01T00:00:00Z"
             }],
             "record_sources": [{
@@ -775,7 +786,7 @@ def self_test() -> None:
 
         sealed = read_manifest(package)
         original_freeze = sealed["old_healthdb_freeze_operation_id"]
-        sealed["old_healthdb_freeze_operation_id"] = "00000000-0000-4000-8000-000000000002"
+        sealed["old_healthdb_freeze_operation_id"] = "MAINT-998"
         (package / MANIFEST).write_text(canonical_json(sealed) + "\n", encoding="utf-8")
         try:
             verify_package(package)

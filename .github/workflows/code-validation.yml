@@ -8,6 +8,13 @@ on:
       - "db/**"
       - "supabase/**"
       - ".github/workflows/code-validation.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "db/**"
+      - "supabase/**"
+      - ".github/workflows/code-validation.yml"
   workflow_dispatch:
 
 permissions:

@@ -24,6 +24,8 @@ Preparing this plan does not authorize full migration or cutover.
 Full migration starts only after an explicit owner command.
 Cutover requires a second explicit owner decision after full migration validation.
 
+The target HEALTH migration operation uses a UUID. The old Drive-native freeze uses the existing legacy Change Log ID format (`MAINT-…`/equivalent). These identifiers belong to different systems and must not be coerced into one format.
+
 ## Final snapshot gate
 
 Immediately before full migration:
@@ -33,11 +35,12 @@ Immediately before full migration:
 3. Create one dedicated old-HealthDB maintenance Change Log row for the migration freeze in state `PREPARED`; it creates no ID reservation.
 4. Reread the old Change Log and require that freeze row to be the sole unfinished operation.
 5. Require all live FORMULA validations to PASS while the freeze is held.
-6. Capture a fresh Registry snapshot and a fresh recursive Sources manifest under that freeze.
-7. Record the snapshot timestamp, all entity counts, the freeze operation ID/state, and zero **other** unfinished operations privately in the package manifest.
-8. Recompute the migration set from that snapshot. Never rely on an earlier MVP or planning count.
-9. Keep the same freeze row `PREPARED` through staging and until the target HEALTH commit gate.
-10. Immediately before target commit, reread the old Change Log and require the same freeze operation to still be `PREPARED` and the sole unfinished operation.
+6. Run the private scheduler capture extractor under that freeze. It must export a fresh Registry snapshot, deterministically extract every REC body from the active individual/annual Google Docs, read every Registry-linked source from active `HEALTH DB/Sources`, recompute source size/SHA-256 from bytes, and capture a fresh recursive Historical Sources manifest.
+7. Materialize Registry-linked source bytes into the new `HEALTH/Sources`, verify copied size/SHA-256 by round-trip, and require the package PRIMARY source locations to point only to those new objects. Retain old Drive IDs/URLs only in private provenance.
+8. Record the snapshot timestamp, all entity counts, the legacy freeze operation ID/state, and zero **other** unfinished operations privately in package schema v2 together with `capture_mode=migration` and `source_location_mode=new-health-primary`.
+9. Recompute the migration set from that snapshot. Never rely on an earlier MVP or planning count.
+10. Keep the same freeze row `PREPARED` through staging and until the target HEALTH commit gate.
+11. Immediately before target commit, re-export the Registry and reread the old Change Log; require an unchanged canonical Registry fingerprint and the same legacy freeze operation to still be `PREPARED` and the sole unfinished operation.
 
 If the freeze is missing, changed, no longer sole, or the old HealthDB changes before commit, abort the target commit, discard the staged result and rebuild from a fresh frozen snapshot. Release/finalize the old freeze only after the target exact post-commit comparison and required validation have completed.
 

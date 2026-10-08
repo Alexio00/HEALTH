@@ -31,11 +31,13 @@ Before sealing:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "CAPTURED",
+  "capture_mode": "migration",
+  "source_location_mode": "new-health-primary",
   "captured_at": "<UTC ISO timestamp>",
   "old_healthdb_validation_pass": true,
-  "old_healthdb_freeze_operation_id": "<UUID of old HealthDB PREPARED freeze operation>",
+  "old_healthdb_freeze_operation_id": "<legacy old HealthDB Change Log ID, for example MAINT-011>",
   "old_healthdb_freeze_state": "PREPARED",
   "old_healthdb_other_unfinished_operations": 0,
   "historical_sources_manifest_sha256": "<64 hex>",
@@ -45,7 +47,11 @@ Before sealing:
 
 The extractor must capture the Registry and record/source evidence under one migration freeze and must recompute all values from the live Drive-native HealthDB. Planning/MVP counts are forbidden as snapshot inputs.
 
-The freeze is a dedicated old-HealthDB maintenance Change Log row in state `PREPARED`. The freeze row itself is not counted by `old_healthdb_other_unfinished_operations`; that field must be exactly `0`. The package records the freeze operation ID and `PREPARED` state so a sealed package cannot represent an unfrozen capture.
+The private scheduler extractor is `SHEDULLER/scripts/capture_old_healthdb.py`. Its `audit` mode is read-only and proves the live extraction/mapping path without creating a migration package or copying Sources. Its `build` mode is not automatic and refuses to start unless both the literal owner authorization token `FULL_MIGRATION_AUTHORIZED` and the live old-HealthDB freeze operation ID are supplied.
+
+Package schema v2 also binds `capture_mode=migration` and `source_location_mode=new-health-primary` into the sealed package fingerprint. Every PRIMARY source location in the package must point to the newly materialized Google Drive object under `HEALTH/Sources` with account alias `HEALTH_PRIMARY`. Old Drive object IDs/URLs may be retained only as private provenance/original locators; they are never active PRIMARY locations.
+
+The freeze is a dedicated old-HealthDB maintenance Change Log row in state `PREPARED`. Its operation ID is the opaque legacy text ID used by the Drive-native Change Log (for example `MAINT-011`); it is not a UUID requirement. The separate target HEALTH operation ID remains a UUID. The freeze row itself is not counted by `old_healthdb_other_unfinished_operations`; that field must be exactly `0`. The package records the freeze operation ID and `PREPARED` state so a sealed package cannot represent an unfrozen capture.
 
 Immediately before the target HEALTH commit, the operator must reread the old Drive-native Change Log and prove that the same freeze operation is still `PREPARED` and is the sole unfinished old-HealthDB operation. If that check fails, the staged package is stale and must not be committed.
 
@@ -66,7 +72,7 @@ python scripts/migration/full_migration.py verify <private-package>
 It also writes a package fingerprint that binds both:
 
 - every canonical table fingerprint;
-- the capture control metadata: schema/status, capture timestamp, old-HealthDB validation PASS, freeze operation ID/state, zero other unfinished operations, and the historical Sources manifest SHA-256.
+- the capture control metadata: schema/status, capture mode, source-location mode, capture timestamp, old-HealthDB validation PASS, freeze operation ID/state, zero other unfinished operations, and the historical Sources manifest SHA-256.
 
 Changing either medical content or freeze/capture control metadata after sealing invalidates the package.
 

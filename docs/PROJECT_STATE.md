@@ -1,6 +1,6 @@
 # Project State
 
-Status: B-04 SYNTHETIC INTEGRATION VERIFIED; INDEPENDENT A/B RE-AUDIT PENDING; FULL MIGRATION NO-GO; CUTOVER NO-GO
+Status: B-04 THREE MAJOR REMEDIATIONS MERGED; RE-AUDIT PENDING; FULL MIGRATION NO-GO; CUTOVER NO-GO
 
 ## Canonical boundary
 
@@ -60,7 +60,7 @@ MVP operational acceptance is PASS:
 
 ## Final pre-migration audit
 
-Earlier preliminary readiness was PASS; **current execution verdict is NO-GO** until the merged B-04 attestation code receives independent re-audit acceptance and the owner separately authorizes freeze/full migration.
+The independent 2026-10-08 follow-up audits disagreed: audit A gave technical GO (immediate execution NO-GO), while adversarial audit B found **3 Major** in the B-04 finalization/recovery chain and returned technical NO-GO. We apply the conservative B verdict. Three code remedies are now merged and synthetically tested; **current technical execution verdict remains NO-GO until a fresh independent re-audit accepts their new exact SHAs**, and a separate owner authorization is still required for any freeze/full migration.
 
 2026-10-08 remediation evidence:
 - the old Drive-native freeze operation ID is now treated as the exact opaque legacy Change Log value (for example `MAINT-011`), while only the new HEALTH target operation uses a UUID;
@@ -78,6 +78,14 @@ Earlier preliminary readiness was PASS; **current execution verdict is NO-GO** u
 - the old Drive-native HealthDB is used only as the canonical migration source until cutover; new HEALTH record text is stored in PostgreSQL and active source PRIMARY objects belong under the new `HEALTH/Sources`.
 
 **Audit A/B reconciliation — 2026-10-08:** auditor B found B-04: text-only recovery PASS could finalize a newer operation. First B-04 remediation was merged in HEALTH `c423d4a4` and private SHEDULLER `27a6c20c`. A subsequent focused review found a further proof-authenticity gap: an arbitrary privately stored restore proof was not demonstrably produced by the claimed successful GitHub Actions run. Private SHEDULLER [PR #10](https://github.com/Alexio000/SHEDULLER/pull/10), merged as `c8399ae8`, now requires the exact matching GitHub-produced digest-only Actions artifact as well as authenticated successful-run metadata. A real synthetic GitHub Actions artifact transport test (run `37818168954`) PASS included upload → authenticated REST/ZIP readback → SHA/run/attempt/SHA binding and negative tampering cases. It also discovered and corrected signed-download redirect handling so the Actions bearer token is not forwarded across host origins. Scheduler main recovery code CI run `37818353973` PASS. This is **synthetic integration**, NOT full-dataset disaster recovery. Auditor A's A-05 replacement-PRIMARY restore/rebind code exists; complete lost-PRIMARY and PWA original-opening exercises remain mandatory before cutover.
+
+**Independent audit B, three Major corrections (2026-10-08):**
+
+- B04-B-01: private scheduler [PR #11](https://github.com/Alexio000/SHEDULLER/pull/11), merged as `380c964d205b33242f5a458b03dab10f141b7f97`, scopes backup `PGOPTIONS=-c default_transaction_read_only=on` strictly to the backup read subprocess rather than mutating the parent finalizer's environment.
+- B04-B-02: public HEALTH [PR #14](https://github.com/Alexio00/HEALTH/pull/14), merged as `d1bad17c93f1d28daf41f89be970f68f55e44f1c`, recalculates complete SHA-256 fingerprints of all 15 medical tables under SHARE DML-blocking locks **in the same PostgreSQL transaction** as `VALIDATED → FINALIZED`, with operation + authorization/snapshot/evidence row locking. Isolated PostgreSQL 17 synthetic tests include a real concurrent two-session writer and reject changed data (CI `37821851207`).
+- B04-B-03: private scheduler PR #11 binds the *entire* `Historical` inventory to the sealed old-Drive fingerprint and byte-reads **all retained originals, including unlinked files**, from independent backup at both backup verification and isolated restore. Full-Historical corruption/omission negative tests PASS (CI `37822115414`). Public recovery contract requires the old sealed inventory digest and count.
+
+**Important scope:** the SHA values above identify the newly merged code, not evidence that a complete production migration was run. Actual post-full-migration operation-bound backup/restore and original Sources acceptance are only possible after owner-approved commit and are mandatory before `FINALIZED`. A-05 replacement PRIMARY plus PWA acceptance remains cutover-only. Nonblocking audit observations about REC whitespace, stale planning counts, MVP restore attestation labeling, producer SHA allowlisting and incomplete failure-mode test enumeration remain tracked as Minor, not accepted production recovery proof.
 
 The executable private recovery evidence contract, fail-closed finalization
 workflow and remaining A-05 recovery/PWA acceptance are documented in
@@ -106,7 +114,7 @@ Full migration readiness is not the same as cutover readiness.
 
 ## Full-migration gate
 
-Historic passes are retained. B-04 code and synthetic real-Actions transport tests are merged with CI PASS. Independent A/B re-audit acceptance and the owner's separate full-migration authorization remain necessary before execution. B-04 full-dataset backup/restore proof cannot be produced until after the separately authorized full migration commits; this proof is mandatory **before FINALIZED**, not a prerequisite to starting a controlled owner-authorized migration. No full migration or cutover is authorized.
+Historic passes are retained. B-04 three Major fixes and synthetic real-Actions plus two-session PostgreSQL tests are merged with CI PASS. Independent repeat A/B audit acceptance on current SHAs and the owner's separate full-migration authorization remain necessary before execution. B-04 full-dataset backup/restore proof cannot be produced until after the separately authorized full migration commits; this proof is mandatory **before FINALIZED**, not a prerequisite to starting a controlled owner-authorized migration. No full migration or cutover is authorized.
 
 Full migration may begin only after a **separate explicit owner authorization**. The private migration path requires the literal `FULL_MIGRATION_AUTHORIZED` token, a new HEALTH PREPARED target operation UUID and the matching old-HealthDB PREPARED legacy freeze operation ID.
 

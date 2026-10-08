@@ -514,7 +514,7 @@ window.addEventListener("hashchange", () => {
 
 async function route() {
   clearPinnedHeaders();
-  const raw = location.hash.replace(/^#\\/?/, "") || "";
+  const raw = location.hash.startsWith("#/") ? location.hash.slice(2) : location.hash.replace(/^#/, "");
   const [pathPart, queryString = ""] = raw.split("?");
   const parts = pathPart.split("/").filter(Boolean);
   const params = new URLSearchParams(queryString);

@@ -817,6 +817,63 @@ def postcommit_verification(db_url_env: str, operation_id: str) -> None:
     print(f"PASS read-only postcommit verification; tables={len(LOAD_ORDER)}; checks={len(statuses)}")
 
 
+def finalize_verified_operation(db_url_env: str, operation_id: str, authorization: str) -> None:
+    if authorization != AUTHORIZATION:
+        fail("finalization requires explicit owner authorization")
+    if not UUID_RE.fullmatch(operation_id):
+        fail("invalid finalization operation ID")
+    postcommit_verification(db_url_env, operation_id)
+    # Recheck state/owner binding inside the same transaction as both state
+    # transitions, so competing operations cannot invalidate the preflight.
+    sql = f"""
+begin;
+do $
+begin
+  if not exists (
+    select 1 from public.operations
+    where operation_id='{operation_id}'::uuid and state='COMMITTED_REGISTRY'
+  ) then
+    raise exception 'target migration operation has changed';
+  end if;
+  if not exists (
+    select 1 from public.system_state
+    where key='full_migration_readiness'
+      and value->>'full_migration_authorized'='true'
+      and value->>'owner_authorized_operation_id'='{operation_id}'
+  ) then
+    raise exception 'operation-specific owner authorization not present';
+  end if;
+end $;
+update public.operations
+set state='VALIDATED', updated_at=now()
+where operation_id='{operation_id}'::uuid and state='COMMITTED_REGISTRY';
+update public.operations
+set state='FINALIZED', result='PASS', updated_at=now(), finalized_at=now()
+where operation_id='{operation_id}'::uuid and state='VALIDATED';
+commit;
+"""
+    run_psql(sql, db_url_env)
+    print("PASS full-migration operation FINALIZED; legacy freeze and cutover remain separate")
+
+
+def mark_interrupted_migration_failed(db_url_env: str, operation_id: str, confirmation: str) -> None:
+    if confirmation != "MARK_TARGET_FAILED_KEEP_LEGACY_FREEZE":
+        fail("explicit failed-operation confirmation required")
+    if not UUID_RE.fullmatch(operation_id):
+        fail("invalid failed-operation ID")
+    sql = f"""
+begin;
+update public.operations
+set state='FAILED', result='FAIL', updated_at=now(),
+    notes=coalesce(notes,'') || ' Target migration interrupted; old source remains canonical; freeze requires separate review.'
+where operation_id='{operation_id}'::uuid
+  and state in ('PREPARED','COMMITTED_REGISTRY','VALIDATED');
+commit;
+"""
+    run_psql(sql, db_url_env)
+    print("Target operation failure recorded; never automatically released old freeze")
+
+
 def postgresql_roundtrip_test() -> None:
     # Strictly local, synthetic-only integration test; NEVER a production URL.
     from urllib.parse import urlparse
@@ -1005,6 +1062,15 @@ def main() -> None:
     p = sub.add_parser("postcommit-verify")
     p.add_argument("--operation-id", required=True)
     p.add_argument("--db-url-env", default="SUPABASE_DB_URL")
+    p = sub.add_parser("finalize-verified-migration")
+    p.add_argument("--operation-id", required=True)
+    p.add_argument("--authorization", required=True)
+    p.add_argument("--db-url-env", default="SUPABASE_DB_URL")
+
+    p = sub.add_parser("mark-interrupted-failed")
+    p.add_argument("--operation-id", required=True)
+    p.add_argument("--confirm", required=True)
+    p.add_argument("--db-url-env", default="SUPABASE_DB_URL")
 
     args = parser.parse_args()
     if args.command == "seal":
@@ -1034,6 +1100,10 @@ def main() -> None:
         postgresql_roundtrip_test()
     elif args.command == "postcommit-verify":
         postcommit_verification(args.db_url_env, args.operation_id)
+    elif args.command == "finalize-verified-migration":
+        finalize_verified_operation(args.db_url_env, args.operation_id, args.authorization)
+    elif args.command == "mark-interrupted-failed":
+        mark_interrupted_migration_failed(args.db_url_env, args.operation_id, args.confirm)
 
 
 if __name__ == "__main__":

@@ -369,7 +369,24 @@ logoutButton.addEventListener("click", async () => {
   showOnly(login);
 });
 
+const mobileMenu = document.querySelector("#primary-nav");
+const menuToggle = document.querySelector("#menu-toggle");
+
+function closeMobileMenu() {
+  mobileMenu?.classList.remove("is-open");
+  menuToggle?.setAttribute("aria-expanded", "false");
+  menuToggle?.setAttribute("aria-label", "Открыть меню");
+}
+menuToggle?.addEventListener("click", () => {
+  const opened = mobileMenu.classList.toggle("is-open");
+  menuToggle.setAttribute("aria-expanded", String(opened));
+  menuToggle.setAttribute("aria-label", opened ? "Закрыть меню" : "Открыть меню");
+});
+mobileMenu?.addEventListener("click", event => {
+  if (event.target.closest("a")) closeMobileMenu();
+});
 window.addEventListener("hashchange", () => {
+  closeMobileMenu();
   if (!app.classList.contains("hidden")) route();
 });
 
@@ -382,6 +399,13 @@ async function route() {
 
   try {
     if (parts.length === 0) return renderCurrentState();
+    if (["chronic", "open-cases", "medications", "monitoring", "visit-preparation", "future-plan"].includes(parts[0])) {
+      return renderCurrentState(parts[0]);
+    }
+    if (parts[0] === "vaccination") {
+      view.innerHTML = '<h1>Вакцинация</h1><p class="empty">Раздел пока не заполнен</p>';
+      return;
+    }
     if (parts[0] === "closed-cases") return renderClosedCases();
     if (parts[0] === "cases" && parts[1]) return renderCase(decodeURIComponent(parts[1]));
     if (parts[0] === "records" && parts.length === 1) return renderRecords({ initialTags: params.getAll("tag") });
@@ -414,7 +438,7 @@ async function fetchCaseBundles(cases) {
   if (recordIds.length) {
     const result = await supabase
       .from("records")
-      .select("record_id,record_date,title")
+      .select("record_id,record_date,title,summary,body_text")
       .in("record_id", recordIds);
     if (result.error) throw result.error;
     records = result.data || [];
@@ -446,7 +470,7 @@ function caseDetails(item, { closed = false, open = false } = {}) {
     return `
       <li>
         <span class="relation">${esc(link.relation)}</span>
-        ${recLink(link.record_id)}
+        ${recLink(link.record_id, r ? recordDisplayTitle(r) : link.record_id)}
         ${date ? `<span class="muted"> · ${esc(fmtDate(date))}</span>` : ""}
         ${r?.title ? `<span> · ${esc(r.title)}</span>` : ""}
         ${link.note ? `<p class="muted">${esc(link.note)}</p>` : ""}
@@ -501,7 +525,97 @@ function questionDetails(item) {
   `;
 }
 
-async function renderCurrentState() {
+
+const specialtyLabels = [
+  ["эндокринолог", "эндокринологу"],
+  ["кардиолог", "кардиологу"],
+  ["терапевт", "терапевту"],
+  ["лор", "лору"],
+  ["отоларинголог", "лору"],
+  ["хирург", "хирургу"],
+  ["ортопед", "ортопеду"],
+  ["гастроэнтеролог", "гастроэнтерологу"],
+  ["невролог", "неврологу"],
+  ["инфекционист", "инфекционисту"],
+  ["стоматолог", "стоматологу"],
+  ["уролог", "урологу"],
+  ["психиатр", "психиатру"],
+  ["дерматолог", "дерматологу"],
+  ["ревматолог", "ревматологу"],
+  ["аллерголог", "аллергологу"],
+  ["онколог", "онкологу"],
+  ["гинеколог", "гинекологу"]
+];
+const visitLabel = specialty => specialtyLabels.find(x => x[0] === specialty)?.[1] || "специалисту";
+
+// Only an explicit specialist prefix in a question or an explicit visit plan
+// is sufficient. Do not infer specialty from the medical history or drug names.
+function namedSpecialties(text) {
+  const value = String(text || "").toLocaleLowerCase("ru");
+  const found = specialtyLabels.filter(([stem]) => value.includes(stem)).map(([stem]) =>
+    stem === "отоларинголог" ? "лор" : stem
+  );
+  return [...new Set(found)];
+}
+function questionSpecialties(question) {
+  const meta = question.metadata || {};
+  if (Array.isArray(meta.visit_specialties) && meta.visit_specialties.length) {
+    return meta.visit_specialties.map(x => String(x).toLocaleLowerCase("ru"))
+      .filter(x => specialtyLabels.some(([stem]) => stem === x));
+  }
+  const prefix = String(question.question || "").split(":")[0];
+  return prefix.length <= 95 ? namedSpecialties(prefix) : [];
+}
+function isMedicalCardQuestion(question) {
+  return ["medical_card", "chart"].includes(question.metadata?.category)
+    || question.metadata?.purpose === "medical_card";
+}
+function visitPreparation(planItems, questions) {
+  const groups = new Map();
+  const getGroup = specialty => {
+    const key = specialty || "специалист";
+    if (!groups.has(key)) groups.set(key, { specialty: key, visits: [], questions: [] });
+    return groups.get(key);
+  };
+  for (const item of planItems || []) {
+    const kind = String(item.metadata?.kind || "").toLocaleLowerCase("ru");
+    if (!kind.includes("визит") && !kind.includes("консультаци")) continue;
+    const prefix = String(item.title || "").split(":")[0];
+    const specialties = prefix.length <= 100 ? namedSpecialties(prefix) : [];
+    for (const specialty of specialties.length ? specialties : ["специалист"]) {
+      getGroup(specialty).visits.push(item);
+    }
+  }
+  for (const question of questions || []) {
+    if (isMedicalCardQuestion(question)) continue;
+    const specialties = questionSpecialties(question);
+    for (const specialty of specialties.length ? specialties : ["специалист"]) {
+      getGroup(specialty).questions.push(question);
+    }
+  }
+  if (!groups.size) return empty("Плановых визитов и вопросов специалистам пока нет");
+  return [...groups.values()].map(group => {
+    const planNotes = group.visits.map(item => {
+      const due = item.metadata?.due_text || fmtDate(item.due_on) || "Срок не указан";
+      return `<li><strong>${esc(due)}</strong> · ${esc(item.title)}
+        ${item.basis_record_id ? ` · ${recLink(item.basis_record_id)}` : ""}</li>`;
+    }).join("");
+    return `
+      <details class="case-card visit-card">
+        <summary><strong>Визит к ${esc(visitLabel(group.specialty))}</strong>
+          <span class="muted"> · вопросов: ${group.questions.length}</span></summary>
+        <div class="case-body">
+          ${planNotes ? `<h3>Плановый визит</h3><ul class="record-list">${planNotes}</ul>` :
+            '<p class="muted">Связанный пункт будущего плана пока не найден</p>'}
+          <h3>Вопросы к специалисту</h3>
+          ${group.questions.length ? group.questions.map(questionDetails).join("") :
+            empty("Вопросы пока не добавлены")}
+        </div>
+      </details>`;
+  }).join("");
+}
+
+async function renderCurrentState(mode = "all") {
   const [cases, meds, monitoring, plan, questions] = await Promise.all([
     supabase.from("cases").select("case_key,title,summary,status,category,opening_record_id,closing_record_id,metadata").eq("status","open").order("title"),
     supabase.from("medications").select("medication_id,name,dose,schedule,status,basis_record_id").eq("status","active").order("name"),
@@ -515,6 +629,7 @@ async function renderCurrentState() {
   }
 
   const bundled = await fetchCaseBundles(cases.data || []);
+  const medicalQuestions = (questions.data || []).filter(isMedicalCardQuestion);
   const chronic = bundled.filter(x => x.category === "chronic");
   const episodes = bundled.filter(x => x.category !== "chronic");
 
@@ -549,37 +664,27 @@ async function renderCurrentState() {
   const planKinds = uniqueValues((plan.data || []).map(x => x.metadata?.kind || ""));
   const planStatuses = uniqueValues((plan.data || []).map(x => x.metadata?.source_status || "запланировано"));
 
-  view.innerHTML = `
-    <h1>Текущее состояние</h1>
-    <p class="intro">Актуальное состояние, открытые случаи, препараты, мониторинг и будущий план. Каждая медицинская деталь должна прослеживаться до REC.</p>
 
-    <section>
-      <h2>Вопросы по медкарте</h2>
-      ${questions.data?.length ? questions.data.map(questionDetails).join("") : empty("Открытых вопросов нет")}
-    </section>
-
-    <section>
-      <h2>Хронические состояния</h2>
+  const sections = {
+    "medical-card": `<section><h2>Вопросы по медкарте</h2>
+      ${medicalQuestions.length ? medicalQuestions.map(questionDetails).join("") : empty("Открытых вопросов по медкарте нет")}
+    </section>`,
+    "chronic": `<section><h2>Хронические состояния</h2>
       ${chronic.length ? chronic.map(x => caseDetails(x)).join("") : empty()}
-    </section>
-
-    <section>
-      <h2>Открытые случаи</h2>
+    </section>`,
+    "open-cases": `<section><h2>Открытые случаи</h2>
       ${episodes.length ? episodes.map(x => caseDetails(x)).join("") : empty()}
-    </section>
-
-    <section>
-      <h2>Текущие лекарственные средства</h2>
+    </section>`,
+    "medications": `<section><h2>Принимаемые препараты</h2>
       ${filterableTable(["Препарат","Дозировка","Режим","REC"], medsRows, { id: "medications-table" })}
-    </section>
-
-    <section>
-      <h2>Мониторинг</h2>
+    </section>`,
+    "monitoring": `<section><h2>Мониторинг</h2>
       ${filterableTable(["Что контролировать","Периодичность","REC"], monitoringRows, { id: "monitoring-table" })}
-    </section>
-
-    <section>
-      <h2>Будущий план</h2>
+    </section>`,
+    "visit-preparation": `<section><h2>Подготовка к визиту</h2>
+      ${visitPreparation(plan.data || [], questions.data || [])}
+    </section>`,
+    "future-plan": `<section><h2>Будущий план</h2>
       ${planKinds.length > 1 || planStatuses.length > 1 ? `
         <div class="filter-bar" aria-label="Фильтр будущего плана">
           <span class="filter-bar-title">Фильтр</span>
@@ -588,7 +693,24 @@ async function renderCurrentState() {
         </div>
       ` : ""}
       ${filterableTable(["Срок или условие","Вид","Действие","Статус","REC"], planRows, { id: "future-plan-table" })}
-    </section>
+    </section>`
+  };
+  const sectionNames = {
+    "chronic": "Хронические состояния",
+    "open-cases": "Открытые случаи",
+    "medications": "Принимаемые препараты",
+    "monitoring": "Мониторинг",
+    "visit-preparation": "Подготовка к визиту",
+    "future-plan": "Будущий план"
+  };
+  const content = mode === "all"
+    ? ["medical-card", "chronic", "open-cases", "medications", "monitoring", "visit-preparation", "future-plan"]
+      .map(name => sections[name]).join("\n")
+    : sections[mode] || empty();
+  view.innerHTML = `
+    <h1>${esc(sectionNames[mode] || "Текущее состояние")}</h1>
+    ${mode === "all" ? '<p class="intro">Сводная информация и подготовка к визитам. Все медицинские сведения связаны с REC.</p>' : ""}
+    ${content}
   `;
   bindFilterableTables();
   bindAttributeFilters("future-plan-table", [
@@ -660,7 +782,7 @@ async function renderCase(caseKey) {
       tableCell(`<span class="relation">${esc(link.relation)}</span>`, link.relation),
       tableCell(esc(date), date),
       tableCell(recLink(link.record_id), link.record_id),
-      tableCell(esc(r?.title || ""), r?.title || "")
+      tableCell(esc(r ? recordDisplayTitle(r) : ""), r ? recordDisplayTitle(r) : "")
     ];
   });
 

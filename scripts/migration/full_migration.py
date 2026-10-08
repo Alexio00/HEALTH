@@ -1229,7 +1229,8 @@ def self_test() -> None:
             raise
     # A successful old MVP restore cannot finalize this migration: it has
     # neither the operation-bound independent artifacts nor all 15 digests.
-    snap = {"package_fingerprint": "a" * 64}
+    snap = {"package_fingerprint": "a" * 64,
+            "historical_sources_manifest_sha256": "f" * 64}
     old_mvp = {"operation_id": example_id, "package_fingerprint": "a" * 64,
                "source_backup_status": "PASS", "database_restore_status": "PASS"}
     try:
@@ -1248,13 +1249,17 @@ def self_test() -> None:
         "restore_evidence_sha256": "d" * 64,
         "restore_run_id": "37784754289",
         "restored_table_fingerprints": {t: "e" * 64 for t in LOAD_ORDER},
+        "historical_sources_manifest_sha256": "f" * 64,
+        "historical_source_count": 2,
     }
     recovery_evidence_contract(good, snap, example_id)
     for field, wrong in (("operation_id", "11111111-1111-4111-8111-111111111111"),
                          ("package_fingerprint", "f" * 64),
                          ("backup_manifest_sha256", "PASS"),
                          ("source_manifest_path", "../stale.json"),
-                         ("restored_table_fingerprints", {"records": "e" * 64})):
+                         ("restored_table_fingerprints", {"records": "e" * 64}),
+                         ("historical_source_count", 0),
+                         ("historical_sources_manifest_sha256", "0" * 64)):
         altered = {**good, field: wrong}
         try:
             recovery_evidence_contract(altered, snap, example_id)

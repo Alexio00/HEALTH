@@ -1241,6 +1241,38 @@ def local_full_cycle_test() -> None:
                     raise
             if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
                 fail("rejected finalization partially advanced migration state")
+            # Two PostgreSQL sessions: writer holds ROW EXCLUSIVE while
+            # finalizer attempts SHARE on all medical tables. After writer
+            # commits, finalizer must see the new bytes and fail atomically.
+            import time
+            writer = subprocess.Popen(
+                ["psql", "-X", "-v", "ON_ERROR_STOP=1", "-d", url,
+                 "-c", "begin; update public.records set title='PARALLEL_SYNTHETIC_MUTATION';"
+                       " select pg_sleep(2); commit;"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                env=psql_env(env),
+            )
+            try:
+                time.sleep(0.5)
+                if writer.poll() is not None:
+                    fail("synthetic concurrent writer failed to hold transaction")
+                globals()["postcommit_verification"] = (
+                    lambda _env, _id, recovery_gate=None: (snapshot, evidence)
+                )
+                try:
+                    finalize_verified_operation(env, op, AUTHORIZATION)
+                    fail("concurrent committed medical DML bypassed locked finalization")
+                except MigrationError as exc:
+                    if "psql command failed" not in str(exc):
+                        raise
+                if writer.wait(timeout=15) != 0:
+                    fail("synthetic concurrent writer aborted")
+            finally:
+                if writer.poll() is None:
+                    writer.kill()
+                    writer.wait()
+            if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
+                fail("concurrent DML race partially advanced finalization")
             # Restore the original record and rerun the *actual* locked
             # 15-table SHA-256 transaction against the initial backup proof.
             run_psql("update public.records set title='synthetic record';", env)

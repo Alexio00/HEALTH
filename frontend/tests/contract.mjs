@@ -22,7 +22,7 @@ const context = vm.createContext({
   CSS: { escape(x) { return x; } }
 });
 const harness = js.replace(/^import .*;\s*$/gm, "").replace(/\nboot\(\);\s*$/, "");
-vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, isMedicalCardQuestion, questionSpecialties, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable };", context);
+vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, isMedicalCardQuestion, questionSpecialties, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable, shouldPinTableHeader };", context);
 const x = context.expose;
 const nav = [...html.matchAll(/<a href="#\/[\w-]*">[^<]+<\/a>/g)].map(m => m[0]);
 assert.equal(nav.length, 10, "ten distinct navigation entries");
@@ -41,8 +41,8 @@ assert.match(css, /\.data-table th\s*\{[^}]*padding:\s*\.5lh \.5rem;[^}]*line-he
 assert.match(css, /\.sort-button\s*\{[^}]*justify-content:\s*center;[^}]*text-align:\s*center;/);
 assert.match(css, /\.data-table \.sort-button > span:first-child\s*\{[^}]*min-width:\s*min-content;[^}]*white-space:\s*normal;/);
 assert.match(css, /\.data-table thead,[\s\S]*?\.data-table \.sort-button > span\s*\{[^}]*overflow-wrap:\s*normal;[^}]*word-break:\s*normal;[^}]*hyphens:\s*none;/);
-assert.equal(x.formatTableHeader("Количество"), "K-V");
-assert.equal(x.formatTableHeader("Общее количество результатов"), "Общее K-V результатов");
+assert.equal(x.formatTableHeader("Количество"), "К-во");
+assert.equal(x.formatTableHeader("Общее количество результатов"), "Общее К-во результатов");
 assert.equal(x.formatTableHeader("Предколичество"), "Предколичество");
 assert.equal(x.formatTableHeader("Референс"), "Референс");
 const formattedTable = x.sortableTable(
@@ -50,9 +50,40 @@ const formattedTable = x.sortableTable(
   [["Показатель", "1", "норма", "ед.", "2"]],
   { id: "heading-contract" }
 );
-assert(formattedTable.includes("<span>K-V</span>"));
+assert(formattedTable.includes("<span>К-во</span>"));
 assert(formattedTable.includes('aria-label="Сортировать: Количество"'));
 assert(formattedTable.includes("<span>Результат</span>"));
+  
+// Layout contract for every page: the first-level page title sticks below
+// the global header; the filter (when present) stacks below the title.
+assert.match(css, /\.content\s*\{\s*padding-top:\s*1rem;/);
+assert.match(css, /\.content\s*>\s*h1\s*\{[^}]*position:\s*sticky;[^}]*top:\s*var\(--topbar-height/);
+assert.match(css, /\.content\s+\.filter-bar\[data-sticky-filter\]\s*\{[^}]*position:\s*sticky;[^}]*top:\s*calc\(var\(--topbar-height/);
+assert.match(css, /\.pinned-table-header\s*\{[^}]*position:\s*fixed;/);
+assert.match(css, /\.topbar\s*\{[^}]*z-index:\s*20;/);
+assert(js.includes("function setupStickyChrome()"));
+assert(js.includes('window.addEventListener("scroll", queuePinnedHeaderUpdate'));
+assert(js.includes('cloneTable.appendChild(table.tHead.cloneNode(true))'));
+assert(js.includes('cloneTable.style.marginLeft = `${-wrapper.scrollLeft}px`'));
+assert(js.includes("original?.click()"), "pinned sort buttons must forward to the original table");
+assert(x.shouldPinTableHeader({height:38,bottom:120}, {width:440,bottom:900}, 130, 800));
+assert(!x.shouldPinTableHeader({height:38,bottom:180}, {width:440,bottom:900}, 130, 800));
+assert(!x.shouldPinTableHeader({height:38,bottom:120}, {width:440,bottom:150}, 130, 800));
+assert(!x.shouldPinTableHeader({height:38,bottom:120}, {width:440,bottom:900}, 760, 800));
+
+// All standalone views suppress their repeated section H2, while Current
+// State continues to display headings for its multiple sections.
+for (const title of ["Хронические состояния","Открытые случаи","Принимаемые препараты",
+  "Мониторинг","Подготовка к визиту","Будущий план"]) {
+  assert(js.includes('mode === "all" ? "<h2>' + title + '</h2>" : ""'), title + " must not duplicate page title");
+}
+assert(!js.includes('class="intro"'), "remove page introduction text");
+assert(!js.includes("setupClosedCaseFilters"), "closed cases have no filter logic");
+const closedSource = js.split("async function renderClosedCases() {")[1].split("async function renderCase(")[0];
+assert(!closedSource.includes("filter-bar"), "closed cases have no filter bar");
+assert(js.includes('data-sticky-filter aria-label="Фильтр записей"'));
+assert(js.includes('mode === "future-plan" ? "data-sticky-filter" : ""'));
+
 
 
 // Both controls are assigned the same explicit height on mobile; the menu

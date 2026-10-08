@@ -117,13 +117,3 @@ At execution time the process must:
 The old Drive-native HealthDB remains canonical until a later explicit cutover authorization.
 
 Cutover remains a separate owner decision and is not authorized by pre-migration audit PASS.
-
-
-
-Pre-migration hardening and independent audit are PASS.
-
-Full migration may begin only after a **separate explicit owner authorization**. The runner still requires the literal `FULL_MIGRATION_AUTHORIZED` token and the matching old-HealthDB PREPARED freeze operation ID at execution time.
-
-Before any full migration commit, capture a fresh frozen Drive-native snapshot and revalidate the source freeze. The old Drive-native HealthDB remains canonical until a later explicit cutover authorization.
-
-Cutover remains a separate owner decision and is not authorized by pre-migration audit PASS.

@@ -65,6 +65,8 @@ Perform a real restore drill:
 
 A restore drill must use an isolated target, restore the dump, reconcile migration history, execute Auth recovery, run database/security invariants, and compare expected record/source relations and snapshot fingerprints.
 
+For post-full-migration recovery, private backup verification writes operation-bound Source locator and byte evidence into the exact new immutable database backup snapshot. The isolated restore independently reads and SHA-256-checks every linked original from backup against the restored DB. Restore evidence includes the operation UUID, package fingerprint, snapshot ID, independent DB/Source manifest digests, actual GitHub workflow run ID/attempt and exact 15-table fingerprints. Private `SHEDULLER/.github/workflows/finalize-migration.yml` rechecks physical artifacts and authenticated completed run before FINALIZED. An old MVP PASS does not qualify.
+
 ## Disaster recovery objective
 
 Recovery must be possible from:
@@ -77,6 +79,8 @@ Recovery must be possible from:
 6. documented restore procedure.
 
 Provider object IDs may change after restore; health IDs and logical links must not.
+
+**A-05 before cutover:** private `SHEDULLER/scripts/relocate_sources.py` implements original Source relocation to a replacement Drive PRIMARY with independent SHA-256 and atomic restored-DB physical locator rebind, preserving canonical source_id. Cutover still requires a real isolated full-dataset loss-of-PRIMARY exercise and opening actual originals through PWA as the replacement owner. Synthetic code tests cannot replace this acceptance gate.
 
 ## Retention
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -141,12 +142,38 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+# PostgreSQL emits timestamptz UTC with '+00:00'; Drive capture emits 'Z'.
+# Normalize instants BEFORE hashing either side, never alter the stored source.
+TIMESTAMPTZ_FIELDS = {
+    "source_locations": {"verified_at"},
+    "id_reservations": {"reserved_at"},
+    "labs": {"observed_at"},
+}
+
+
+def canonical_timestamp(value: Any) -> Any:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        fail("timestamp fingerprint value must be an ISO timestamp string")
+    try:
+        stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        fail("invalid timestamp in migration fingerprint")
+    if stamp.tzinfo is None:
+        fail("timezone-less timestamp in migration fingerprint")
+    return stamp.astimezone(timezone.utc).isoformat(timespec="microseconds")
+
+
 def normalized_row(table: str, row: dict[str, Any]) -> dict[str, Any]:
     cols = TABLES[table]["columns"]
     unknown = sorted(set(row) - set(cols))
     if unknown:
         fail(f"{table}: unknown columns: {','.join(unknown)}")
-    return {col: row.get(col) for col in cols}
+    out = {col: row.get(col) for col in cols}
+    for field in TIMESTAMPTZ_FIELDS.get(table, ()):
+        out[field] = canonical_timestamp(out[field])
+    return out
 
 
 def table_fingerprint(table: str, rows: list[dict[str, Any]]) -> str:
@@ -714,6 +741,12 @@ def self_test() -> None:
         fail("self-test canonical order failed")
     if pg_array(["a", 'b"c']) != '{"a","b\\\"c"}':
         fail("self-test array encoding failed")
+    if canonical_timestamp("2026-10-08T12:00:00Z") != canonical_timestamp("2026-10-08T12:00:00+00:00"):
+        fail("self-test UTC fingerprint normalization failed")
+    if canonical_timestamp("2026-10-08T15:00:00+03:00") != canonical_timestamp("2026-10-08T12:00:00.000000Z"):
+        fail("self-test offset fingerprint normalization failed")
+    if table_fingerprint("source_locations", [{"verified_at": "2026-10-08T12:00:00Z"}]) != table_fingerprint("source_locations", [{"verified_at": "2026-10-08T12:00:00+00:00"}]):
+        fail("self-test timestamps yield different sealed fingerprints")
 
     with tempfile.TemporaryDirectory(prefix="health-migration-selftest-") as raw:
         package = Path(raw)

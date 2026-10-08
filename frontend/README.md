@@ -47,6 +47,18 @@ The UI deliberately mirrors the useful reading patterns of the legacy HealthDB f
 
 All data tables use sortable column headers. Click a header to toggle ascending/descending order; there is no separate row of per-column text filters.
 
+Table header display contract (REC markdown tables and top-level pages alike):
+- Center header text horizontally and vertically.
+- Word wrapping is allowed only between complete words; never split single
+  words letter-by-letter just to fit the viewport. A horizontally scrollable
+  table is preferred over breaking "Результат", "Референс" or "Параметр".
+- Vertical padding above and below is half of one line height each, and
+  remains unchanged when a header wraps to additional lines.
+- The visible word "Количество" (standalone or in a multiword header) is
+  abbreviated as `K-V`; source text and the accessible sorting label remain
+  unchanged.
+
+
 Compact filter bars appear only when they add value:
 - date ranges where relevant;
 - repeated categorical values as live select controls;

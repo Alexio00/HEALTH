@@ -704,7 +704,7 @@ begin
   ) then
     raise exception 'operation-bound owner authorization is absent';
   end if;
-end $;
+end $$;
 
 truncate {med_tables} restart identity;
 
@@ -849,7 +849,7 @@ begin
   ) then
     raise exception 'operation-specific owner authorization not present';
   end if;
-end $;
+end $$;
 update public.operations
 set state='VALIDATED', updated_at=now()
 where operation_id='{operation_id}'::uuid and state='COMMITTED_REGISTRY';
@@ -878,7 +878,7 @@ begin
   ) then
     raise exception 'no unfinished target operation to mark FAILED';
   end if;
-end $;
+end $$;
 update public.operations
 set state='FAILED', result='FAIL', updated_at=now(),
     notes=coalesce(notes,'') || ' Target migration interrupted; old source remains canonical; freeze requires separate review.'

@@ -153,8 +153,11 @@ After commit:
 2. rerun all migration-impacted OPERATION_AUDIT checks;
 3. run the migration runner exact table-fingerprint comparison against the sealed final Drive snapshot; counts alone are insufficient;
 4. verify source PRIMARY copies;
-5. verify independent backup state;
-6. keep the old Drive-native HealthDB unchanged and canonical until owner cutover.
+5. take a NEW independent postcommit database+Sources backup and verify exact snapshot and source identity/byte evidence;
+6. independently restore that precise backup, compare all 15 tables, originals, migrations, Auth/security and record-source relations;
+7. authenticate completed restore workflow run ID/attempt and proof hashes against same operation UUID and sealed package fingerprint;
+8. finalize only through private owner-gated recovery verification; no declarative PASS-only finalization;
+9. keep old Drive-native HealthDB unchanged and canonical until owner cutover.
 
 ## Post-migration delta
 
@@ -175,7 +178,9 @@ Cutover is a separate owner decision.
 Only after:
 - full migration PASS;
 - source verification PASS;
-- independent backup PASS;
+- independent post-full-migration backup/restore evidence PASS;
+- replacement PRIMARY Source recovery/rebind and real PWA original-opening test PASS (A-05);
+- controlled Health API write path accepted;
 - final post-migration delta = empty;
 - owner review/acceptance;
 

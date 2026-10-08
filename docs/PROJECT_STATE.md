@@ -77,7 +77,7 @@ Current verdict: **PASS for full-migration readiness; owner authorization still 
 - legacy GitHub HealthDB repositories are not migration inputs or runtime dependencies;
 - the old Drive-native HealthDB is used only as the canonical migration source until cutover; new HEALTH record text is stored in PostgreSQL and active source PRIMARY objects belong under the new `HEALTH/Sources`.
 
-**Superseded on 2026-10-08:** independent audits A/B found Major migration blockers. Full migration remains NO-GO until remediation and repeat integration verification PASS.
+**Audit A/B reconciliation — 2026-10-08:** auditor B found B-04: text-only recovery PASS could finalize a newer operation. B-04 code remediation is now merged in HEALTH `c423d4a4` and private SHEDULLER `27a6c20c`: operation-bound backup/source/restore evidence, authenticated successful restore run and fail-closed private finalization. Synthetic CI PASS, but a real post-full-migration recovery proof cannot exist before authorized migration. Auditor A's A-05 Source recovery/rebind tool was added, while a complete lost-PRIMARY and PWA acceptance remains mandatory before cutover.
 
 **Full migration has not been run. Cutover has not been authorized.**
 
@@ -100,7 +100,7 @@ Full migration readiness is not the same as cutover readiness.
 
 ## Full-migration gate
 
-Historical pre-audit passes are preserved as evidence, but the 2026-10-08 adversarial audits supersede the earlier readiness verdict. Current decision: NO-GO pending fixes.
+Historic passes are retained. B-04 code remediation is now merged with synthetic tests PASS. A fresh independent audit acceptance and the owner's separate full-migration authorization remain necessary before execution. No full migration or cutover is authorized.
 
 Full migration may begin only after a **separate explicit owner authorization**. The private migration path requires the literal `FULL_MIGRATION_AUTHORIZED` token, a new HEALTH PREPARED target operation UUID and the matching old-HealthDB PREPARED legacy freeze operation ID.
 
@@ -112,7 +112,9 @@ At execution time the process must:
 5. re-read the Registry and old freeze immediately before target commit and abort on any change;
 6. guarded-commit the target medical domain;
 7. exact-compare public tables to the sealed package;
-8. run all impacted validation and backup checks before finalization.
+8. rerun all impacted Validation and operation-scoped audits;
+9. capture a NEW post-commit immutable backup and Source manifest, independently restore that exact dataset (15 tables, Auth/security and original Sources), and preserve actual run evidence;
+10. finalize only through the private B-04 verifier: bind UUID, package fingerprint, backup/Source manifest SHA-256, successful authenticated restore run and actual recovered fingerprints. Text-only PASS is never enough.
 
 The old Drive-native HealthDB remains canonical until a later explicit cutover authorization.
 

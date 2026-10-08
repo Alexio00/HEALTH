@@ -223,5 +223,20 @@ begin
   if bad is not null then
     raise exception 'SECURITY: unsafe postgres default privileges: %', bad;
   end if;
+  -- 13. service_role must not mutate any migration-control tables.
+  -- PostgreSQL superuser/DB owner remains explicitly trusted.
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    select string_agg(format('%I:%s', t.table_name, p.privilege), ', ')
+      into bad
+    from (values ('operations'),('system_state'),('validation_results'),
+                 ('validation_checks'),('id_reservations')) as t(table_name)
+    cross join (values ('INSERT'),('UPDATE'),('DELETE'),('TRUNCATE'),
+                       ('TRIGGER'),('REFERENCES')) as p(privilege)
+    where has_table_privilege('service_role',
+                               format('public.%I', t.table_name), p.privilege);
+    if bad is not null then
+      raise exception 'SECURITY: service_role can mutate migration controls: %', bad;
+    end if;
+  end if;
 end
 $$;

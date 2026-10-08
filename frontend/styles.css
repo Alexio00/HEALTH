@@ -143,6 +143,7 @@ h3 { margin: 1.4rem 0 .6rem; }
 .sort-button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: .28rem;
   width: 100%;
   padding: 0;
@@ -152,7 +153,22 @@ h3 { margin: 1.4rem 0 .6rem; }
   color: inherit;
   font: inherit;
   font-weight: inherit;
-  text-align: left;
+  text-align: center;
+}
+/* Keep the longest header word intact. In REC pages the surrounding body
+   uses overflow-wrap:anywhere, which must not propagate into table headings.
+   The table wrapper scrolls horizontally if the screen is too narrow. */
+.data-table thead,
+.data-table th,
+.data-table .sort-button,
+.data-table .sort-button > span {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+.data-table .sort-button > span:first-child {
+  min-width: min-content;
+  white-space: normal;
 }
 .sort-button:hover,
 .sort-button:focus-visible { text-decoration: underline; }
@@ -204,8 +220,11 @@ h3 { margin: 1.4rem 0 .6rem; }
   border-bottom: 1px solid #e5e5e5;
 }
 .data-table th {
-  padding: .18rem .5rem;
+  /* Single-line header height = one line + half a line above and below. */
+  padding: .5lh .5rem;
   line-height: 1.2;
+  text-align: center;
+  vertical-align: middle;
   white-space: normal;
   position: sticky;
   top: 0;

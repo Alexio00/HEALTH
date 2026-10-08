@@ -67,6 +67,12 @@ A restore drill must use an isolated target, restore the dump, reconcile migrati
 
 For post-full-migration recovery, private backup verification writes operation-bound Source locator and byte evidence into the exact new immutable database backup snapshot. The isolated restore independently reads and SHA-256-checks every linked original from backup against the restored DB. Restore evidence includes the operation UUID, package fingerprint, snapshot ID, independent DB/Source manifest digests, actual GitHub workflow run ID/attempt and exact 15-table fingerprints. Private `SHEDULLER/.github/workflows/finalize-migration.yml` rechecks physical artifacts and authenticated completed run before FINALIZED. An old MVP PASS does not qualify.
 
+For the detailed implementation contract and remaining independent acceptance
+steps, see the **private** [SHEDULLER B-04/A-05 recovery audit guide](https://github.com/Alexio000/SHEDULLER/blob/main/docs/AUDIT_B04_A05_RECOVERY.md).
+Access is restricted to authorized maintainers. It is the operational reference
+for validating a specific post-full-migration backup, Source manifest, restored
+snapshot and authenticated restore run; a text-only PASS is insufficient.
+
 ## Disaster recovery objective
 
 Recovery must be possible from:

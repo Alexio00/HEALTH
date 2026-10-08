@@ -79,6 +79,12 @@ Current verdict: **PASS for full-migration readiness; owner authorization still 
 
 **Audit A/B reconciliation — 2026-10-08:** auditor B found B-04: text-only recovery PASS could finalize a newer operation. B-04 code remediation is now merged in HEALTH `c423d4a4` and private SHEDULLER `27a6c20c`: operation-bound backup/source/restore evidence, authenticated successful restore run and fail-closed private finalization. Synthetic CI PASS, but a real post-full-migration recovery proof cannot exist before authorized migration. Auditor A's A-05 Source recovery/rebind tool was added, while a complete lost-PRIMARY and PWA acceptance remains mandatory before cutover.
 
+The executable private recovery evidence contract, fail-closed finalization
+workflow and remaining A-05 recovery/PWA acceptance are documented in
+[SHEDULLER — B-04/A-05 audit recovery guide](https://github.com/Alexio000/SHEDULLER/blob/main/docs/AUDIT_B04_A05_RECOVERY.md)
+(private; authorized maintainers only). This reference is part of the
+pre-migration handoff, not a claim that a full-dataset recovery has run.
+
 **Full migration has not been run. Cutover has not been authorized.**
 
 ## Non-blocking advisor status

@@ -159,6 +159,12 @@ After commit:
 8. finalize only through private owner-gated recovery verification; no declarative PASS-only finalization;
 9. keep old Drive-native HealthDB unchanged and canonical until owner cutover.
 
+Operational reference: the private
+[SHEDULLER B-04/A-05 recovery evidence and Sources recovery guide](https://github.com/Alexio000/SHEDULLER/blob/main/docs/AUDIT_B04_A05_RECOVERY.md)
+defines the independent, operation-bound backup/restore proof required before
+migration FINALIZED and the separately required replacement-PRIMARY Sources
+restore/rebind acceptance before cutover. Passing CI alone proves neither.
+
 ## Post-migration delta
 
 If the owner continues to use old HealthDB after a full migration but before cutover, any subsequent old-HealthDB changes form a new delta.

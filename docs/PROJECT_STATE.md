@@ -1,6 +1,6 @@
 # Project State
 
-Status: PRE-MIGRATION HARDENING; MVP operational acceptance PASS; full migration NOT authorized
+Status: PRE-FULL-MIGRATION READY; independent remediation audit PASS; full migration NOT authorized
 
 ## Canonical boundary
 
@@ -40,10 +40,16 @@ MVP operational acceptance is PASS:
 
 ## Current validation
 
-- Live Auth invariants: PASS after hardening.
-- Live browser/database security invariants: PASS after hardening.
-- Public code CI synthetic migration package seal/verify: PASS.
-- Hardened private scheduler execution test: PASS (revision 6). Database backup, Sources copy, database/source verification and five-file database round-trip SHA-256 all PASS.
+- Live Supabase project: ACTIVE_HEALTHY, PostgreSQL 17.
+- Live Auth invariants: PASS on 2026-10-08.
+- Live browser/database security invariants: PASS on 2026-10-08.
+- Canonical timestamped migration ledger: 9 migrations.
+- Public HEALTH code validation: PASS for commit `1cf7a08bbf440cc9047cbcf40bd3b3e1048a36e0`, run `37751436255`.
+- A real GitHub scheduled daily pipeline was observed: run `37743776377` SUCCESS. It produced five database dumps, copied/verified Sources, proved primary inventory unchanged, and passed database/source verification plus five-file round-trip SHA-256.
+- Latest scheduled database backup used for fresh restore evidence: `2026-10-08T07-30-49Z`.
+- Fresh isolated restore drill rerun (run `37690089948`, attempt 2): SUCCESS against that latest backup; roles/schema/data restore PASS, migration history 9/9 PASS, exact 15-table medical-domain fingerprint PASS, replacement-owner Auth recovery PASS, restored Auth/security PASS.
+- Private Drive capture extractor is live-audited on scheduler main: run `37752859591` SUCCESS; 267 records, 1414 Labs rows, 23 Registry-linked Sources, all 15 target tables and Historical manifest processed read-only.
+- Scheduler main commit for the fail-closed capture/orchestration path: `31d93b3e83279239a07b4357366710e10e711893`.
 
 ## Owner gates
 
@@ -54,23 +60,26 @@ MVP operational acceptance is PASS:
 
 ## Final pre-migration audit
 
-Current verdict: **PASS**.
+Current verdict: **PASS for full-migration readiness; owner authorization still required.**
 
-Final evidence:
-- owner gates resolved: keep `us-west-1`; existing public Git commit email accepted; post-hardening PWA smoke PASS;
-- source-freeze/package contract hardened so the sealed package fingerprint binds freeze/capture control metadata; hardening commit `89bbaa0882330016c623090559301cc952694313`;
-- live migration ledger and public timestamped migration SQL are exact 9/9 after drift repair commit `3c72cbd950836ce3086b75d2ceaaed8b1527d89d`;
-- full-migration runner has one fail-closed execute path requiring both the matching old-HealthDB freeze operation ID and literal owner token `FULL_MIGRATION_AUTHORIZED`, chaining seal/verify/stage/exact compare/guarded commit/exact public compare; hardening commit `46af6eef8b3dae0000c48b49f53fd216ae0d4957`;
-- browser/database security validation is search-path invariant; commit `e63a40f1326a9e8628c0aaa7b5df2c04abc1cb95`, code validation run `37690027154` PASS;
-- live Auth invariants PASS and live browser/database security invariants PASS;
-- GitHub Actions in HEALTH and SHEDULLER use immutable full-SHA external action refs; no floating external action refs remain;
-- hardened scheduler database -> Sources -> verification chain run `37676153947` PASS;
-- real isolated five-file restore drill run `37690089948` SUCCESS: backup SHA-256 PASS, fresh local Supabase restore PASS, exact 15-table medical-domain comparison PASS, migration history 9/9 PASS, replacement-owner Auth recovery PASS, restored Auth/security invariants PASS, and restored record/source integrity PASS;
-- current remediation validation stamps `PRE_MIGRATION_HARDENED_RESTORE` and `PRE_MIGRATION_FINAL_AUDIT` are PASS.
+2026-10-08 remediation evidence:
+- the old Drive-native freeze operation ID is now treated as the exact opaque legacy Change Log value (for example `MAINT-011`), while only the new HEALTH target operation uses a UUID;
+- migration package contract is schema v2 and binds `capture_mode=migration` plus `source_location_mode=new-health-primary`;
+- package PRIMARY source locations are required to point to verified objects under the new `HEALTH/Sources`; old Drive IDs/URLs may remain only as private provenance;
+- private scheduler extractor has a read-only `audit` mode and a separately gated authorized migration path; medical package data is ephemeral and is not published as GitHub artifacts or logs;
+- preferred private `migrate` orchestration is capture -> materialize/round-trip-verify new Sources -> seal/verify -> isolated stage -> **fresh Registry + freeze reread** -> guarded target commit -> exact public comparison;
+- full-migration build/migrate refuses to start without both the literal `FULL_MIGRATION_AUTHORIZED` token and the matching live legacy PREPARED freeze operation ID;
+- public HEALTH hardening commit `1cf7a08bbf440cc9047cbcf40bd3b3e1048a36e0` passed CI;
+- private scheduler capture/orchestration commit `31d93b3e83279239a07b4357366710e10e711893` passed live Drive capture audit on main;
+- scheduled backup execution has now been observed as a real `event=schedule` SUCCESS, not merely a manual/bootstrap run;
+- the newest scheduled five-file backup was restored in an isolated local Supabase with exact medical-domain, migration-history, Auth and security validation PASS;
+- live production Auth/security invariants remain PASS;
+- legacy GitHub HealthDB repositories are not migration inputs or runtime dependencies;
+- the old Drive-native HealthDB is used only as the canonical migration source until cutover; new HEALTH record text is stored in PostgreSQL and active source PRIMARY objects belong under the new `HEALTH/Sources`.
 
-No pre-migration technical blocker remains from this remediation.
+No technical blocker remains for **starting full migration after a separate explicit owner authorization**.
 
-**Full migration remains forbidden until the owner gives a separate explicit authorization.** Cutover remains a later, separate owner decision.
+**Full migration has not been run. Cutover has not been authorized.**
 
 ## Non-blocking advisor status
 
@@ -78,7 +87,38 @@ No pre-migration technical blocker remains from this remediation.
 - Leaked-password protection is unavailable on the current Free plan.
 - Newly created covering indexes can remain reported as unused until traffic exercises them.
 
+## Post-migration / cutover boundary
+
+Full migration readiness is not the same as cutover readiness.
+
+- The old Drive-native HealthDB remains canonical until explicit cutover.
+- After full migration, require exact post-load validation, independent backup verification and final old-HealthDB delta = empty.
+- The controlled Health API / AI write path is still deferred and is required before normal post-cutover ChatGPT write operations.
+- The current external ChatGPT Project Prompt remains Drive-native until cutover. A replacement HEALTH prompt must be issued only after the new backend/write path is accepted.
+- A clean new ChatGPT Project is recommended after cutover rather than carrying forward the old project's accumulated architecture context.
+- Legacy `HEALTH_DB_old` retention/deletion is a separate post-cutover decision after recovery evidence is accepted.
+
 ## Full-migration gate
+
+Pre-migration hardening, scheduled backup proof, live capture audit, fresh isolated restore and independent technical audit are PASS.
+
+Full migration may begin only after a **separate explicit owner authorization**. The private migration path requires the literal `FULL_MIGRATION_AUTHORIZED` token, a new HEALTH PREPARED target operation UUID and the matching old-HealthDB PREPARED legacy freeze operation ID.
+
+At execution time the process must:
+1. create/hold the dedicated old Drive-native PREPARED freeze;
+2. capture a fresh frozen Registry/REC/Sources snapshot;
+3. materialize and verify new `HEALTH/Sources` PRIMARY objects;
+4. seal/verify and load isolated staging;
+5. re-read the Registry and old freeze immediately before target commit and abort on any change;
+6. guarded-commit the target medical domain;
+7. exact-compare public tables to the sealed package;
+8. run all impacted validation and backup checks before finalization.
+
+The old Drive-native HealthDB remains canonical until a later explicit cutover authorization.
+
+Cutover remains a separate owner decision and is not authorized by pre-migration audit PASS.
+
+
 
 Pre-migration hardening and independent audit are PASS.
 

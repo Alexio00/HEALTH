@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "scripts/**"
+      - "frontend/**"
+      - "docs/**"
       - "db/**"
       - "supabase/**"
       - ".github/workflows/code-validation.yml"
@@ -12,6 +14,8 @@ on:
     branches: [main]
     paths:
       - "scripts/**"
+      - "frontend/**"
+      - "docs/**"
       - "db/**"
       - "supabase/**"
       - ".github/workflows/code-validation.yml"
@@ -28,6 +32,10 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - name: Frontend syntax and synthetic contract checks
+        run: |
+          node --check --input-type=module < frontend/app.js
+          node frontend/tests/contract.mjs
       - name: Python syntax
         run: python3 -m py_compile scripts/migration/full_migration.py
       - name: Migration runner self-test

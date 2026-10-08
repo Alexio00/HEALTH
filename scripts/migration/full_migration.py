@@ -736,7 +736,7 @@ def self_test() -> None:
                 "mime_type":"text/plain","size_bytes":1,"sha256":"a"*64,"source_date":"2026-01-01","metadata":{}
             }],
             "source_locations": [{
-                "source_id":"SRC-20260101-001","provider":"synthetic","account_alias":"TEST",
+                "source_id":"SRC-20260101-001","provider":"google-drive","account_alias":"HEALTH_PRIMARY",
                 "provider_object_id":"synthetic-object","location_role":"PRIMARY","verified_at":"2026-01-01T00:00:00Z"
             }],
             "record_sources": [{

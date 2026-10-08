@@ -39,9 +39,15 @@ assert(!js.includes('class="filter-bar-title"'));
 assert(js.includes('aria-label="Фильтр записей"'));
 assert(js.includes('aria-label="Фильтр будущего плана"'));
 // Center names above every filter field without centering input/select values.
-assert.match(css, /\\.filter-bar label\\s*\\{[^}]*text-align:\\s*center;/);
-assert.match(css, /\\.filter-bar-label\\s*\\{[^}]*text-align:\\s*center;/);
-assert.match(css, /\\.filter-bar input,\\s*\\.filter-bar select\\s*\\{[^}]*text-align:\\s*start;/);
+function cssDeclarations(selector) {
+  const marker = selector + " {";
+  const start = css.indexOf(marker);
+  assert(start !== -1, "CSS selector missing: " + selector);
+  return css.slice(start + marker.length, css.indexOf("}", start));
+}
+assert(cssDeclarations(".filter-bar label").includes("text-align: center;"));
+assert(cssDeclarations(".filter-bar-label").includes("text-align: center;"));
+assert(cssDeclarations(".filter-bar input,\\n.filter-bar select").includes("text-align: start;"));
 
 
 // Regression: REC markup was inheriting pre-wrap from record-body. Indentation

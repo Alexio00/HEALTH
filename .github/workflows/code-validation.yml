@@ -60,5 +60,10 @@ jobs:
           HEALTH_SYNTHETIC_DB_URL: postgresql://postgres@127.0.0.1:5432/postgres
           PGPASSWORD: health-synthetic
         run: python3 scripts/migration/full_migration.py pg-roundtrip-test
+      - name: Synthetic PostgreSQL full migration transaction and recovery gates
+        env:
+          HEALTH_SYNTHETIC_DB_URL: postgresql://postgres@127.0.0.1:5432/postgres
+          PGPASSWORD: health-synthetic
+        run: python3 scripts/migration/full_migration.py pg-full-cycle-test
       - name: Public repository secret-pattern guard
         run: python3 scripts/validation/public_secret_guard.py

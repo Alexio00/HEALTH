@@ -77,7 +77,7 @@ Current verdict: **PASS for full-migration readiness; owner authorization still 
 - legacy GitHub HealthDB repositories are not migration inputs or runtime dependencies;
 - the old Drive-native HealthDB is used only as the canonical migration source until cutover; new HEALTH record text is stored in PostgreSQL and active source PRIMARY objects belong under the new `HEALTH/Sources`.
 
-No technical blocker remains for **starting full migration after a separate explicit owner authorization**.
+**Superseded on 2026-10-08:** independent audits A/B found Major migration blockers. Full migration remains NO-GO until remediation and repeat integration verification PASS.
 
 **Full migration has not been run. Cutover has not been authorized.**
 
@@ -100,7 +100,7 @@ Full migration readiness is not the same as cutover readiness.
 
 ## Full-migration gate
 
-Pre-migration hardening, scheduled backup proof, live capture audit, fresh isolated restore and independent technical audit are PASS.
+Historical pre-audit passes are preserved as evidence, but the 2026-10-08 adversarial audits supersede the earlier readiness verdict. Current decision: NO-GO pending fixes.
 
 Full migration may begin only after a **separate explicit owner authorization**. The private migration path requires the literal `FULL_MIGRATION_AUTHORIZED` token, a new HEALTH PREPARED target operation UUID and the matching old-HealthDB PREPARED legacy freeze operation ID.
 

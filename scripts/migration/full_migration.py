@@ -663,6 +663,7 @@ def commit_stage(
 
     snapshot = {
         "status": "CAPTURED",
+        "operation_id": operation_id,
         "captured_at": manifest["captured_at"],
         "old_healthdb_validation_pass": manifest["old_healthdb_validation_pass"],
         "old_healthdb_freeze_operation_id": manifest["old_healthdb_freeze_operation_id"],
@@ -765,8 +766,47 @@ def sql_scalar(db_url_env: str, query: str) -> str:
     return records[0][0]
 
 
-def postcommit_verification(db_url_env: str, operation_id: str) -> None:
-    """Read-only operation-scoped gate. Never marks medical evidence PASS."""
+def recovery_evidence_contract(evidence: dict[str, Any], snapshot: dict[str, Any], operation_id: str) -> None:
+    """Require operation-bound, content-addressed independent recovery artifacts.
+
+    This is only the *contract*. The private recovery_gate MUST retrieve and
+    authenticate the actual immutable backup, source and restore artifacts.
+    No row in system_state can attest to its own truth.
+    """
+    required = ("operation_id", "package_fingerprint", "backup_snapshot_id",
+                "backup_manifest_sha256", "source_manifest_path",
+                "source_manifest_sha256", "restore_evidence_path",
+                "restore_evidence_sha256", "restore_run_id",
+                "restored_table_fingerprints")
+    if not isinstance(evidence, dict) or any(not evidence.get(k) for k in required):
+        fail("postcommit recovery artifact contract incomplete")
+    if (evidence["operation_id"] != operation_id
+            or evidence["package_fingerprint"] != snapshot.get("package_fingerprint")):
+        fail("postcommit recovery proof belongs to another migration")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z", str(evidence["backup_snapshot_id"])):
+        fail("postcommit invalid backup snapshot identifier")
+    for key in ("backup_manifest_sha256", "source_manifest_sha256", "restore_evidence_sha256"):
+        if not re.fullmatch(r"[a-f0-9]{64}", str(evidence[key])):
+            fail("postcommit invalid independent artifact digest")
+    if (not isinstance(evidence["restore_run_id"], str)
+            or not re.fullmatch(r"[1-9][0-9]*", evidence["restore_run_id"])):
+        fail("postcommit invalid restore run identifier")
+    for key in ("source_manifest_path", "restore_evidence_path"):
+        value = evidence[key]
+        if not isinstance(value, str) or not value or ".." in Path(value).parts or value.startswith("/"):
+            fail("postcommit invalid recovery artifact path")
+    fingerprints = evidence["restored_table_fingerprints"]
+    if (not isinstance(fingerprints, dict) or set(fingerprints) != set(LOAD_ORDER)
+            or any(not re.fullmatch(r"[a-f0-9]{64}", str(v)) for v in fingerprints.values())):
+        fail("postcommit incomplete independent restored-table evidence")
+
+
+def postcommit_verification(
+    db_url_env: str, operation_id: str,
+    recovery_gate: Callable[[dict[str, Any], dict[str, Any]], None] | None = None,
+) -> None:
+    """Read-only operation-scoped gate with mandatory private artifact inspection."""
+
     if not UUID_RE.fullmatch(operation_id):
         fail("postcommit invalid operation ID")
     state = sql_scalar(
@@ -815,20 +855,26 @@ def postcommit_verification(db_url_env: str, operation_id: str) -> None:
         "select value::text from public.system_state where key='full_migration_recovery_evidence'",
     )
     evidence = json.loads(evidence_raw)
-    if (evidence.get("operation_id") != operation_id
-            or evidence.get("package_fingerprint") != snapshot.get("package_fingerprint")
-            or evidence.get("source_backup_status") != "PASS"
-            or evidence.get("database_restore_status") != "PASS"):
-        fail("postcommit independent backup/recovery proof is missing or stale")
+    recovery_evidence_contract(evidence, snapshot, operation_id)
+    # Mandatory PRIVATE implementation: re-read independently stored backup
+    # MANIFEST, Source locator manifest, exact restore-run artifact and digests,
+    # verify authenticated run success and correspondence to all 15 restored
+    # tables. The public CLI intentionally supplies no gate and FAILS closed.
+    if recovery_gate is None:
+        fail("postcommit requires private independent recovery-artifact verification")
+    recovery_gate(evidence, snapshot)
     print(f"PASS read-only postcommit verification; tables={len(LOAD_ORDER)}; checks={len(statuses)}")
 
 
-def finalize_verified_operation(db_url_env: str, operation_id: str, authorization: str) -> None:
+def finalize_verified_operation(
+    db_url_env: str, operation_id: str, authorization: str,
+    recovery_gate: Callable[[dict[str, Any], dict[str, Any]], None] | None = None,
+) -> None:
     if authorization != AUTHORIZATION:
         fail("finalization requires explicit owner authorization")
     if not UUID_RE.fullmatch(operation_id):
         fail("invalid finalization operation ID")
-    postcommit_verification(db_url_env, operation_id)
+    postcommit_verification(db_url_env, operation_id, recovery_gate=recovery_gate)
     # Recheck state/owner binding inside the same transaction as both state
     # transitions, so competing operations cannot invalidate the preflight.
     sql = f"""
@@ -1083,7 +1129,7 @@ def local_full_cycle_test() -> None:
         # recovery/semantic gate. Synthetic override is never used by CLI.
         checker = globals()["postcommit_verification"]
         try:
-            globals()["postcommit_verification"] = lambda _env, _id: None
+            globals()["postcommit_verification"] = lambda _env, _id, recovery_gate=None: None
             finalize_verified_operation(env, op, AUTHORIZATION)
         finally:
             globals()["postcommit_verification"] = checker
@@ -1123,6 +1169,42 @@ def self_test() -> None:
     except MigrationError as exc:
         if "explicit failed-operation confirmation" not in str(exc):
             raise
+    # A successful old MVP restore cannot finalize this migration: it has
+    # neither the operation-bound independent artifacts nor all 15 digests.
+    snap = {"package_fingerprint": "a" * 64}
+    old_mvp = {"operation_id": example_id, "package_fingerprint": "a" * 64,
+               "source_backup_status": "PASS", "database_restore_status": "PASS"}
+    try:
+        recovery_evidence_contract(old_mvp, snap, example_id)
+        fail("old MVP-only recovery declaration was accepted")
+    except MigrationError as exc:
+        if "artifact contract incomplete" not in str(exc):
+            raise
+    good = {
+        "operation_id": example_id, "package_fingerprint": "a" * 64,
+        "backup_snapshot_id": "2026-10-08T13-26-07Z",
+        "backup_manifest_sha256": "b" * 64,
+        "source_manifest_path": "source-manifests/source-id-locators-test.json",
+        "source_manifest_sha256": "c" * 64,
+        "restore_evidence_path": "recovery-evidence/proof-test.json",
+        "restore_evidence_sha256": "d" * 64,
+        "restore_run_id": "37784754289",
+        "restored_table_fingerprints": {t: "e" * 64 for t in LOAD_ORDER},
+    }
+    recovery_evidence_contract(good, snap, example_id)
+    for field, wrong in (("operation_id", "11111111-1111-4111-8111-111111111111"),
+                         ("package_fingerprint", "f" * 64),
+                         ("backup_manifest_sha256", "PASS"),
+                         ("source_manifest_path", "../stale.json"),
+                         ("restored_table_fingerprints", {"records": "e" * 64})):
+        altered = {**good, field: wrong}
+        try:
+            recovery_evidence_contract(altered, snap, example_id)
+            fail("tampered recovery contract accepted: " + field)
+        except MigrationError as exc:
+            if str(exc).startswith("tampered recovery contract accepted:"):
+                raise
+    print("PASS operation-bound recovery-evidence contract negative tests")
     if canonical_timestamp("2026-10-08T12:00:00Z") != canonical_timestamp("2026-10-08T12:00:00+00:00"):
         fail("self-test UTC fingerprint normalization failed")
     if canonical_timestamp("2026-10-08T15:00:00+03:00") != canonical_timestamp("2026-10-08T12:00:00.000000Z"):

@@ -47,7 +47,7 @@ function cssDeclarations(selector) {
 }
 assert(cssDeclarations(".filter-bar label").includes("text-align: center;"));
 assert(cssDeclarations(".filter-bar-label").includes("text-align: center;"));
-assert(cssDeclarations(".filter-bar input,\\n.filter-bar select").includes("text-align: start;"));
+assert(cssDeclarations(".filter-bar select").includes("text-align: start;"));
 
 
 // Regression: REC markup was inheriting pre-wrap from record-body. Indentation

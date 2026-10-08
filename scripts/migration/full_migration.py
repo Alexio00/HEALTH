@@ -914,7 +914,7 @@ begin;
 -- competing privileged writer cannot change any medical row between these
 -- fingerprints and the atomic FINALIZED state transition.
 lock table {med_tables} in share mode;
-do $
+do $$
 begin
   -- Keep operation and three authorizing/sealed state rows stable until
   -- COMMIT, not just the medical rows. A concurrent change waits or aborts.

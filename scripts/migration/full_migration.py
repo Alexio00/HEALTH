@@ -751,6 +751,48 @@ def cleanup_stage(db_url_env: str, schema: str, authorization: str) -> None:
     print(f"PASS staging schema removed; schema={schema}")
 
 
+def postgresql_roundtrip_test() -> None:
+    # Strictly local, synthetic-only integration test; NEVER a production URL.
+    from urllib.parse import urlparse
+    url = os.environ.get("HEALTH_SYNTHETIC_DB_URL", "")
+    if urlparse(url).hostname not in {"localhost", "127.0.0.1"}:
+        fail("PostgreSQL synthetic roundtrip requires local-only test database")
+    os.environ["HEALTH_ROUNDTRIP_URL"] = url
+    schema = "health_synthetic_roundtrip"
+    sql = f"""
+drop schema if exists {schema} cascade;
+create schema {schema};
+create table {schema}.source_locations (
+    source_id text,provider text,account_alias text,
+    provider_object_id text,location_role text,verified_at timestamptz
+);
+insert into {schema}.source_locations values
+('SRC-20261007-001','google-drive','HEALTH_PRIMARY','synthetic-1','PRIMARY','2026-10-08T12:00:00Z'),
+('SRC-20261007-002','google-drive','HEALTH_PRIMARY','synthetic-2','PRIMARY','2026-10-08T15:00:00+03:00');
+"""
+    expected = [
+        {"source_id": f"SRC-20261007-00{i}",
+         "provider": "google-drive", "account_alias": "HEALTH_PRIMARY",
+         "provider_object_id": f"synthetic-{i}", "location_role": "PRIMARY",
+         "verified_at": "2026-10-08T12:00:00Z"}
+        for i in (1, 2)
+    ]
+    run_psql(sql, "HEALTH_ROUNDTRIP_URL")
+    try:
+        rows = target_rows("source_locations", "HEALTH_ROUNDTRIP_URL", schema)
+        if table_fingerprint("source_locations", rows) != table_fingerprint("source_locations", expected):
+            fail("PostgreSQL timestamptz source fingerprint roundtrip mismatch")
+        probe = run_psql(
+            "copy (select count(*) from jsonb_object_keys('{\\\"a\\\":1,\\\"b\\\":2}'::jsonb)) to stdout;",
+            "HEALTH_ROUNDTRIP_URL", capture=True,
+        )
+        if probe.strip() != "2":
+            fail("PostgreSQL JSONB object count test mismatch")
+    finally:
+        run_psql(f"drop schema if exists {schema} cascade;", "HEALTH_ROUNDTRIP_URL")
+    print("PASS synthetic PostgreSQL 17 timestamptz/jsonb roundtrip")
+
+
 def self_test() -> None:
     sample = [{"b": 2, "a": "x"}, {"a": "y", "b": 1}]
     a = sha256_bytes(("\n".join(sorted(canonical_json(x) for x in sample)) + "\n").encode())
@@ -893,6 +935,7 @@ def main() -> None:
     p.add_argument("--authorization", required=True)
 
     sub.add_parser("self-test")
+    sub.add_parser("pg-roundtrip-test")
 
     args = parser.parse_args()
     if args.command == "seal":
@@ -918,6 +961,8 @@ def main() -> None:
         cleanup_stage(args.db_url_env, args.schema, args.authorization)
     elif args.command == "self-test":
         self_test()
+    elif args.command == "pg-roundtrip-test":
+        postgresql_roundtrip_test()
 
 
 if __name__ == "__main__":

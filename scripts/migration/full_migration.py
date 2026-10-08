@@ -897,12 +897,12 @@ create table {schema}.source_locations (
 );
 insert into {schema}.source_locations values
 ('SRC-20261007-001','google-drive','HEALTH_PRIMARY','synthetic-1','PRIMARY','2026-10-08T12:00:00Z'),
-('SRC-20261007-002','google-drive','HEALTH_PRIMARY','synthetic-2','PRIMARY','2026-10-08T15:00:00+03:00');
+('SRC-20261007-002','google-drive','HEALTH_PRIMARY','synthetic-2' || chr(92) || 'slash' || chr(10) || 'newline','PRIMARY','2026-10-08T15:00:00+03:00');
 """
     expected = [
         {"source_id": f"SRC-20261007-00{i}",
          "provider": "google-drive", "account_alias": "HEALTH_PRIMARY",
-         "provider_object_id": f"synthetic-{i}", "location_role": "PRIMARY",
+         "provider_object_id": (f"synthetic-{i}" if i == 1 else "synthetic-2" + chr(92) + "slash" + chr(10) + "newline"), "location_role": "PRIMARY",
          "verified_at": "2026-10-08T12:00:00Z"}
         for i in (1, 2)
     ]

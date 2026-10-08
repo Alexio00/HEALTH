@@ -753,8 +753,8 @@ def cleanup_stage(db_url_env: str, schema: str, authorization: str) -> None:
 
 def sql_scalar(db_url_env: str, query: str) -> str:
     # COPY TO STDOUT avoids locale-dependent psql header formatting.
-    result = run_psql(f"copy ({query}) to stdout;\\n", db_url_env, capture=True).strip()
-    if not result or "\\n" in result:
+    result = run_psql(f"copy ({query}) to stdout;\n", db_url_env, capture=True).strip()
+    if not result or "\n" in result:
         fail("expected one database scalar")
     return result
 
@@ -785,7 +785,7 @@ def postcommit_verification(db_url_env: str, operation_id: str) -> None:
     root = Path(__file__).resolve().parents[1] / "validation"
     check_sql = (root / "full_migration_invariants.sql").read_text(encoding="utf-8")
     result = run_psql(check_sql, db_url_env, capture=True)
-    statuses = re.findall(r"^\\s*([A-Z][A-Z0-9_]+)\\s*\\|\\s*(PASS|FAIL|WAITING)\\s*$", result, re.M)
+    statuses = re.findall(r"^\s*([A-Z][A-Z0-9_]+)\s*\|\s*(PASS|FAIL|WAITING)\s*$", result, re.M)
     if not statuses or any(status != "PASS" for _, status in statuses):
         fail("postcommit full-migration SQL invariants not all PASS")
     for test in ("security_invariants.sql", "auth_invariants.sql"):

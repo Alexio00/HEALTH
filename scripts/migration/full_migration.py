@@ -97,7 +97,7 @@ LOAD_ORDER = [
 REC_RE = re.compile(r"^REC-(\d{8})-(\d{3})$")
 SRC_RE = re.compile(r"^SRC-[0-9]{8}-[0-9]{3,}$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{64}$")
-UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")
+UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")\nOLD_OPERATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 class MigrationError(RuntimeError):
@@ -713,7 +713,7 @@ def self_test() -> None:
             "status": "CAPTURED",
             "captured_at": "2026-01-01T00:00:00Z",
             "old_healthdb_validation_pass": True,
-            "old_healthdb_freeze_operation_id": "00000000-0000-4000-8000-000000000001",
+            "old_healthdb_freeze_operation_id": "MAINT-999",
             "old_healthdb_freeze_state": "PREPARED",
             "old_healthdb_other_unfinished_operations": 0,
             "historical_sources_manifest_sha256": "0" * 64,
@@ -775,7 +775,7 @@ def self_test() -> None:
 
         sealed = read_manifest(package)
         original_freeze = sealed["old_healthdb_freeze_operation_id"]
-        sealed["old_healthdb_freeze_operation_id"] = "00000000-0000-4000-8000-000000000002"
+        sealed["old_healthdb_freeze_operation_id"] = "MAINT-998"
         (package / MANIFEST).write_text(canonical_json(sealed) + "\n", encoding="utf-8")
         try:
             verify_package(package)

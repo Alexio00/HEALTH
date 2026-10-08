@@ -27,6 +27,20 @@ permissions:
 jobs:
   static:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: health-synthetic
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -41,5 +55,9 @@ jobs:
         run: python3 -m py_compile scripts/migration/full_migration.py
       - name: Migration runner self-test
         run: python3 scripts/migration/full_migration.py self-test
+      - name: Synthetic PostgreSQL 17 time and JSONB roundtrip
+        env:
+          HEALTH_SYNTHETIC_DB_URL: postgresql://postgres:health-synthetic@127.0.0.1:5432/postgres
+        run: python3 scripts/migration/full_migration.py pg-roundtrip-test
       - name: Public repository secret-pattern guard
         run: python3 scripts/validation/public_secret_guard.py

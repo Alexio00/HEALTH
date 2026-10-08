@@ -1,6 +1,6 @@
 # Project State
 
-Status: AUDIT REMEDIATION IN PROGRESS; FULL MIGRATION NO-GO; CUTOVER NO-GO
+Status: B-04 SYNTHETIC INTEGRATION VERIFIED; INDEPENDENT A/B RE-AUDIT PENDING; FULL MIGRATION NO-GO; CUTOVER NO-GO
 
 ## Canonical boundary
 
@@ -60,7 +60,7 @@ MVP operational acceptance is PASS:
 
 ## Final pre-migration audit
 
-Current verdict: **PASS for full-migration readiness; owner authorization still required.**
+Earlier preliminary readiness was PASS; **current execution verdict is NO-GO** until the merged B-04 attestation code receives independent re-audit acceptance and the owner separately authorizes freeze/full migration.
 
 2026-10-08 remediation evidence:
 - the old Drive-native freeze operation ID is now treated as the exact opaque legacy Change Log value (for example `MAINT-011`), while only the new HEALTH target operation uses a UUID;
@@ -77,7 +77,7 @@ Current verdict: **PASS for full-migration readiness; owner authorization still 
 - legacy GitHub HealthDB repositories are not migration inputs or runtime dependencies;
 - the old Drive-native HealthDB is used only as the canonical migration source until cutover; new HEALTH record text is stored in PostgreSQL and active source PRIMARY objects belong under the new `HEALTH/Sources`.
 
-**Audit A/B reconciliation — 2026-10-08:** auditor B found B-04: text-only recovery PASS could finalize a newer operation. B-04 code remediation is now merged in HEALTH `c423d4a4` and private SHEDULLER `27a6c20c`: operation-bound backup/source/restore evidence, authenticated successful restore run and fail-closed private finalization. Synthetic CI PASS, but a real post-full-migration recovery proof cannot exist before authorized migration. Auditor A's A-05 Source recovery/rebind tool was added, while a complete lost-PRIMARY and PWA acceptance remains mandatory before cutover.
+**Audit A/B reconciliation — 2026-10-08:** auditor B found B-04: text-only recovery PASS could finalize a newer operation. First B-04 remediation was merged in HEALTH `c423d4a4` and private SHEDULLER `27a6c20c`. A subsequent focused review found a further proof-authenticity gap: an arbitrary privately stored restore proof was not demonstrably produced by the claimed successful GitHub Actions run. Private SHEDULLER [PR #10](https://github.com/Alexio000/SHEDULLER/pull/10), merged as `c8399ae8`, now requires the exact matching GitHub-produced digest-only Actions artifact as well as authenticated successful-run metadata. A real synthetic GitHub Actions artifact transport test (run `37818168954`) PASS included upload → authenticated REST/ZIP readback → SHA/run/attempt/SHA binding and negative tampering cases. It also discovered and corrected signed-download redirect handling so the Actions bearer token is not forwarded across host origins. Scheduler main recovery code CI run `37818353973` PASS. This is **synthetic integration**, NOT full-dataset disaster recovery. Auditor A's A-05 replacement-PRIMARY restore/rebind code exists; complete lost-PRIMARY and PWA original-opening exercises remain mandatory before cutover.
 
 The executable private recovery evidence contract, fail-closed finalization
 workflow and remaining A-05 recovery/PWA acceptance are documented in
@@ -106,7 +106,7 @@ Full migration readiness is not the same as cutover readiness.
 
 ## Full-migration gate
 
-Historic passes are retained. B-04 code remediation is now merged with synthetic tests PASS. A fresh independent audit acceptance and the owner's separate full-migration authorization remain necessary before execution. No full migration or cutover is authorized.
+Historic passes are retained. B-04 code and synthetic real-Actions transport tests are merged with CI PASS. Independent A/B re-audit acceptance and the owner's separate full-migration authorization remain necessary before execution. B-04 full-dataset backup/restore proof cannot be produced until after the separately authorized full migration commits; this proof is mandatory **before FINALIZED**, not a prerequisite to starting a controlled owner-authorized migration. No full migration or cutover is authorized.
 
 Full migration may begin only after a **separate explicit owner authorization**. The private migration path requires the literal `FULL_MIGRATION_AUTHORIZED` token, a new HEALTH PREPARED target operation UUID and the matching old-HealthDB PREPARED legacy freeze operation ID.
 

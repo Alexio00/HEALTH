@@ -940,6 +940,20 @@ def self_test() -> None:
         fail("self-test canonical order failed")
     if pg_array(["a", 'b"c']) != '{"a","b\\\"c"}':
         fail("self-test array encoding failed")
+    # A maintenance command is not a medical migration authorization.
+    example_id = "33333333-3333-4333-8333-333333333333"
+    try:
+        finalize_verified_operation("SYNTHETIC_DATABASE", example_id, "NOT_AUTHORIZED")
+        fail("unauthorized finalization accepted")
+    except MigrationError as exc:
+        if "explicit owner authorization" not in str(exc):
+            raise
+    try:
+        mark_interrupted_migration_failed("SYNTHETIC_DATABASE", example_id, "NOT_CONFIRMED")
+        fail("unconfirmed failure transition accepted")
+    except MigrationError as exc:
+        if "explicit failed-operation confirmation" not in str(exc):
+            raise
     if canonical_timestamp("2026-10-08T12:00:00Z") != canonical_timestamp("2026-10-08T12:00:00+00:00"):
         fail("self-test UTC fingerprint normalization failed")
     if canonical_timestamp("2026-10-08T15:00:00+03:00") != canonical_timestamp("2026-10-08T12:00:00.000000Z"):

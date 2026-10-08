@@ -1116,6 +1116,9 @@ def local_full_cycle_test() -> None:
     repo = Path(__file__).resolve().parents[2]
     for migration in ("0001_core.sql", "0004_mvp_fidelity.sql", "0006_id_reservations_metadata.sql"):
         run_psql((repo / "db" / "migrations" / migration).read_text(encoding="utf-8"), env)
+    # Standalone PostgreSQL 17 does not install Supabase's extensions schema.
+    run_psql("create schema if not exists extensions; "
+             "create extension if not exists pgcrypto with schema extensions;", env)
     op = "11111111-1111-4111-8111-111111111111"
     second = "22222222-2222-4222-8222-222222222222"
     with tempfile.TemporaryDirectory(prefix="health-local-fullcycle-") as directory:
@@ -1183,11 +1186,78 @@ def local_full_cycle_test() -> None:
             if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
                 raise
 
-        # Exercise SQL state-transition mechanics separately from the full
-        # recovery/semantic gate. Synthetic override is never used by CLI.
+        # Build real PostgreSQL full-row fingerprints on this isolated dataset.
+        # Only the external recovery callback is synthetic; the locked SQL
+        # proof binding and FINALIZED transaction execute against PostgreSQL.
+        backup_fps = {}
+        for table in LOAD_ORDER:
+            query = (
+                "select encode(extensions.digest(convert_to(coalesce("
+                "string_agg(to_jsonb(t)::text, E'\\n' order by to_jsonb(t)::text),"
+                "''), 'UTF8'), 'sha256'), 'hex') from public." + table + " t"
+            )
+            backup_fps[table] = sql_scalar(env, query)
+        snapshot = json.loads(sql_scalar(
+            env, "select value::text from public.system_state "
+                 "where key='full_migration_snapshot'",
+        ))
+        evidence = {
+            "operation_id": op, "package_fingerprint": snapshot["package_fingerprint"],
+            "backup_snapshot_id": "2026-10-08T13-26-07Z",
+            "backup_manifest_sha256": "a" * 64,
+            "source_manifest_path": "source-manifests/synthetic.json",
+            "source_manifest_sha256": "b" * 64,
+            "restore_evidence_path": "recovery-evidence/synthetic.json",
+            "restore_evidence_sha256": "c" * 64,
+            "restore_run_id": "37818168954",
+            "restored_table_fingerprints": backup_fps,
+            "historical_sources_manifest_sha256": snapshot["historical_sources_manifest_sha256"],
+            "historical_source_count": 1,
+        }
+        recovery_evidence_contract(evidence, snapshot, op)
+        ev_text = canonical_json(evidence).replace("'", "''")
+        run_psql("insert into public.system_state(key,value) values "
+                 "('full_migration_recovery_evidence','" + ev_text + "'::jsonb);", env)
         checker = globals()["postcommit_verification"]
         try:
-            globals()["postcommit_verification"] = lambda _env, _id, recovery_gate=None: None
+            # Changing just one medical field AFTER successful unlocked
+            # preflight must NOT allow SQL FINALIZED to succeed.
+            def changed_after_preflight(_env, _id, recovery_gate=None):
+                run_psql("update public.records set title='CONCURRENT_SYNTHETIC_MUTATION';", env)
+                return snapshot, evidence
+            globals()["postcommit_verification"] = changed_after_preflight
+            try:
+                finalize_verified_operation(env, op, AUTHORIZATION)
+                fail("locked finalization accepted changed medical rows")
+            except MigrationError as exc:
+                if "psql command failed" not in str(exc):
+                    raise
+            if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
+                fail("rejected finalization partially advanced migration state")
+            # Restore the original record and rerun the *actual* locked
+            # 15-table SHA-256 transaction against the initial backup proof.
+            run_psql("update public.records set title='synthetic record';", env)
+            # Titles for synthetic package are not fixed: update to the actual
+            # staged value before retrying, rather than guessing.
+            original = target_rows("records", env, DEFAULT_STAGE_SCHEMA)[0]["title"]
+            safe_title = original.replace("'", "''")
+            run_psql("update public.records set title='" + safe_title + "';", env)
+            # Some schemas have updated_at triggers; refresh the fixture's
+            # full-row digest after restoring the identical medical content.
+            # This is an isolated test-only proof, not a production recovery.
+            refreshed = {}
+            for table in LOAD_ORDER:
+                query = (
+                    "select encode(extensions.digest(convert_to(coalesce("
+                    "string_agg(to_jsonb(t)::text, E'\\n' order by to_jsonb(t)::text),"
+                    "''), 'UTF8'), 'sha256'), 'hex') from public." + table + " t"
+                )
+                refreshed[table] = sql_scalar(env, query)
+            evidence["restored_table_fingerprints"] = refreshed
+            ev_text = canonical_json(evidence).replace("'", "''")
+            run_psql("update public.system_state set value='" + ev_text + "'::jsonb "
+                     "where key='full_migration_recovery_evidence';", env)
+            globals()["postcommit_verification"] = lambda _env, _id, recovery_gate=None: (snapshot, evidence)
             finalize_verified_operation(env, op, AUTHORIZATION)
         finally:
             globals()["postcommit_verification"] = checker

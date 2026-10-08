@@ -330,6 +330,8 @@ def validate_data(data: dict[str, list[dict[str, Any]]]) -> None:
         location_keys.add(key)
         if role == "PRIMARY":
             primary_count[sid] += 1
+            if row.get("provider") != "google-drive" or row.get("account_alias") != "HEALTH_PRIMARY":
+                fail("source_locations: PRIMARY must be the new HEALTH Google Drive")
             if not row.get("verified_at"):
                 fail("source_locations: PRIMARY must be verified")
     if any(count != 1 for count in primary_count.values()):

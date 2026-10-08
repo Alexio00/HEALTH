@@ -582,38 +582,65 @@ function isMedicalCardQuestion(question) {
     || question.metadata?.purpose === "medical_card";
 }
 function visitPreparation(planItems, questions) {
-  const groups = new Map();
-  const getGroup = specialty => {
-    const key = specialty || "специалист";
-    if (!groups.has(key)) groups.set(key, { specialty: key, visits: [], questions: [] });
-    return groups.get(key);
-  };
+  const plannedGroups = [];
+  const unmatchedGroups = new Map();
   for (const item of planItems || []) {
     const kind = String(item.metadata?.kind || "").toLocaleLowerCase("ru");
     if (!kind.includes("визит") && !kind.includes("консультаци")) continue;
     const prefix = String(item.title || "").split(":")[0];
     const specialties = prefix.length <= 100 ? namedSpecialties(prefix) : [];
-    for (const specialty of specialties.length ? specialties : ["специалист"]) {
-      getGroup(specialty).visits.push(item);
-    }
+    plannedGroups.push({
+      specialty: specialties,
+      title: specialties.length ? `Визит к ${specialties.map(visitLabel).join(" и ")}` : "Визит к специалисту",
+      visits: [item], questions: [], planItemId: item.plan_item_id
+    });
   }
+  const unmatched = specialty => {
+    if (!unmatchedGroups.has(specialty)) {
+      unmatchedGroups.set(specialty, {
+        specialty: [specialty],
+        title: specialty === "специалист"
+          ? "Вопросы к специалисту — специальность не указана"
+          : `Вопросы для ${visitLabel(specialty)} — визит не запланирован`,
+        visits: [], questions: []
+      });
+    }
+    return unmatchedGroups.get(specialty);
+  };
   for (const question of questions || []) {
     if (isMedicalCardQuestion(question)) continue;
     const specialties = questionSpecialties(question);
-    for (const specialty of specialties.length ? specialties : ["специалист"]) {
-      getGroup(specialty).questions.push(question);
+    if (!specialties.length) {
+      unmatched("специалист").questions.push(question);
+      continue;
+    }
+    // A question can belong to more than one explicit planned visit.
+    // Show it only once within each visit, even if two specialties match.
+    const matched = new Set();
+    for (const specialty of specialties) {
+      let found = false;
+      for (const group of plannedGroups) {
+        if (!group.specialty.includes(specialty)) continue;
+        if (!matched.has(group)) {
+          group.questions.push(question);
+          matched.add(group);
+        }
+        found = true;
+      }
+      if (!found) unmatched(specialty).questions.push(question);
     }
   }
-  if (!groups.size) return empty("Плановых визитов и вопросов специалистам пока нет");
-  return [...groups.values()].map(group => {
+  const all = [...plannedGroups, ...unmatchedGroups.values()];
+  if (!all.length) return empty("Плановых визитов и вопросов специалистам пока нет");
+  return all.map(group => {
     const planNotes = group.visits.map(item => {
       const due = item.metadata?.due_text || fmtDate(item.due_on) || "Срок не указан";
       return `<li><strong>${esc(due)}</strong> · ${esc(item.title)}
         ${item.basis_record_id ? ` · ${recLink(item.basis_record_id)}` : ""}</li>`;
     }).join("");
     return `
-      <details class="case-card visit-card">
-        <summary><strong>Визит к ${esc(visitLabel(group.specialty))}</strong>
+      <details class="case-card visit-card" ${group.planItemId ? `data-plan-id="${esc(group.planItemId)}"` : ""}>
+        <summary><strong>${esc(group.title)}</strong>
           <span class="muted"> · вопросов: ${group.questions.length}</span></summary>
         <div class="case-body">
           ${planNotes ? `<h3>Плановый визит</h3><ul class="record-list">${planNotes}</ul>` :

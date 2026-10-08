@@ -204,7 +204,9 @@ h3 { margin: 1.4rem 0 .6rem; }
   border-bottom: 1px solid #e5e5e5;
 }
 .data-table th {
-  padding: .22rem .5rem;
+  padding: .18rem .5rem;
+  line-height: 1.2;
+  white-space: normal;
   position: sticky;
   top: 0;
   background: #f0f0f0;
@@ -257,6 +259,15 @@ h3 { margin: 1.4rem 0 .6rem; }
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* Override the raw-text style for the structured REC HTML renderer.
+   Otherwise indentation/newlines in sortableTable() become visible blank
+   lines inside every table header (especially in dark-mode REC pages). */
+.record-body.rich-record-body {
+  white-space: normal;
+}
+.record-body.rich-record-body .data-table {
+  white-space: normal;
+}
 
 dl, .meta-list {
   display: grid;
@@ -269,8 +280,28 @@ dd { margin: 0; overflow-wrap: anywhere; }
 
 @media (max-width: 720px) {
   .panel, .content { padding: 1.4rem .8rem; }
-  .topbar { align-items: flex-start; flex-wrap: wrap; }
-  .menu-toggle { display: inline-flex; margin-left: auto; padding: .45rem .7rem; min-width: 2.5rem; justify-content: center; }
+  .topbar {
+    --mobile-action-height: 3.25rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .menu-toggle {
+    display: inline-grid;
+    place-items: center;
+    margin-left: auto;
+    padding: 0;
+    width: var(--mobile-action-height);
+    height: var(--mobile-action-height);
+    min-width: var(--mobile-action-height);
+    flex: 0 0 var(--mobile-action-height);
+    line-height: 1;
+  }
+  .menu-toggle span { font-size: 1.6rem; line-height: 1; }
+  .topbar #logout {
+    height: var(--mobile-action-height);
+    padding: 0 1rem;
+    margin-left: 0;
+  }
   .topbar nav { display: none; order: 3; width: 100%; gap: .15rem; flex-direction: column; flex-basis: 100%; }
   .topbar nav.is-open { display: flex; }
   .topbar nav a { display: block; padding: .65rem .55rem; border-radius: .35rem; }

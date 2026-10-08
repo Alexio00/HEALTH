@@ -33,6 +33,20 @@ for (const route of ["chronic","open-cases","medications","monitoring","visit-pr
 assert(html.includes('aria-expanded="false"'));
 assert(css.includes('.topbar nav.is-open { display: flex; }'));
 
+// Regression: REC markup was inheriting pre-wrap from record-body. Indentation
+// in generated table templates became large empty areas above table headings.
+assert.match(css, /\.record-body\.rich-record-body\s*\{\s*white-space:\s*normal;/);
+assert.match(css, /\.record-body\.rich-record-body\s+\.data-table\s*\{\s*white-space:\s*normal;/);
+assert.match(css, /\.data-table th\s*\{[^}]*padding:\s*\.18rem \.5rem;[^}]*line-height:\s*1\.2;/);
+
+// Both controls are assigned the same explicit height on mobile; the menu
+// additionally sets equal width and a larger symbol.
+assert.match(css, /--mobile-action-height:\s*3\.25rem;/);
+assert.match(css, /\.menu-toggle\s*\{[^}]*width:\s*var\(--mobile-action-height\);[^}]*height:\s*var\(--mobile-action-height\);/);
+assert.match(css, /\.topbar #logout\s*\{[^}]*height:\s*var\(--mobile-action-height\);/);
+assert.match(css, /\.menu-toggle span\s*\{[^}]*font-size:\s*1\.6rem;/);
+
+
 const q1 = { question: "Кардиологу: обсудить контрольный тест", metadata: {}, basis_record_id: "REC-20260101-001" };
 const q2 = { question: "Эндокринологу: обсудить повторную оценку", metadata: {} };
 const q3 = { question: "Кардиологу-терапевту или эндокринологу: уточнить план", metadata: {} };

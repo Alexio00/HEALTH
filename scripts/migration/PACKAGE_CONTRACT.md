@@ -119,6 +119,35 @@ This must PASS for every table. Then run the SQL validation suite, browser/secur
 
 Do not remove staging until final validation is complete.
 
+## Executable post-commit operation gate
+
+The independent post-commit verifier reads all 15 live medical tables and
+compares them with the sealed fingerprints in
+`system_state/full_migration_snapshot`. It runs the full-migration SQL suite,
+security and Auth invariants, and requires current-operation PASS evidence for
+all impacted semantic audits and independent backup/recovery evidence.
+
+```bash
+python scripts/migration/full_migration.py postcommit-verify \
+  --operation-id <new-health-operation-uuid>
+```
+
+Only after that gate is PASS can a separately authorized operator finalize:
+
+```bash
+python scripts/migration/full_migration.py finalize-verified-migration \
+  --operation-id <new-health-operation-uuid> \
+  --authorization FULL_MIGRATION_AUTHORIZED
+```
+
+This advances COMMITTED_REGISTRY to VALIDATED and FINALIZED transactionally.
+It **does not** release the old Drive freeze or authorize cutover.
+An interrupted target operation requires manual recovery analysis. Its explicit
+FAILED path deliberately retains the old freeze for a separate decision.
+
+Until real operation-scoped validation and recovery evidence exists, these
+commands must fail closed. Synthetic tests alone are not sufficient.
+
 ## Rollback before cutover
 
 The old Drive-native HealthDB remains canonical. A failed migration is recovered by rebuilding/recommitting the new HEALTH target from the same sealed snapshot or a newer fresh snapshot. The old Drive source is never modified to roll back the new target.

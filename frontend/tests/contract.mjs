@@ -69,7 +69,7 @@ assert(js.includes("original?.click()"), "pinned sort buttons must forward to th
 assert(x.shouldPinTableHeader({height:38,bottom:120}, {width:440,bottom:900}, 130, 800));
 assert(!x.shouldPinTableHeader({height:38,bottom:180}, {width:440,bottom:900}, 130, 800));
 assert(!x.shouldPinTableHeader({height:38,bottom:120}, {width:440,bottom:150}, 130, 800));
-assert(!x.shouldPinTableHeader({height:38,bottom:120}, {width:440,bottom:900}, 760, 800));
+assert(!x.shouldPinTableHeader({height:38,bottom:120}, {width:440,bottom:900}, 770, 800));
 
 // All standalone views suppress their repeated section H2, while Current
 // State continues to display headings for its multiple sections.

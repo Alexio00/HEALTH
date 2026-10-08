@@ -32,6 +32,7 @@ button { border: 0; border-radius: .6rem; padding: .75rem 1rem; background: #171
   border-bottom: 1px solid #ddd;
 }
 .topbar nav { display: flex; gap: 1rem; flex: 1; flex-wrap: wrap; }
+.menu-toggle { display: none; }
 .brand { font-weight: 800; text-decoration: none; letter-spacing: .04em; }
 h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.05; }
 h2 { margin-top: 2.4rem; }
@@ -203,6 +204,7 @@ h3 { margin: 1.4rem 0 .6rem; }
   border-bottom: 1px solid #e5e5e5;
 }
 .data-table th {
+  padding: .22rem .5rem;
   position: sticky;
   top: 0;
   background: #f0f0f0;
@@ -229,8 +231,13 @@ h3 { margin: 1.4rem 0 .6rem; }
 }
 .rich-record-body p {
   max-width: 88ch;
-  margin: 0;
+  margin: .55rem 0;
+  line-height: 1.6;
 }
+.rich-record-body blockquote { border-left: 3px solid #aaa; padding-left: .85rem; margin: .55rem 0; }
+.rich-record-body .sort-button { line-height: 1.15; }
+.rich-record-body ol { padding-left: 1.35rem; }
+
 .rich-record-body .record-list {
   margin: 0;
 }
@@ -263,7 +270,12 @@ dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 720px) {
   .panel, .content { padding: 1.4rem .8rem; }
   .topbar { align-items: flex-start; flex-wrap: wrap; }
-  .topbar nav { order: 3; width: 100%; gap: .8rem; }
+  .menu-toggle { display: inline-flex; margin-left: auto; padding: .45rem .7rem; min-width: 2.5rem; justify-content: center; }
+  .topbar nav { display: none; order: 3; width: 100%; gap: .15rem; flex-direction: column; flex-basis: 100%; }
+  .topbar nav.is-open { display: flex; }
+  .topbar nav a { display: block; padding: .65rem .55rem; border-radius: .35rem; }
+  .topbar nav a[aria-current="page"] { font-weight: 700; background: rgba(128,128,128,.14); }
+  .topbar #logout { margin-left: 0; }
   .ghost { margin-left: auto; }
   .data-table { font-size: .86rem; }
   .filter-bar { align-items: stretch; }

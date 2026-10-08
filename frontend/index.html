@@ -38,10 +38,18 @@
     <section id="app" class="hidden">
       <header class="topbar">
         <a class="brand" href="#/">HEALTH</a>
-        <nav aria-label="Основная навигация">
-          <a href="#/">Состояние</a>
+        <button id="menu-toggle" class="menu-toggle ghost" type="button" aria-controls="primary-nav" aria-expanded="false" aria-label="Открыть меню"><span aria-hidden="true">☰</span></button>
+        <nav id="primary-nav" aria-label="Основная навигация">
+          <a href="#/">Текущее состояние</a>
+          <a href="#/chronic">Хронические состояния</a>
+          <a href="#/open-cases">Открытые случаи</a>
+          <a href="#/medications">Принимаемые препараты</a>
+          <a href="#/monitoring">Мониторинг</a>
+          <a href="#/visit-preparation">Подготовка к визиту</a>
+          <a href="#/future-plan">Будущий план</a>
           <a href="#/closed-cases">Закрытые случаи</a>
           <a href="#/records">Записи</a>
+          <a href="#/vaccination">Вакцинация</a>
         </nav>
         <button id="logout" class="ghost" type="button">Выйти</button>
       </header>

@@ -59,6 +59,17 @@ Canonical analyte dictionary plus raw laboratory observations.
 ### medications / monitoring / plan_items / questions
 Current-state layers with explicit basis REC links.
 
+Visit Preparation is a view over plan_items (explicit planned visits)
+and questions (specialist discussion items), not a duplicate storage entity.
+Question metadata.category=medical_card is reserved for chart conflicts/actions;
+metadata.visit_specialties stores only explicit specialist associations.
+The absence of a matching plan item never authorizes inventing an appointment.
+
+New active medications require an idempotent, transactionally linked pending
+medical-card drug-interaction check. This must be implemented in the future
+Health API write path prior to production writes. Migration of existing
+medications must not create false new-prescription alerts.
+
 ### operations
 Single-writer logical transaction state.
 

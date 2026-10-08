@@ -4,12 +4,34 @@ The frontend is a static, read-only PWA deployed through GitHub Pages.
 
 ## Navigation
 
-- **Состояние** — current state with questions, chronic states, open cases, medications, monitoring and future plan.
-- **Закрытые случаи** — collapsible closed-case register with opening/closing REC links and the imported case chain.
-- **Записи** — table index with REC, date, tags, type, confidence, summary and case links.
-- **Карточка случая** — chronology of OPEN / CONTINUES / CLOSES relations.
-- **REC** — full record text, related cases and Sources.
-- **Source** — provider-neutral metadata and owner-only Google Drive locator.
+The mobile menu is collapsed by default (hamburger button); the desktop header
+keeps a wrapping horizontal navigation. Routing opens the requested page,
+not a menu. Current State is a composite view; other pages reuse the same live
+rows without copying or synchronizing duplicate medical entities.
+
+1. Текущее состояние — questions about chart conflicts or chart actions, chronic conditions,
+   open episodes, medications, monitoring, visit preparation, future plan.
+2. Хронические состояния
+3. Открытые случаи
+4. Принимаемые препараты
+5. Мониторинг
+6. Подготовка к визиту
+7. Будущий план
+8. Закрытые случаи
+9. Записи
+10. Вакцинация — deliberately empty until the owner provides content.
+
+Visit preparation groups plan items explicitly marked as visits/consultations and
+open specialist questions. Specialties are determined only by explicit source
+wording (normally the prefix before the colon); questions may be shown for
+multiple explicitly named specialists. No matching planned appointment is
+invented when a question has no corresponding plan item. Data lives in the
+existing plan_items/questions tables, not copied UI state.
+
+Questions marked metadata.category=medical_card (or
+metadata.purpose=medical_card) remain in Questions on Current State.
+The pre-existing MVP specialist questions are displayed only under Visit
+Preparation by default.
 
 The UI deliberately mirrors the useful reading patterns of the legacy HealthDB files while reading live structured data from Supabase.
 

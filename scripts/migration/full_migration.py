@@ -777,12 +777,21 @@ def recovery_evidence_contract(evidence: dict[str, Any], snapshot: dict[str, Any
                 "backup_manifest_sha256", "source_manifest_path",
                 "source_manifest_sha256", "restore_evidence_path",
                 "restore_evidence_sha256", "restore_run_id",
-                "restored_table_fingerprints")
+                "restored_table_fingerprints", "historical_sources_manifest_sha256",
+                "historical_source_count")
     if not isinstance(evidence, dict) or any(not evidence.get(k) for k in required):
         fail("postcommit recovery artifact contract incomplete")
     if (evidence["operation_id"] != operation_id
             or evidence["package_fingerprint"] != snapshot.get("package_fingerprint")):
         fail("postcommit recovery proof belongs to another migration")
+    if (not re.fullmatch(r"[a-f0-9]{64}",
+                         str(evidence.get("historical_sources_manifest_sha256", "")))
+            or evidence["historical_sources_manifest_sha256"]
+               != snapshot.get("historical_sources_manifest_sha256")
+            or not isinstance(evidence["historical_source_count"], int)
+            or isinstance(evidence["historical_source_count"], bool)
+            or evidence["historical_source_count"] <= 0):
+        fail("postcommit Historical corpus digest/count unbound to sealed snapshot")
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z", str(evidence["backup_snapshot_id"])):
         fail("postcommit invalid backup snapshot identifier")
     for key in ("backup_manifest_sha256", "source_manifest_sha256", "restore_evidence_sha256"):
@@ -864,23 +873,56 @@ def postcommit_verification(
         fail("postcommit requires private independent recovery-artifact verification")
     recovery_gate(evidence, snapshot)
     print(f"PASS read-only postcommit verification; tables={len(LOAD_ORDER)}; checks={len(statuses)}")
+    return snapshot, evidence
 
 
-def finalize_verified_operation(
-    db_url_env: str, operation_id: str, authorization: str,
-    recovery_gate: Callable[[dict[str, Any], dict[str, Any]], None] | None = None,
-) -> None:
-    if authorization != AUTHORIZATION:
-        fail("finalization requires explicit owner authorization")
+def locked_finalization_sql(operation_id: str, snapshot: dict[str, Any],
+                            evidence: dict[str, Any]) -> str:
+    """One transaction: block medical DML, re-fingerprint, then FINALIZED.
+
+    The external independent recovery attestation was verified immediately
+    before calling this function. We also freeze its exact JSONB values inside
+    this transaction; a changed system_state row cannot silently replace it.
+    """
     if not UUID_RE.fullmatch(operation_id):
-        fail("invalid finalization operation ID")
-    postcommit_verification(db_url_env, operation_id, recovery_gate=recovery_gate)
-    # Recheck state/owner binding inside the same transaction as both state
-    # transitions, so competing operations cannot invalidate the preflight.
-    sql = f"""
+        fail("invalid locked-finalization operation ID")
+    recovery_evidence_contract(evidence, snapshot, operation_id)
+    fingerprints = evidence["restored_table_fingerprints"]
+    if set(fingerprints) != set(LOAD_ORDER):
+        fail("missing locked-finalization fingerprints")
+    checks = []
+    for table in LOAD_ORDER:
+        digest = fingerprints[table]
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            fail("unsafe locked-finalization fingerprint")
+        # Exactly the same full-row, order-independent SHA-256 fingerprint
+        # algorithm as the independent database backup and restored proof.
+        checks.append(
+            "if (select encode(extensions.digest(convert_to(coalesce("
+            "string_agg(to_jsonb(t)::text, E'\\n' order by to_jsonb(t)::text),"
+            "''), 'UTF8'), 'sha256'), 'hex') from public." + table + " t)"
+            " <> '" + digest + "' then "
+            "raise exception 'locked medical fingerprint mismatch: " + table + "';"
+            " end if;"
+        )
+    expected_snapshot = canonical_json(snapshot).replace("'", "''")
+    expected_evidence = canonical_json(evidence).replace("'", "''")
+    med_tables = ", ".join("public." + t for t in LOAD_ORDER)
+    return f"""
 begin;
+-- SHARE is incompatible with ROW EXCLUSIVE (INSERT/UPDATE/DELETE), hence a
+-- competing privileged writer cannot change any medical row between these
+-- fingerprints and the atomic FINALIZED state transition.
+lock table {med_tables} in share mode;
 do $$
 begin
+  -- Keep operation and three authorizing/sealed state rows stable until
+  -- COMMIT, not just the medical rows. A concurrent change waits or aborts.
+  perform 1 from public.operations
+    where operation_id='{operation_id}'::uuid for update;
+  perform 1 from public.system_state
+    where key in ('full_migration_readiness','full_migration_snapshot',
+                  'full_migration_recovery_evidence') for update;
   if not exists (
     select 1 from public.operations
     where operation_id='{operation_id}'::uuid and state='COMMITTED_REGISTRY'
@@ -895,6 +937,13 @@ begin
   ) then
     raise exception 'operation-specific owner authorization not present';
   end if;
+  if (select value from public.system_state where key='full_migration_snapshot')
+       is distinct from '{expected_snapshot}'::jsonb
+     or (select value from public.system_state where key='full_migration_recovery_evidence')
+       is distinct from '{expected_evidence}'::jsonb then
+    raise exception 'sealed snapshot or independently verified proof changed';
+  end if;
+  {chr(10).join(checks)}
 end $$;
 update public.operations
 set state='VALIDATED', updated_at=now()
@@ -904,7 +953,23 @@ set state='FINALIZED', result='PASS', updated_at=now(), finalized_at=now()
 where operation_id='{operation_id}'::uuid and state='VALIDATED';
 commit;
 """
-    run_psql(sql, db_url_env)
+
+
+def finalize_verified_operation(
+    db_url_env: str, operation_id: str, authorization: str,
+    recovery_gate: Callable[[dict[str, Any], dict[str, Any]], None] | None = None,
+) -> None:
+    if authorization != AUTHORIZATION:
+        fail("finalization requires explicit owner authorization")
+    if not UUID_RE.fullmatch(operation_id):
+        fail("invalid finalization operation ID")
+    snapshot, evidence = postcommit_verification(
+        db_url_env, operation_id, recovery_gate=recovery_gate,
+    )
+    # This fresh SQL transaction does not trust the earlier unlocked table
+    # reads. It locks all 15 medical tables and recomputes independently
+    # restored full-row digests while the locks are held.
+    run_psql(locked_finalization_sql(operation_id, snapshot, evidence), db_url_env)
     print("PASS full-migration operation FINALIZED; legacy freeze and cutover remain separate")
 
 
@@ -1058,6 +1123,9 @@ def local_full_cycle_test() -> None:
     repo = Path(__file__).resolve().parents[2]
     for migration in ("0001_core.sql", "0004_mvp_fidelity.sql", "0006_id_reservations_metadata.sql"):
         run_psql((repo / "db" / "migrations" / migration).read_text(encoding="utf-8"), env)
+    # Standalone PostgreSQL 17 does not install Supabase's extensions schema.
+    run_psql("create schema if not exists extensions; "
+             "create extension if not exists pgcrypto with schema extensions;", env)
     op = "11111111-1111-4111-8111-111111111111"
     second = "22222222-2222-4222-8222-222222222222"
     with tempfile.TemporaryDirectory(prefix="health-local-fullcycle-") as directory:
@@ -1125,11 +1193,110 @@ def local_full_cycle_test() -> None:
             if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
                 raise
 
-        # Exercise SQL state-transition mechanics separately from the full
-        # recovery/semantic gate. Synthetic override is never used by CLI.
+        # Build real PostgreSQL full-row fingerprints on this isolated dataset.
+        # Only the external recovery callback is synthetic; the locked SQL
+        # proof binding and FINALIZED transaction execute against PostgreSQL.
+        backup_fps = {}
+        for table in LOAD_ORDER:
+            query = (
+                "select encode(extensions.digest(convert_to(coalesce("
+                "string_agg(to_jsonb(t)::text, E'\\n' order by to_jsonb(t)::text),"
+                "''), 'UTF8'), 'sha256'), 'hex') from public." + table + " t"
+            )
+            backup_fps[table] = sql_scalar(env, query)
+        snapshot = json.loads(sql_scalar(
+            env, "select value::text from public.system_state "
+                 "where key='full_migration_snapshot'",
+        ))
+        evidence = {
+            "operation_id": op, "package_fingerprint": snapshot["package_fingerprint"],
+            "backup_snapshot_id": "2026-10-08T13-26-07Z",
+            "backup_manifest_sha256": "a" * 64,
+            "source_manifest_path": "source-manifests/synthetic.json",
+            "source_manifest_sha256": "b" * 64,
+            "restore_evidence_path": "recovery-evidence/synthetic.json",
+            "restore_evidence_sha256": "c" * 64,
+            "restore_run_id": "37818168954",
+            "restored_table_fingerprints": backup_fps,
+            "historical_sources_manifest_sha256": snapshot["historical_sources_manifest_sha256"],
+            "historical_source_count": 1,
+        }
+        recovery_evidence_contract(evidence, snapshot, op)
+        ev_text = canonical_json(evidence).replace("'", "''")
+        run_psql("insert into public.system_state(key,value) values "
+                 "('full_migration_recovery_evidence','" + ev_text + "'::jsonb);", env)
         checker = globals()["postcommit_verification"]
         try:
-            globals()["postcommit_verification"] = lambda _env, _id, recovery_gate=None: None
+            # Changing just one medical field AFTER successful unlocked
+            # preflight must NOT allow SQL FINALIZED to succeed.
+            def changed_after_preflight(_env, _id, recovery_gate=None):
+                run_psql("update public.records set title='CONCURRENT_SYNTHETIC_MUTATION';", env)
+                return snapshot, evidence
+            globals()["postcommit_verification"] = changed_after_preflight
+            try:
+                finalize_verified_operation(env, op, AUTHORIZATION)
+                fail("locked finalization accepted changed medical rows")
+            except MigrationError as exc:
+                if "psql command failed" not in str(exc):
+                    raise
+            if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
+                fail("rejected finalization partially advanced migration state")
+            # Two PostgreSQL sessions: writer holds ROW EXCLUSIVE while
+            # finalizer attempts SHARE on all medical tables. After writer
+            # commits, finalizer must see the new bytes and fail atomically.
+            import time
+            writer = subprocess.Popen(
+                ["psql", "-X", "-v", "ON_ERROR_STOP=1", "-d", url,
+                 "-c", "begin; update public.records set title='PARALLEL_SYNTHETIC_MUTATION';"
+                       " select pg_sleep(2); commit;"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                env=psql_env(env),
+            )
+            try:
+                time.sleep(0.5)
+                if writer.poll() is not None:
+                    fail("synthetic concurrent writer failed to hold transaction")
+                globals()["postcommit_verification"] = (
+                    lambda _env, _id, recovery_gate=None: (snapshot, evidence)
+                )
+                try:
+                    finalize_verified_operation(env, op, AUTHORIZATION)
+                    fail("concurrent committed medical DML bypassed locked finalization")
+                except MigrationError as exc:
+                    if "psql command failed" not in str(exc):
+                        raise
+                if writer.wait(timeout=15) != 0:
+                    fail("synthetic concurrent writer aborted")
+            finally:
+                if writer.poll() is None:
+                    writer.kill()
+                    writer.wait()
+            if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
+                fail("concurrent DML race partially advanced finalization")
+            # Restore the original record and rerun the *actual* locked
+            # 15-table SHA-256 transaction against the initial backup proof.
+            run_psql("update public.records set title='synthetic record';", env)
+            # Titles for synthetic package are not fixed: update to the actual
+            # staged value before retrying, rather than guessing.
+            original = target_rows("records", env, DEFAULT_STAGE_SCHEMA)[0]["title"]
+            safe_title = original.replace("'", "''")
+            run_psql("update public.records set title='" + safe_title + "';", env)
+            # Some schemas have updated_at triggers; refresh the fixture's
+            # full-row digest after restoring the identical medical content.
+            # This is an isolated test-only proof, not a production recovery.
+            refreshed = {}
+            for table in LOAD_ORDER:
+                query = (
+                    "select encode(extensions.digest(convert_to(coalesce("
+                    "string_agg(to_jsonb(t)::text, E'\\n' order by to_jsonb(t)::text),"
+                    "''), 'UTF8'), 'sha256'), 'hex') from public." + table + " t"
+                )
+                refreshed[table] = sql_scalar(env, query)
+            evidence["restored_table_fingerprints"] = refreshed
+            ev_text = canonical_json(evidence).replace("'", "''")
+            run_psql("update public.system_state set value='" + ev_text + "'::jsonb "
+                     "where key='full_migration_recovery_evidence';", env)
+            globals()["postcommit_verification"] = lambda _env, _id, recovery_gate=None: (snapshot, evidence)
             finalize_verified_operation(env, op, AUTHORIZATION)
         finally:
             globals()["postcommit_verification"] = checker
@@ -1171,7 +1338,8 @@ def self_test() -> None:
             raise
     # A successful old MVP restore cannot finalize this migration: it has
     # neither the operation-bound independent artifacts nor all 15 digests.
-    snap = {"package_fingerprint": "a" * 64}
+    snap = {"package_fingerprint": "a" * 64,
+            "historical_sources_manifest_sha256": "f" * 64}
     old_mvp = {"operation_id": example_id, "package_fingerprint": "a" * 64,
                "source_backup_status": "PASS", "database_restore_status": "PASS"}
     try:
@@ -1190,13 +1358,17 @@ def self_test() -> None:
         "restore_evidence_sha256": "d" * 64,
         "restore_run_id": "37784754289",
         "restored_table_fingerprints": {t: "e" * 64 for t in LOAD_ORDER},
+        "historical_sources_manifest_sha256": "f" * 64,
+        "historical_source_count": 2,
     }
     recovery_evidence_contract(good, snap, example_id)
     for field, wrong in (("operation_id", "11111111-1111-4111-8111-111111111111"),
                          ("package_fingerprint", "f" * 64),
                          ("backup_manifest_sha256", "PASS"),
                          ("source_manifest_path", "../stale.json"),
-                         ("restored_table_fingerprints", {"records": "e" * 64})):
+                         ("restored_table_fingerprints", {"records": "e" * 64}),
+                         ("historical_source_count", 0),
+                         ("historical_sources_manifest_sha256", "0" * 64)):
         altered = {**good, field: wrong}
         try:
             recovery_evidence_contract(altered, snap, example_id)

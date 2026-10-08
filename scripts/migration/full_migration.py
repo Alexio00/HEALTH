@@ -914,8 +914,15 @@ begin;
 -- competing privileged writer cannot change any medical row between these
 -- fingerprints and the atomic FINALIZED state transition.
 lock table {med_tables} in share mode;
-do $$
+do $
 begin
+  -- Keep operation and three authorizing/sealed state rows stable until
+  -- COMMIT, not just the medical rows. A concurrent change waits or aborts.
+  perform 1 from public.operations
+    where operation_id='{operation_id}'::uuid for update;
+  perform 1 from public.system_state
+    where key in ('full_migration_readiness','full_migration_snapshot',
+                  'full_migration_recovery_evidence') for update;
   if not exists (
     select 1 from public.operations
     where operation_id='{operation_id}'::uuid and state='COMMITTED_REGISTRY'

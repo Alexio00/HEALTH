@@ -79,6 +79,15 @@ const uniqueValues = (values) =>
   [...new Set((values || []).map(x => String(x ?? "").trim()).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "ru", { numeric: true }));
 
+// Shorten only the visible column heading; preserve the full original
+// heading in the sorting button's accessible name and in source records.
+function formatTableHeader(label) {
+  return String(label ?? "").replace(
+    /(^|[^\p{L}])количество(?=$|[^\p{L}])/giu,
+    "$1K-V"
+  );
+}
+
 function sortableTable(headers, rows, { id, emptyLabel = "Пока нет данных" } = {}) {
   if (!rows?.length) return empty(emptyLabel);
   if (!id) throw new Error("sortableTable requires a stable id");
@@ -107,7 +116,7 @@ function sortableTable(headers, rows, { id, emptyLabel = "Пока нет дан
             ${headers.map((h, index) => `
               <th>
                 <button type="button" class="sort-button" data-column="${index}" aria-label="Сортировать: ${esc(h)}">
-                  <span>${esc(h)}</span><span class="sort-indicator" aria-hidden="true">↕</span>
+                  <span>${esc(formatTableHeader(h))}</span><span class="sort-indicator" aria-hidden="true">↕</span>
                 </button>
               </th>
             `).join("")}

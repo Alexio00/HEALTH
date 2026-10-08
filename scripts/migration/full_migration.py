@@ -10,6 +10,7 @@ import argparse
 import csv
 from datetime import datetime, timezone
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -603,18 +604,22 @@ def target_rows(table: str, db_url_env: str, schema: str) -> list[dict[str, Any]
     sid = sql_ident(schema)
     cols = TABLES[table]["columns"]
     projection = ",".join(sql_ident(c) for c in cols)
+    # CSV encoding preserves literal backslashes/newlines embedded in JSON.
+    # COPY's default text mode double-escapes JSON backslashes, silently
+    # distorting medical body_text and other values before hashing.
     sql = (
         "copy (select row_to_json(x)::text from "
-        f"(select {projection} from {sid}.{sql_ident(table)}) x) to stdout;\n"
+        f"(select {projection} from {sid}.{sql_ident(table)}) x) to stdout with (format csv);\n"
     )
     output = run_psql(sql, db_url_env, capture=True)
     rows: list[dict[str, Any]] = []
-    for line in output.splitlines():
-        if line.strip():
-            value = json.loads(line)
-            if not isinstance(value, dict):
-                fail(f"{schema}.{table}: unexpected row encoding")
-            rows.append(value)
+    for fields in csv.reader(io.StringIO(output)):
+        if len(fields) != 1:
+            fail(f"{schema}.{table}: unexpected COPY CSV encoding")
+        value = json.loads(fields[0])
+        if not isinstance(value, dict):
+            fail(f"{schema}.{table}: unexpected row encoding")
+        rows.append(value)
     return rows
 
 
@@ -753,10 +758,11 @@ def cleanup_stage(db_url_env: str, schema: str, authorization: str) -> None:
 
 def sql_scalar(db_url_env: str, query: str) -> str:
     # COPY TO STDOUT avoids locale-dependent psql header formatting.
-    result = run_psql(f"copy ({query}) to stdout;\n", db_url_env, capture=True).strip()
-    if not result or "\n" in result:
+    output = run_psql(f"copy ({query}) to stdout with (format csv);\n", db_url_env, capture=True)
+    records = list(csv.reader(io.StringIO(output)))
+    if len(records) != 1 or len(records[0]) != 1:
         fail("expected one database scalar")
-    return result
+    return records[0][0]
 
 
 def postcommit_verification(db_url_env: str, operation_id: str) -> None:

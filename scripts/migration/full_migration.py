@@ -159,6 +159,8 @@ def sealed_package_fingerprint(manifest: dict[str, Any], tables: dict[str, Any])
     control = {
         "schema_version": manifest.get("schema_version"),
         "status": manifest.get("status"),
+        "capture_mode": manifest.get("capture_mode"),
+        "source_location_mode": manifest.get("source_location_mode"),
         "captured_at": manifest.get("captured_at"),
         "old_healthdb_validation_pass": manifest.get("old_healthdb_validation_pass"),
         "old_healthdb_freeze_operation_id": manifest.get("old_healthdb_freeze_operation_id"),
@@ -185,17 +187,21 @@ def read_manifest(package: Path) -> dict[str, Any]:
 
 def read_package(package: Path, require_sealed: bool = True) -> tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]:
     manifest = read_manifest(package)
-    if manifest.get("schema_version") != 1:
-        fail("manifest schema_version must be 1")
+    if manifest.get("schema_version") != 2:
+        fail("manifest schema_version must be 2")
     if manifest.get("status") != "CAPTURED":
         fail("manifest status must be CAPTURED")
+    if manifest.get("capture_mode") != "migration":
+        fail("manifest capture_mode must be migration")
+    if manifest.get("source_location_mode") != "new-health-primary":
+        fail("manifest source_location_mode must be new-health-primary")
     if not manifest.get("captured_at"):
         fail("manifest captured_at is required")
     if manifest.get("old_healthdb_validation_pass") is not True:
         fail("old HealthDB Validation PASS is required")
     freeze_operation_id = str(manifest.get("old_healthdb_freeze_operation_id", ""))
-    if not UUID_RE.fullmatch(freeze_operation_id):
-        fail("old HealthDB migration freeze operation_id is required")
+    if not OLD_OPERATION_ID_RE.fullmatch(freeze_operation_id):
+        fail("old HealthDB migration freeze operation_id is missing or unsafe")
     if manifest.get("old_healthdb_freeze_state") != "PREPARED":
         fail("old HealthDB migration freeze must be PREPARED at capture")
     if int(manifest.get("old_healthdb_other_unfinished_operations", -1)) != 0:
@@ -709,8 +715,10 @@ def self_test() -> None:
     with tempfile.TemporaryDirectory(prefix="health-migration-selftest-") as raw:
         package = Path(raw)
         manifest = {
-            "schema_version": 1,
+            "schema_version": 2,
             "status": "CAPTURED",
+            "capture_mode": "migration",
+            "source_location_mode": "new-health-primary",
             "captured_at": "2026-01-01T00:00:00Z",
             "old_healthdb_validation_pass": True,
             "old_healthdb_freeze_operation_id": "MAINT-999",

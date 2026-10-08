@@ -65,5 +65,9 @@ jobs:
           HEALTH_SYNTHETIC_DB_URL: postgresql://postgres@127.0.0.1:5432/postgres
           PGPASSWORD: health-synthetic
         run: python3 scripts/migration/full_migration.py pg-full-cycle-test
+      - name: B04-M03 disposable PostgreSQL service_role denial
+        env:
+          PGPASSWORD: health-synthetic
+        run: psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres -f scripts/validation/test_service_role_controls.sql
       - name: Public repository secret-pattern guard
         run: python3 scripts/validation/public_secret_guard.py

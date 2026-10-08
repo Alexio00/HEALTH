@@ -777,12 +777,21 @@ def recovery_evidence_contract(evidence: dict[str, Any], snapshot: dict[str, Any
                 "backup_manifest_sha256", "source_manifest_path",
                 "source_manifest_sha256", "restore_evidence_path",
                 "restore_evidence_sha256", "restore_run_id",
-                "restored_table_fingerprints")
+                "restored_table_fingerprints", "historical_sources_manifest_sha256",
+                "historical_source_count")
     if not isinstance(evidence, dict) or any(not evidence.get(k) for k in required):
         fail("postcommit recovery artifact contract incomplete")
     if (evidence["operation_id"] != operation_id
             or evidence["package_fingerprint"] != snapshot.get("package_fingerprint")):
         fail("postcommit recovery proof belongs to another migration")
+    if (not re.fullmatch(r"[a-f0-9]{64}",
+                         str(evidence.get("historical_sources_manifest_sha256", "")))
+            or evidence["historical_sources_manifest_sha256"]
+               != snapshot.get("historical_sources_manifest_sha256")
+            or not isinstance(evidence["historical_source_count"], int)
+            or isinstance(evidence["historical_source_count"], bool)
+            or evidence["historical_source_count"] <= 0):
+        fail("postcommit Historical corpus digest/count unbound to sealed snapshot")
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z", str(evidence["backup_snapshot_id"])):
         fail("postcommit invalid backup snapshot identifier")
     for key in ("backup_manifest_sha256", "source_manifest_sha256", "restore_evidence_sha256"):

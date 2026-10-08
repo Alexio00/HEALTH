@@ -783,7 +783,7 @@ insert into {schema}.source_locations values
         if table_fingerprint("source_locations", rows) != table_fingerprint("source_locations", expected):
             fail("PostgreSQL timestamptz source fingerprint roundtrip mismatch")
         probe = run_psql(
-            "copy (select count(*) from jsonb_object_keys('{\\\"a\\\":1,\\\"b\\\":2}'::jsonb)) to stdout;",
+            "copy (select count(*) from jsonb_object_keys(jsonb_build_object('a',1,'b',2))) to stdout;",
             "HEALTH_ROUNDTRIP_URL", capture=True,
         )
         if probe.strip() != "2":

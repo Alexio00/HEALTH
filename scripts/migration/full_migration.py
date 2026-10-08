@@ -864,21 +864,47 @@ def postcommit_verification(
         fail("postcommit requires private independent recovery-artifact verification")
     recovery_gate(evidence, snapshot)
     print(f"PASS read-only postcommit verification; tables={len(LOAD_ORDER)}; checks={len(statuses)}")
+    return snapshot, evidence
 
 
-def finalize_verified_operation(
-    db_url_env: str, operation_id: str, authorization: str,
-    recovery_gate: Callable[[dict[str, Any], dict[str, Any]], None] | None = None,
-) -> None:
-    if authorization != AUTHORIZATION:
-        fail("finalization requires explicit owner authorization")
+def locked_finalization_sql(operation_id: str, snapshot: dict[str, Any],
+                            evidence: dict[str, Any]) -> str:
+    """One transaction: block medical DML, re-fingerprint, then FINALIZED.
+
+    The external independent recovery attestation was verified immediately
+    before calling this function. We also freeze its exact JSONB values inside
+    this transaction; a changed system_state row cannot silently replace it.
+    """
     if not UUID_RE.fullmatch(operation_id):
-        fail("invalid finalization operation ID")
-    postcommit_verification(db_url_env, operation_id, recovery_gate=recovery_gate)
-    # Recheck state/owner binding inside the same transaction as both state
-    # transitions, so competing operations cannot invalidate the preflight.
-    sql = f"""
+        fail("invalid locked-finalization operation ID")
+    recovery_evidence_contract(evidence, snapshot, operation_id)
+    fingerprints = evidence["restored_table_fingerprints"]
+    if set(fingerprints) != set(LOAD_ORDER):
+        fail("missing locked-finalization fingerprints")
+    checks = []
+    for table in LOAD_ORDER:
+        digest = fingerprints[table]
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            fail("unsafe locked-finalization fingerprint")
+        # Exactly the same full-row, order-independent SHA-256 fingerprint
+        # algorithm as the independent database backup and restored proof.
+        checks.append(
+            "if (select encode(extensions.digest(convert_to(coalesce("
+            "string_agg(to_jsonb(t)::text, E'\\n' order by to_jsonb(t)::text),"
+            "''), 'UTF8'), 'sha256'), 'hex') from public." + table + " t)"
+            " <> '" + digest + "' then "
+            "raise exception 'locked medical fingerprint mismatch: " + table + "';"
+            " end if;"
+        )
+    expected_snapshot = canonical_json(snapshot).replace("'", "''")
+    expected_evidence = canonical_json(evidence).replace("'", "''")
+    med_tables = ", ".join("public." + t for t in LOAD_ORDER)
+    return f"""
 begin;
+-- SHARE is incompatible with ROW EXCLUSIVE (INSERT/UPDATE/DELETE), hence a
+-- competing privileged writer cannot change any medical row between these
+-- fingerprints and the atomic FINALIZED state transition.
+lock table {med_tables} in share mode;
 do $$
 begin
   if not exists (
@@ -895,6 +921,13 @@ begin
   ) then
     raise exception 'operation-specific owner authorization not present';
   end if;
+  if (select value from public.system_state where key='full_migration_snapshot')
+       is distinct from '{expected_snapshot}'::jsonb
+     or (select value from public.system_state where key='full_migration_recovery_evidence')
+       is distinct from '{expected_evidence}'::jsonb then
+    raise exception 'sealed snapshot or independently verified proof changed';
+  end if;
+  {chr(10).join(checks)}
 end $$;
 update public.operations
 set state='VALIDATED', updated_at=now()
@@ -904,7 +937,23 @@ set state='FINALIZED', result='PASS', updated_at=now(), finalized_at=now()
 where operation_id='{operation_id}'::uuid and state='VALIDATED';
 commit;
 """
-    run_psql(sql, db_url_env)
+
+
+def finalize_verified_operation(
+    db_url_env: str, operation_id: str, authorization: str,
+    recovery_gate: Callable[[dict[str, Any], dict[str, Any]], None] | None = None,
+) -> None:
+    if authorization != AUTHORIZATION:
+        fail("finalization requires explicit owner authorization")
+    if not UUID_RE.fullmatch(operation_id):
+        fail("invalid finalization operation ID")
+    snapshot, evidence = postcommit_verification(
+        db_url_env, operation_id, recovery_gate=recovery_gate,
+    )
+    # This fresh SQL transaction does not trust the earlier unlocked table
+    # reads. It locks all 15 medical tables and recomputes independently
+    # restored full-row digests while the locks are held.
+    run_psql(locked_finalization_sql(operation_id, snapshot, evidence), db_url_env)
     print("PASS full-migration operation FINALIZED; legacy freeze and cutover remain separate")
 
 

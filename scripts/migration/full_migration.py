@@ -1001,6 +1001,106 @@ def make_synthetic_package(package: Path) -> None:
     verify_package(package)
 
 
+def local_full_cycle_test() -> None:
+    """Destructive operations ONLY in a fresh localhost synthetic PostgreSQL."""
+    from urllib.parse import urlparse
+    url = os.environ.get("HEALTH_SYNTHETIC_DB_URL", "")
+    if urlparse(url).hostname not in {"127.0.0.1", "localhost"}:
+        fail("synthetic full cycle needs loopback PostgreSQL")
+    os.environ["HEALTH_CYCLE_URL"] = url
+    env = "HEALTH_CYCLE_URL"
+    repo = Path(__file__).resolve().parents[2]
+    for migration in ("0001_core.sql", "0004_mvp_fidelity.sql", "0006_id_reservations_metadata.sql"):
+        run_psql((repo / "db" / "migrations" / migration).read_text(encoding="utf-8"), env)
+    op = "11111111-1111-4111-8111-111111111111"
+    second = "22222222-2222-4222-8222-222222222222"
+    with tempfile.TemporaryDirectory(prefix="health-local-fullcycle-") as directory:
+        package = Path(directory)
+        make_synthetic_package(package)
+        stage_package(package, env, DEFAULT_STAGE_SCHEMA)
+        run_psql(
+            "insert into public.operations(operation_id,operation,mode,state) values "
+            f"('{op}'::uuid,'synthetic-full-migration','maintenance','PREPARED');"
+            "insert into public.system_state(key,value) values "
+            "('full_migration_readiness','{\"full_migration_authorized\":false}'::jsonb);",
+            env,
+        )
+        # No private source callback -> no write.
+        try:
+            commit_stage(package, env, DEFAULT_STAGE_SCHEMA, op, AUTHORIZATION)
+            fail("direct commit without full source guard accepted")
+        except MigrationError as exc:
+            if "source attestation required" not in str(exc):
+                raise
+        # A stale source is rejected, even when the package is sealed.
+        guard_calls = []
+        def reject_stale() -> None:
+            guard_calls.append("called")
+            fail("synthetic original REC content changed")
+        try:
+            commit_stage(package, env, DEFAULT_STAGE_SCHEMA, op, AUTHORIZATION, reject_stale)
+            fail("stale original accepted")
+        except MigrationError as exc:
+            if "synthetic original REC content changed" not in str(exc):
+                raise
+        if guard_calls != ["called"]:
+            fail("live source guard was skipped")
+
+        # Literal authorization alone cannot bypass owner-bound state.
+        try:
+            commit_stage(package, env, DEFAULT_STAGE_SCHEMA, op, AUTHORIZATION, lambda: None)
+            fail("operation without owner authorization committed")
+        except MigrationError as exc:
+            if "psql command failed" not in str(exc):
+                raise
+        if sql_scalar(env, "select state from public.operations where operation_id='" + op + "'::uuid") != "PREPARED":
+            fail("denied commit changed target operation")
+        if sql_scalar(env, "select count(*) from public.records") != "0":
+            fail("denied commit inserted a medical row")
+        if sql_scalar(env, "select count(*) from public.system_state where key='full_migration_snapshot'") != "0":
+            fail("denied commit recorded a snapshot")
+
+        run_psql(
+            "update public.system_state set value="
+            f"jsonb_build_object('full_migration_authorized',true,'owner_authorized_operation_id','{op}',"
+            "'owner_authorized_freeze_operation_id','MAINT-999') "
+            "where key='full_migration_readiness';",
+            env,
+        )
+        commit_stage(package, env, DEFAULT_STAGE_SCHEMA, op, AUTHORIZATION, lambda: None)
+        compare_target(package, env, "public")
+        if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
+            fail("successful commit not in COMMITTED_REGISTRY")
+        # Finalization must reject missing semantic audits/recovery proofs.
+        try:
+            finalize_verified_operation(env, op, AUTHORIZATION)
+            fail("operation prematurely finalized without audits")
+        except MigrationError:
+            if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
+                raise
+
+        # Exercise SQL state-transition mechanics separately from the full
+        # recovery/semantic gate. Synthetic override is never used by CLI.
+        checker = globals()["postcommit_verification"]
+        try:
+            globals()["postcommit_verification"] = lambda _env, _id: None
+            finalize_verified_operation(env, op, AUTHORIZATION)
+        finally:
+            globals()["postcommit_verification"] = checker
+        if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "FINALIZED":
+            fail("authorized target operation did not reach FINALIZED")
+
+        run_psql(
+            "insert into public.operations(operation_id,operation,mode,state) values "
+            f"('{second}'::uuid,'synthetic-interruption','maintenance','PREPARED');",
+            env,
+        )
+        mark_interrupted_migration_failed(env, second, "MARK_TARGET_FAILED_KEEP_LEGACY_FREEZE")
+        if sql_scalar(env, f"select state from public.operations where operation_id='{second}'::uuid") != "FAILED":
+            fail("interrupted target operation not marked FAILED")
+    print("PASS isolated synthetic staging/commit/denial/finalization/failure workflow")
+
+
 def self_test() -> None:
     sample = [{"b": 2, "a": "x"}, {"a": "y", "b": 1}]
     a = sha256_bytes(("\n".join(sorted(canonical_json(x) for x in sample)) + "\n").encode())
@@ -1093,6 +1193,7 @@ def main() -> None:
 
     sub.add_parser("self-test")
     sub.add_parser("pg-roundtrip-test")
+    sub.add_parser("pg-full-cycle-test")
     p = sub.add_parser("postcommit-verify")
     p.add_argument("--operation-id", required=True)
     p.add_argument("--db-url-env", default="SUPABASE_DB_URL")
@@ -1132,6 +1233,8 @@ def main() -> None:
         self_test()
     elif args.command == "pg-roundtrip-test":
         postgresql_roundtrip_test()
+    elif args.command == "pg-full-cycle-test":
+        local_full_cycle_test()
     elif args.command == "postcommit-verify":
         postcommit_verification(args.db_url_env, args.operation_id)
     elif args.command == "finalize-verified-migration":

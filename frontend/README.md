@@ -55,7 +55,7 @@ Table header display contract (REC markdown tables and top-level pages alike):
 - Vertical padding above and below is half of one line height each, and
   remains unchanged when a header wraps to additional lines.
 - The visible word "Количество" (standalone or in a multiword header) is
-  abbreviated as `K-V`; source text and the accessible sorting label remain
+  abbreviated as `К-во`; source text and the accessible sorting label remain
   unchanged.
 
 
@@ -64,9 +64,30 @@ Compact filter bars appear only when they add value:
 - repeated categorical values as live select controls;
 - Records: date range, Tag, Record Type and Confirmation when available;
 - Future Plan: repeated Kind and Status values;
-- Closed Cases: closing date and Category when multiple categories are present.
+- Closed Cases: no filters (the list is read directly).
 
 Record tags are clickable. A tag click immediately opens the Records index with that tag active. Filters default to All/empty, so no rows are hidden by default.
+
+## Scrolling / sticky chrome
+
+All page titles are sticky directly beneath the site header. The title's
+initial top margin is reduced to give more reading space. No page-introduction
+paragraphs or duplicated standalone section titles appear; Current State
+retains its multiple named sections.
+
+On single-table pages (Records and Future Plan), the existing filter bar
+remains pinned between the page title and the table header. The Closed Cases
+list no longer has date/category filters.
+
+Table headings remain visible during vertical scrolling. Native CSS sticky
+headings cannot stick to the viewport inside the horizontally scrollable
+table wrapper, so a position-fixed, width-aligned header mirror is used while
+the real table header has scrolled off. Horizontal table scroll positions and
+sorting buttons are synchronized to the original table; the mirror is hidden
+outside its owning table. Global header height and sticky title height are
+measured dynamically to accommodate desktop wrapping and the mobile menu.
+This is presentation-only and does not change row contents or filtering.
+
 
 REC presentation is owner-facing rather than migration-facing: legacy YAML/frontmatter is hidden, technical source roles/hashes are not shown, Sources open the primary Google Drive original directly, and source page numbers remain visible because they locate the evidence inside multi-page originals.
 

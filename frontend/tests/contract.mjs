@@ -22,7 +22,7 @@ const context = vm.createContext({
   CSS: { escape(x) { return x; } }
 });
 const harness = js.replace(/^import .*;\s*$/gm, "").replace(/\nboot\(\);\s*$/, "");
-vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, isMedicalCardQuestion, questionSpecialties, renderRecordBody, recordDisplayTitle, fmtMskTimestamp };", context);
+vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, isMedicalCardQuestion, questionSpecialties, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable };", context);
 const x = context.expose;
 const nav = [...html.matchAll(/<a href="#\/[\w-]*">[^<]+<\/a>/g)].map(m => m[0]);
 assert.equal(nav.length, 10, "ten distinct navigation entries");
@@ -37,7 +37,23 @@ assert(css.includes('.topbar nav.is-open { display: flex; }'));
 // in generated table templates became large empty areas above table headings.
 assert.match(css, /\.record-body\.rich-record-body\s*\{\s*white-space:\s*normal;/);
 assert.match(css, /\.record-body\.rich-record-body\s+\.data-table\s*\{\s*white-space:\s*normal;/);
-assert.match(css, /\.data-table th\s*\{[^}]*padding:\s*\.18rem \.5rem;[^}]*line-height:\s*1\.2;/);
+assert.match(css, /\.data-table th\s*\{[^}]*padding:\s*\.5lh \.5rem;[^}]*line-height:\s*1\.2;[^}]*text-align:\s*center;[^}]*vertical-align:\s*middle;/);
+assert.match(css, /\.sort-button\s*\{[^}]*justify-content:\s*center;[^}]*text-align:\s*center;/);
+assert.match(css, /\.data-table \.sort-button > span:first-child\s*\{[^}]*min-width:\s*min-content;[^}]*white-space:\s*normal;/);
+assert.match(css, /\.data-table thead,[\s\S]*?\.data-table \.sort-button > span\s*\{[^}]*overflow-wrap:\s*normal;[^}]*word-break:\s*normal;[^}]*hyphens:\s*none;/);
+assert.equal(x.formatTableHeader("Количество"), "K-V");
+assert.equal(x.formatTableHeader("Общее количество результатов"), "Общее K-V результатов");
+assert.equal(x.formatTableHeader("Предколичество"), "Предколичество");
+assert.equal(x.formatTableHeader("Референс"), "Референс");
+const formattedTable = x.sortableTable(
+  ["Параметр", "Результат", "Референс", "Ед. изм.", "Количество"],
+  [["Показатель", "1", "норма", "ед.", "2"]],
+  { id: "heading-contract" }
+);
+assert(formattedTable.includes("<span>K-V</span>"));
+assert(formattedTable.includes('aria-label="Сортировать: Количество"'));
+assert(formattedTable.includes("<span>Результат</span>"));
+
 
 // Both controls are assigned the same explicit height on mobile; the menu
 // additionally sets equal width and a larger symbol.

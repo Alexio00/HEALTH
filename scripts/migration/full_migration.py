@@ -833,7 +833,7 @@ def finalize_verified_operation(db_url_env: str, operation_id: str, authorizatio
     # transitions, so competing operations cannot invalidate the preflight.
     sql = f"""
 begin;
-do $
+do $$
 begin
   if not exists (
     select 1 from public.operations
@@ -869,7 +869,7 @@ def mark_interrupted_migration_failed(db_url_env: str, operation_id: str, confir
         fail("invalid failed-operation ID")
     sql = f"""
 begin;
-do $
+do $$
 begin
   if not exists (
     select 1 from public.operations

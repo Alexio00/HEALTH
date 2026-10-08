@@ -24,6 +24,17 @@ const esc = (value) => String(value ?? "")
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#039;");
 
+// Operational timestamps are stored as UTC instants and displayed in Moscow time.
+const fmtMskTimestamp = (value) => {
+  if (!value) return "";
+  const stamp = new Date(value);
+  return Number.isNaN(stamp.getTime()) ? String(value) :
+    new Intl.DateTimeFormat("ru-RU", {
+      timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: false
+    }).format(stamp);
+};
+
 const fmtDate = (value) => {
   if (!value) return "";
   const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -962,6 +973,27 @@ function parseMarkdownTableRow(line) {
   return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(x => x.trim());
 }
 
+// This is a presentation-only transform. The source body_text remains intact.
+function readableRecordParagraphs(lines) {
+  const text = lines.join(" ").trim();
+  if (!text) return "";
+  if (text.length < 450) return `<p>${inlineRecordMarkdown(text)}</p>`;
+  // Split long prose at clear sentence boundaries; never alter stored medical text.
+  const sentences = text.split(/(?<=[.!?…])\s+(?=[А-ЯЁA-Z])/u);
+  if (sentences.length < 3) return `<p>${inlineRecordMarkdown(text)}</p>`;
+  const paragraphs = [];
+  let group = "";
+  for (const sentence of sentences) {
+    if (group && group.length + sentence.length > 330) {
+      paragraphs.push(group);
+      group = "";
+    }
+    group += (group ? " " : "") + sentence;
+  }
+  if (group) paragraphs.push(group);
+  return paragraphs.map(value => `<p>${inlineRecordMarkdown(value)}</p>`).join("\n");
+}
+
 function renderRecordBody(text) {
   const cleaned = cleanLegacyRecordText(text);
   const lines = cleaned.split(/\r?\n/);
@@ -1022,7 +1054,7 @@ function renderRecordBody(text) {
       paragraph.push(lines[i].trim());
       i += 1;
     }
-    blocks.push(`<p>${inlineRecordMarkdown(paragraph.join(" "))}</p>`);
+    blocks.push(readableRecordParagraphs(paragraph));
   }
 
   return blocks.join("\n");

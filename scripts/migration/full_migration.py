@@ -751,6 +751,72 @@ def cleanup_stage(db_url_env: str, schema: str, authorization: str) -> None:
     print(f"PASS staging schema removed; schema={schema}")
 
 
+def sql_scalar(db_url_env: str, query: str) -> str:
+    # COPY TO STDOUT avoids locale-dependent psql header formatting.
+    result = run_psql(f"copy ({query}) to stdout;\\n", db_url_env, capture=True).strip()
+    if not result or "\\n" in result:
+        fail("expected one database scalar")
+    return result
+
+
+def postcommit_verification(db_url_env: str, operation_id: str) -> None:
+    """Read-only operation-scoped gate. Never marks medical evidence PASS."""
+    if not UUID_RE.fullmatch(operation_id):
+        fail("postcommit invalid operation ID")
+    state = sql_scalar(
+        db_url_env,
+        f"select state from public.operations where operation_id='{operation_id}'::uuid",
+    )
+    if state != "COMMITTED_REGISTRY":
+        fail("postcommit operation is not COMMITTED_REGISTRY")
+    raw = sql_scalar(
+        db_url_env,
+        "select value::text from public.system_state where key='full_migration_snapshot'",
+    )
+    snapshot = json.loads(raw)
+    expected = snapshot.get("table_fingerprints")
+    if snapshot.get("status") != "CAPTURED" or not isinstance(expected, dict) or set(expected) != set(LOAD_ORDER):
+        fail("postcommit missing sealed expected table fingerprints")
+    for table in LOAD_ORDER:
+        rows = target_rows(table, db_url_env, "public")
+        if table_fingerprint(table, rows) != expected[table]:
+            fail(f"postcommit source-to-target table mismatch: {table}")
+
+    root = Path(__file__).resolve().parents[1] / "validation"
+    check_sql = (root / "full_migration_invariants.sql").read_text(encoding="utf-8")
+    result = run_psql(check_sql, db_url_env, capture=True)
+    statuses = re.findall(r"^\\s*([A-Z][A-Z0-9_]+)\\s*\\|\\s*(PASS|FAIL|WAITING)\\s*$", result, re.M)
+    if not statuses or any(status != "PASS" for _, status in statuses):
+        fail("postcommit full-migration SQL invariants not all PASS")
+    for test in ("security_invariants.sql", "auth_invariants.sql"):
+        run_psql((root / test).read_text(encoding="utf-8"), db_url_env)
+
+    # Semantic OPERATION_AUDIT is never inferred from a generic SQL PASS.
+    deps = ",".join("'" + t + "'" for t in LOAD_ORDER)
+    missing = sql_scalar(
+        db_url_env,
+        "select count(*) from public.validation_checks c "
+        "left join public.validation_results r on r.check_key=c.check_key "
+        f"and r.operation_id='{operation_id}'::uuid "
+        "where c.active and c.mechanism='OPERATION_AUDIT' "
+        f"and (c.dependencies && array[{deps}]::text[] or c.check_key like 'FULL_MIGRATION_%') "
+        "and coalesce(r.status,'MISSING')<>'PASS'",
+    )
+    if missing != "0":
+        fail("postcommit impacted operation audits are not all stamped PASS")
+    evidence_raw = sql_scalar(
+        db_url_env,
+        "select value::text from public.system_state where key='full_migration_recovery_evidence'",
+    )
+    evidence = json.loads(evidence_raw)
+    if (evidence.get("operation_id") != operation_id
+            or evidence.get("package_fingerprint") != snapshot.get("package_fingerprint")
+            or evidence.get("source_backup_status") != "PASS"
+            or evidence.get("database_restore_status") != "PASS"):
+        fail("postcommit independent backup/recovery proof is missing or stale")
+    print(f"PASS read-only postcommit verification; tables={len(LOAD_ORDER)}; checks={len(statuses)}")
+
+
 def postgresql_roundtrip_test() -> None:
     # Strictly local, synthetic-only integration test; NEVER a production URL.
     from urllib.parse import urlparse
@@ -936,6 +1002,9 @@ def main() -> None:
 
     sub.add_parser("self-test")
     sub.add_parser("pg-roundtrip-test")
+    p = sub.add_parser("postcommit-verify")
+    p.add_argument("--operation-id", required=True)
+    p.add_argument("--db-url-env", default="SUPABASE_DB_URL")
 
     args = parser.parse_args()
     if args.command == "seal":
@@ -963,6 +1032,8 @@ def main() -> None:
         self_test()
     elif args.command == "pg-roundtrip-test":
         postgresql_roundtrip_test()
+    elif args.command == "postcommit-verify":
+        postcommit_verification(args.db_url_env, args.operation_id)
 
 
 if __name__ == "__main__":

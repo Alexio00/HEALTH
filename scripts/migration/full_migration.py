@@ -17,7 +17,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from typing import Any
+from typing import Any, Callable
 
 AUTHORIZATION = "FULL_MIGRATION_AUTHORIZED"
 DEFAULT_STAGE_SCHEMA = "health_migration_stage"
@@ -630,13 +630,21 @@ def compare_target(package: Path, db_url_env: str, schema: str) -> None:
     print(f"PASS exact target comparison; schema={schema}; tables={len(LOAD_ORDER)}")
 
 
-def commit_stage(package: Path, db_url_env: str, schema: str, operation_id: str, authorization: str) -> None:
+def commit_stage(
+    package: Path, db_url_env: str, schema: str, operation_id: str,
+    authorization: str, source_gate: Callable[[], None] | None = None,
+) -> None:
+    # The private scheduler must prove the live old Drive state immediately
+    # before production commit. CLI/direct invocations cannot supply this.
+    if source_gate is None:
+        fail("live old-HealthDB source attestation required; use private scheduler migrate")
     if authorization != AUTHORIZATION:
         fail("explicit full-migration authorization token missing")
     if not UUID_RE.fullmatch(operation_id):
         fail("invalid operation_id")
     manifest, _ = verify_package(package)
     compare_target(package, db_url_env, schema)
+    source_gate()  # live Registry + REC Docs + original Sources + Historical
 
     sid = sql_ident(schema)
     med_tables = ",".join(f"public.{sql_ident(t)}" for t in LOAD_ORDER)
@@ -680,7 +688,18 @@ begin
   ) then
     raise exception 'migration operation must exist in PREPARED';
   end if;
-end $$;
+  -- Knowing the public authorization string is NOT owner approval.
+  -- Require a separate operation-bound authorization in private system_state.
+  if not exists (
+    select 1 from public.system_state
+    where key='full_migration_readiness'
+      and value->>'full_migration_authorized'='true'
+      and value->>'owner_authorized_operation_id'='{operation_id}'
+      and value->>'owner_authorized_freeze_operation_id'='{manifest["old_healthdb_freeze_operation_id"]}'
+  ) then
+    raise exception 'operation-bound owner authorization is absent';
+  end if;
+end $;
 
 truncate {med_tables} restart identity;
 
@@ -717,8 +736,7 @@ def execute_full_migration(
     if source_freeze_operation_id != manifest["old_healthdb_freeze_operation_id"]:
         fail("source freeze confirmation does not match sealed package")
 
-    stage_package(package, db_url_env, schema)
-    commit_stage(package, db_url_env, schema, operation_id, authorization)
+    fail("public execute is disabled: live Drive revalidation must run in private scheduler migrate")
     compare_target(package, db_url_env, "public")
     print(
         "PASS full migration execution chain through exact public comparison; "
@@ -886,7 +904,7 @@ def main() -> None:
     elif args.command == "compare":
         compare_target(args.package, args.db_url_env, args.schema)
     elif args.command == "commit":
-        commit_stage(args.package, args.db_url_env, args.schema, args.operation_id, args.authorization)
+        fail("direct commit is disabled: live Drive revalidation must run in private scheduler migrate")
     elif args.command == "execute":
         execute_full_migration(
             args.package,

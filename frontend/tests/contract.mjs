@@ -41,9 +41,15 @@ const groups = x.visitPreparation(
   [q1, q2, q3]
 );
 assert(groups.includes("Визит к кардиологу"));
-assert(groups.includes("Визит к эндокринологу"));
-assert(groups.includes("Визит к терапевту"));
+assert(groups.includes("Вопросы к эндокринологу — визит не запланирован"));
+assert(groups.includes("Вопросы к терапевту — визит не запланирован"));
 assert(groups.includes("после обследования"));
+const twice = x.visitPreparation([
+  { plan_item_id: 31, title: "Кардиолог: первый визит", metadata: { kind: "визит" } },
+  { plan_item_id: 32, title: "Кардиолог: повторный визит", metadata: { kind: "визит" } }
+], [q1]);
+assert.equal((twice.match(/class="case-card visit-card"/g) || []).length, 2, "one row per planned visit");
+assert.equal((twice.match(/Кардиологу: обсудить контрольный тест/g) || []).length, 2, "questions shown under each relevant visit");
 assert(groups.includes('href="#/records/REC-20260101-001"'));
 assert.equal(x.isMedicalCardQuestion(q1), false);
 assert.equal(x.isMedicalCardQuestion({ metadata: { category: "medical_card" } }), true);

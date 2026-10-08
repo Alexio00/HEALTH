@@ -112,7 +112,7 @@ structural_checks as (
          exists (
            select 1 from snapshot
            where jsonb_typeof(value->'table_fingerprints') = 'object'
-             and jsonb_object_length(value->'table_fingerprints') = 15
+             and (select count(*) from jsonb_object_keys(value->'table_fingerprints')) = 15
              and nullif(value->>'package_fingerprint','') is not null
          )
   union all

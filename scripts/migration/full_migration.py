@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import datetime, timezone
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -16,7 +18,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from typing import Any
+from typing import Any, Callable
 
 AUTHORIZATION = "FULL_MIGRATION_AUTHORIZED"
 DEFAULT_STAGE_SCHEMA = "health_migration_stage"
@@ -141,12 +143,38 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+# PostgreSQL emits timestamptz UTC with '+00:00'; Drive capture emits 'Z'.
+# Normalize instants BEFORE hashing either side, never alter the stored source.
+TIMESTAMPTZ_FIELDS = {
+    "source_locations": {"verified_at"},
+    "id_reservations": {"reserved_at"},
+    "labs": {"observed_at"},
+}
+
+
+def canonical_timestamp(value: Any) -> Any:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        fail("timestamp fingerprint value must be an ISO timestamp string")
+    try:
+        stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        fail("invalid timestamp in migration fingerprint")
+    if stamp.tzinfo is None:
+        fail("timezone-less timestamp in migration fingerprint")
+    return stamp.astimezone(timezone.utc).isoformat(timespec="microseconds")
+
+
 def normalized_row(table: str, row: dict[str, Any]) -> dict[str, Any]:
     cols = TABLES[table]["columns"]
     unknown = sorted(set(row) - set(cols))
     if unknown:
         fail(f"{table}: unknown columns: {','.join(unknown)}")
-    return {col: row.get(col) for col in cols}
+    out = {col: row.get(col) for col in cols}
+    for field in TIMESTAMPTZ_FIELDS.get(table, ()):
+        out[field] = canonical_timestamp(out[field])
+    return out
 
 
 def table_fingerprint(table: str, rows: list[dict[str, Any]]) -> str:
@@ -576,18 +604,22 @@ def target_rows(table: str, db_url_env: str, schema: str) -> list[dict[str, Any]
     sid = sql_ident(schema)
     cols = TABLES[table]["columns"]
     projection = ",".join(sql_ident(c) for c in cols)
+    # CSV encoding preserves literal backslashes/newlines embedded in JSON.
+    # COPY's default text mode double-escapes JSON backslashes, silently
+    # distorting medical body_text and other values before hashing.
     sql = (
         "copy (select row_to_json(x)::text from "
-        f"(select {projection} from {sid}.{sql_ident(table)}) x) to stdout;\n"
+        f"(select {projection} from {sid}.{sql_ident(table)}) x) to stdout with (format csv);\n"
     )
     output = run_psql(sql, db_url_env, capture=True)
     rows: list[dict[str, Any]] = []
-    for line in output.splitlines():
-        if line.strip():
-            value = json.loads(line)
-            if not isinstance(value, dict):
-                fail(f"{schema}.{table}: unexpected row encoding")
-            rows.append(value)
+    for fields in csv.reader(io.StringIO(output)):
+        if len(fields) != 1:
+            fail(f"{schema}.{table}: unexpected COPY CSV encoding")
+        value = json.loads(fields[0])
+        if not isinstance(value, dict):
+            fail(f"{schema}.{table}: unexpected row encoding")
+        rows.append(value)
     return rows
 
 
@@ -603,13 +635,21 @@ def compare_target(package: Path, db_url_env: str, schema: str) -> None:
     print(f"PASS exact target comparison; schema={schema}; tables={len(LOAD_ORDER)}")
 
 
-def commit_stage(package: Path, db_url_env: str, schema: str, operation_id: str, authorization: str) -> None:
+def commit_stage(
+    package: Path, db_url_env: str, schema: str, operation_id: str,
+    authorization: str, source_gate: Callable[[], None] | None = None,
+) -> None:
+    # The private scheduler must prove the live old Drive state immediately
+    # before production commit. CLI/direct invocations cannot supply this.
+    if source_gate is None:
+        fail("live old-HealthDB source attestation required; use private scheduler migrate")
     if authorization != AUTHORIZATION:
         fail("explicit full-migration authorization token missing")
     if not UUID_RE.fullmatch(operation_id):
         fail("invalid operation_id")
     manifest, _ = verify_package(package)
     compare_target(package, db_url_env, schema)
+    source_gate()  # live Registry + REC Docs + original Sources + Historical
 
     sid = sql_ident(schema)
     med_tables = ",".join(f"public.{sql_ident(t)}" for t in LOAD_ORDER)
@@ -653,6 +693,17 @@ begin
   ) then
     raise exception 'migration operation must exist in PREPARED';
   end if;
+  -- Knowing the public authorization string is NOT owner approval.
+  -- Require a separate operation-bound authorization in private system_state.
+  if not exists (
+    select 1 from public.system_state
+    where key='full_migration_readiness'
+      and value->>'full_migration_authorized'='true'
+      and value->>'owner_authorized_operation_id'='{operation_id}'
+      and value->>'owner_authorized_freeze_operation_id'='{manifest["old_healthdb_freeze_operation_id"]}'
+  ) then
+    raise exception 'operation-bound owner authorization is absent';
+  end if;
 end $$;
 
 truncate {med_tables} restart identity;
@@ -690,8 +741,7 @@ def execute_full_migration(
     if source_freeze_operation_id != manifest["old_healthdb_freeze_operation_id"]:
         fail("source freeze confirmation does not match sealed package")
 
-    stage_package(package, db_url_env, schema)
-    commit_stage(package, db_url_env, schema, operation_id, authorization)
+    fail("public execute is disabled: live Drive revalidation must run in private scheduler migrate")
     compare_target(package, db_url_env, "public")
     print(
         "PASS full migration execution chain through exact public comparison; "
@@ -706,6 +756,351 @@ def cleanup_stage(db_url_env: str, schema: str, authorization: str) -> None:
     print(f"PASS staging schema removed; schema={schema}")
 
 
+def sql_scalar(db_url_env: str, query: str) -> str:
+    # COPY TO STDOUT avoids locale-dependent psql header formatting.
+    output = run_psql(f"copy ({query}) to stdout with (format csv);\n", db_url_env, capture=True)
+    records = list(csv.reader(io.StringIO(output)))
+    if len(records) != 1 or len(records[0]) != 1:
+        fail("expected one database scalar")
+    return records[0][0]
+
+
+def postcommit_verification(db_url_env: str, operation_id: str) -> None:
+    """Read-only operation-scoped gate. Never marks medical evidence PASS."""
+    if not UUID_RE.fullmatch(operation_id):
+        fail("postcommit invalid operation ID")
+    state = sql_scalar(
+        db_url_env,
+        f"select state from public.operations where operation_id='{operation_id}'::uuid",
+    )
+    if state != "COMMITTED_REGISTRY":
+        fail("postcommit operation is not COMMITTED_REGISTRY")
+    raw = sql_scalar(
+        db_url_env,
+        "select value::text from public.system_state where key='full_migration_snapshot'",
+    )
+    snapshot = json.loads(raw)
+    expected = snapshot.get("table_fingerprints")
+    if snapshot.get("status") != "CAPTURED" or not isinstance(expected, dict) or set(expected) != set(LOAD_ORDER):
+        fail("postcommit missing sealed expected table fingerprints")
+    for table in LOAD_ORDER:
+        rows = target_rows(table, db_url_env, "public")
+        if table_fingerprint(table, rows) != expected[table]:
+            fail(f"postcommit source-to-target table mismatch: {table}")
+
+    root = Path(__file__).resolve().parents[1] / "validation"
+    check_sql = (root / "full_migration_invariants.sql").read_text(encoding="utf-8")
+    result = run_psql(check_sql, db_url_env, capture=True)
+    statuses = re.findall(r"^\s*([A-Z][A-Z0-9_]+)\s*\|\s*(PASS|FAIL|WAITING)\s*$", result, re.M)
+    if not statuses or any(status != "PASS" for _, status in statuses):
+        fail("postcommit full-migration SQL invariants not all PASS")
+    for test in ("security_invariants.sql", "auth_invariants.sql"):
+        run_psql((root / test).read_text(encoding="utf-8"), db_url_env)
+
+    # Semantic OPERATION_AUDIT is never inferred from a generic SQL PASS.
+    deps = ",".join("'" + t + "'" for t in LOAD_ORDER)
+    missing = sql_scalar(
+        db_url_env,
+        "select count(*) from public.validation_checks c "
+        "left join public.validation_results r on r.check_key=c.check_key "
+        f"and r.operation_id='{operation_id}'::uuid "
+        "where c.active and c.mechanism='OPERATION_AUDIT' "
+        f"and (c.dependencies && array[{deps}]::text[] or c.check_key like 'FULL_MIGRATION_%') "
+        "and coalesce(r.status,'MISSING')<>'PASS'",
+    )
+    if missing != "0":
+        fail("postcommit impacted operation audits are not all stamped PASS")
+    evidence_raw = sql_scalar(
+        db_url_env,
+        "select value::text from public.system_state where key='full_migration_recovery_evidence'",
+    )
+    evidence = json.loads(evidence_raw)
+    if (evidence.get("operation_id") != operation_id
+            or evidence.get("package_fingerprint") != snapshot.get("package_fingerprint")
+            or evidence.get("source_backup_status") != "PASS"
+            or evidence.get("database_restore_status") != "PASS"):
+        fail("postcommit independent backup/recovery proof is missing or stale")
+    print(f"PASS read-only postcommit verification; tables={len(LOAD_ORDER)}; checks={len(statuses)}")
+
+
+def finalize_verified_operation(db_url_env: str, operation_id: str, authorization: str) -> None:
+    if authorization != AUTHORIZATION:
+        fail("finalization requires explicit owner authorization")
+    if not UUID_RE.fullmatch(operation_id):
+        fail("invalid finalization operation ID")
+    postcommit_verification(db_url_env, operation_id)
+    # Recheck state/owner binding inside the same transaction as both state
+    # transitions, so competing operations cannot invalidate the preflight.
+    sql = f"""
+begin;
+do $$
+begin
+  if not exists (
+    select 1 from public.operations
+    where operation_id='{operation_id}'::uuid and state='COMMITTED_REGISTRY'
+  ) then
+    raise exception 'target migration operation has changed';
+  end if;
+  if not exists (
+    select 1 from public.system_state
+    where key='full_migration_readiness'
+      and value->>'full_migration_authorized'='true'
+      and value->>'owner_authorized_operation_id'='{operation_id}'
+  ) then
+    raise exception 'operation-specific owner authorization not present';
+  end if;
+end $$;
+update public.operations
+set state='VALIDATED', updated_at=now()
+where operation_id='{operation_id}'::uuid and state='COMMITTED_REGISTRY';
+update public.operations
+set state='FINALIZED', result='PASS', updated_at=now(), finalized_at=now()
+where operation_id='{operation_id}'::uuid and state='VALIDATED';
+commit;
+"""
+    run_psql(sql, db_url_env)
+    print("PASS full-migration operation FINALIZED; legacy freeze and cutover remain separate")
+
+
+def mark_interrupted_migration_failed(db_url_env: str, operation_id: str, confirmation: str) -> None:
+    if confirmation != "MARK_TARGET_FAILED_KEEP_LEGACY_FREEZE":
+        fail("explicit failed-operation confirmation required")
+    if not UUID_RE.fullmatch(operation_id):
+        fail("invalid failed-operation ID")
+    sql = f"""
+begin;
+do $$
+begin
+  if not exists (
+    select 1 from public.operations
+    where operation_id='{operation_id}'::uuid
+      and state in ('PREPARED','COMMITTED_REGISTRY','VALIDATED')
+  ) then
+    raise exception 'no unfinished target operation to mark FAILED';
+  end if;
+end $$;
+update public.operations
+set state='FAILED', result='FAIL', updated_at=now(),
+    notes=coalesce(notes,'') || ' Target migration interrupted; old source remains canonical; freeze requires separate review.'
+where operation_id='{operation_id}'::uuid
+  and state in ('PREPARED','COMMITTED_REGISTRY','VALIDATED');
+commit;
+"""
+    run_psql(sql, db_url_env)
+    print("Target operation failure recorded; never automatically released old freeze")
+
+
+def postgresql_roundtrip_test() -> None:
+    # Strictly local, synthetic-only integration test; NEVER a production URL.
+    from urllib.parse import urlparse
+    url = os.environ.get("HEALTH_SYNTHETIC_DB_URL", "")
+    if urlparse(url).hostname not in {"localhost", "127.0.0.1"}:
+        fail("PostgreSQL synthetic roundtrip requires local-only test database")
+    os.environ["HEALTH_ROUNDTRIP_URL"] = url
+    schema = "health_synthetic_roundtrip"
+    sql = f"""
+drop schema if exists {schema} cascade;
+create schema {schema};
+create table {schema}.source_locations (
+    source_id text,provider text,account_alias text,
+    provider_object_id text,location_role text,verified_at timestamptz
+);
+insert into {schema}.source_locations values
+('SRC-20261007-001','google-drive','HEALTH_PRIMARY','synthetic-1','PRIMARY','2026-10-08T12:00:00Z'),
+('SRC-20261007-002','google-drive','HEALTH_PRIMARY','synthetic-2' || chr(92) || 'slash' || chr(10) || 'newline','PRIMARY','2026-10-08T15:00:00+03:00');
+"""
+    expected = [
+        {"source_id": f"SRC-20261007-00{i}",
+         "provider": "google-drive", "account_alias": "HEALTH_PRIMARY",
+         "provider_object_id": (f"synthetic-{i}" if i == 1 else "synthetic-2" + chr(92) + "slash" + chr(10) + "newline"), "location_role": "PRIMARY",
+         "verified_at": "2026-10-08T12:00:00Z"}
+        for i in (1, 2)
+    ]
+    run_psql(sql, "HEALTH_ROUNDTRIP_URL")
+    try:
+        rows = target_rows("source_locations", "HEALTH_ROUNDTRIP_URL", schema)
+        if table_fingerprint("source_locations", rows) != table_fingerprint("source_locations", expected):
+            fail("PostgreSQL timestamptz source fingerprint roundtrip mismatch")
+        probe = run_psql(
+            "copy (select count(*) from jsonb_object_keys(jsonb_build_object('a',1,'b',2))) to stdout;",
+            "HEALTH_ROUNDTRIP_URL", capture=True,
+        )
+        if probe.strip() != "2":
+            fail("PostgreSQL JSONB object count test mismatch")
+    finally:
+        run_psql(f"drop schema if exists {schema} cascade;", "HEALTH_ROUNDTRIP_URL")
+    print("PASS synthetic PostgreSQL 17 timestamptz/jsonb roundtrip")
+
+
+def make_synthetic_package(package: Path) -> None:
+    manifest = {
+        "schema_version": 2,
+        "status": "CAPTURED",
+        "capture_mode": "migration",
+        "source_location_mode": "new-health-primary",
+        "captured_at": "2026-01-01T00:00:00Z",
+        "old_healthdb_validation_pass": True,
+        "old_healthdb_freeze_operation_id": "MAINT-999",
+        "old_healthdb_freeze_state": "PREPARED",
+        "old_healthdb_other_unfinished_operations": 0,
+        "historical_sources_manifest_sha256": "0" * 64,
+        "tables": {},
+    }
+    (package / MANIFEST).write_text(canonical_json(manifest) + "\n", encoding="utf-8")
+    synthetic = {
+        "domains": [{"domain_code":"general","label":"General","active":True,"aliases":[],"metadata":{}}],
+        "analytes": [{"analyte_key":"synthetic","display_name":"Synthetic","aliases":[],"metadata":{}}],
+        "records": [{
+            "record_id":"REC-20260101-001","nnn":1,"record_date":"2026-01-01","title":"Synthetic",
+            "type":"medical-record","record_type":"synthetic","confidence":"test","status":"active",
+            "tags":["general"],"summary":"Synthetic only","body_text":"# Synthetic\nTest body",
+            "provenance_status":"not-applicable","source_label":None,"source_request_id":None,
+            "source_pages":None,"metadata":{}
+        }],
+        "record_domains": [{"record_id":"REC-20260101-001","domain_code":"general"}],
+        "sources": [{
+            "source_id":"SRC-20260101-001","logical_path":"synthetic/source","original_filename":"synthetic.txt",
+            "mime_type":"text/plain","size_bytes":1,"sha256":"a"*64,"source_date":"2026-01-01","metadata":{}
+        }],
+        "source_locations": [{
+            "source_id":"SRC-20260101-001","provider":"google-drive","account_alias":"HEALTH_PRIMARY",
+            "provider_object_id":"synthetic-object","location_role":"PRIMARY","verified_at":"2026-01-01T00:00:00Z"
+        }],
+        "record_sources": [{
+            "record_id":"REC-20260101-001","source_id":"SRC-20260101-001","role":"evidence",
+            "source_pages":None,"provenance":{}
+        }],
+        "cases": [{
+            "case_key":"REC-20260101-001","opening_record_id":"REC-20260101-001","closing_record_id":None,
+            "category":"episode","status":"open","title":"Synthetic","summary":None,"metadata":{}
+        }],
+        "case_links": [{
+            "case_key":"REC-20260101-001","record_id":"REC-20260101-001","relation":"OPEN",
+            "relation_date":"2026-01-01","note":None
+        }],
+        "labs": [{
+            "record_id":"REC-20260101-001","analyte_key":"synthetic","value":"1.0","unit":None,
+            "reference_range":None,"flag":None,"observed_at":None,"observed_on":"2026-01-01",
+            "source_id":"SRC-20260101-001","source_locator":None,"source_name":"Synthetic","note":None,
+            "metadata":{"literal_preserved":True}
+        }],
+        "medications": [],
+        "monitoring": [],
+        "plan_items": [],
+        "questions": [],
+        "id_reservations": [{
+            "nnn":1,"state":"used","record_id":"REC-20260101-001","operation_id":None,
+            "reserved_at":None,"metadata":{}
+        }],
+    }
+    for table in LOAD_ORDER:
+        with (package / f"{table}.jsonl").open("w", encoding="utf-8") as out:
+            for row in synthetic[table]:
+                out.write(canonical_json(row) + "\n")
+    seal_package(package)
+    verify_package(package)
+
+
+def local_full_cycle_test() -> None:
+    """Destructive operations ONLY in a fresh localhost synthetic PostgreSQL."""
+    from urllib.parse import urlparse
+    url = os.environ.get("HEALTH_SYNTHETIC_DB_URL", "")
+    if urlparse(url).hostname not in {"127.0.0.1", "localhost"}:
+        fail("synthetic full cycle needs loopback PostgreSQL")
+    os.environ["HEALTH_CYCLE_URL"] = url
+    env = "HEALTH_CYCLE_URL"
+    repo = Path(__file__).resolve().parents[2]
+    for migration in ("0001_core.sql", "0004_mvp_fidelity.sql", "0006_id_reservations_metadata.sql"):
+        run_psql((repo / "db" / "migrations" / migration).read_text(encoding="utf-8"), env)
+    op = "11111111-1111-4111-8111-111111111111"
+    second = "22222222-2222-4222-8222-222222222222"
+    with tempfile.TemporaryDirectory(prefix="health-local-fullcycle-") as directory:
+        package = Path(directory)
+        make_synthetic_package(package)
+        stage_package(package, env, DEFAULT_STAGE_SCHEMA)
+        run_psql(
+            "insert into public.operations(operation_id,operation,mode,state) values "
+            f"('{op}'::uuid,'synthetic-full-migration','maintenance','PREPARED');"
+            "insert into public.system_state(key,value) values "
+            "('full_migration_readiness','{\"full_migration_authorized\":false}'::jsonb);",
+            env,
+        )
+        # No private source callback -> no write.
+        try:
+            commit_stage(package, env, DEFAULT_STAGE_SCHEMA, op, AUTHORIZATION)
+            fail("direct commit without full source guard accepted")
+        except MigrationError as exc:
+            if "source attestation required" not in str(exc):
+                raise
+        # A stale source is rejected, even when the package is sealed.
+        guard_calls = []
+        def reject_stale() -> None:
+            guard_calls.append("called")
+            fail("synthetic original REC content changed")
+        try:
+            commit_stage(package, env, DEFAULT_STAGE_SCHEMA, op, AUTHORIZATION, reject_stale)
+            fail("stale original accepted")
+        except MigrationError as exc:
+            if "synthetic original REC content changed" not in str(exc):
+                raise
+        if guard_calls != ["called"]:
+            fail("live source guard was skipped")
+
+        # Literal authorization alone cannot bypass owner-bound state.
+        try:
+            commit_stage(package, env, DEFAULT_STAGE_SCHEMA, op, AUTHORIZATION, lambda: None)
+            fail("operation without owner authorization committed")
+        except MigrationError as exc:
+            if "psql command failed" not in str(exc):
+                raise
+        if sql_scalar(env, "select state from public.operations where operation_id='" + op + "'::uuid") != "PREPARED":
+            fail("denied commit changed target operation")
+        if sql_scalar(env, "select count(*) from public.records") != "0":
+            fail("denied commit inserted a medical row")
+        if sql_scalar(env, "select count(*) from public.system_state where key='full_migration_snapshot'") != "0":
+            fail("denied commit recorded a snapshot")
+
+        run_psql(
+            "update public.system_state set value="
+            f"jsonb_build_object('full_migration_authorized',true,'owner_authorized_operation_id','{op}',"
+            "'owner_authorized_freeze_operation_id','MAINT-999') "
+            "where key='full_migration_readiness';",
+            env,
+        )
+        commit_stage(package, env, DEFAULT_STAGE_SCHEMA, op, AUTHORIZATION, lambda: None)
+        compare_target(package, env, "public")
+        if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
+            fail("successful commit not in COMMITTED_REGISTRY")
+        # Finalization must reject missing semantic audits/recovery proofs.
+        try:
+            finalize_verified_operation(env, op, AUTHORIZATION)
+            fail("operation prematurely finalized without audits")
+        except MigrationError:
+            if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "COMMITTED_REGISTRY":
+                raise
+
+        # Exercise SQL state-transition mechanics separately from the full
+        # recovery/semantic gate. Synthetic override is never used by CLI.
+        checker = globals()["postcommit_verification"]
+        try:
+            globals()["postcommit_verification"] = lambda _env, _id: None
+            finalize_verified_operation(env, op, AUTHORIZATION)
+        finally:
+            globals()["postcommit_verification"] = checker
+        if sql_scalar(env, f"select state from public.operations where operation_id='{op}'::uuid") != "FINALIZED":
+            fail("authorized target operation did not reach FINALIZED")
+
+        run_psql(
+            "insert into public.operations(operation_id,operation,mode,state) values "
+            f"('{second}'::uuid,'synthetic-interruption','maintenance','PREPARED');",
+            env,
+        )
+        mark_interrupted_migration_failed(env, second, "MARK_TARGET_FAILED_KEEP_LEGACY_FREEZE")
+        if sql_scalar(env, f"select state from public.operations where operation_id='{second}'::uuid") != "FAILED":
+            fail("interrupted target operation not marked FAILED")
+    print("PASS isolated synthetic staging/commit/denial/finalization/failure workflow")
+
+
 def self_test() -> None:
     sample = [{"b": 2, "a": "x"}, {"a": "y", "b": 1}]
     a = sha256_bytes(("\n".join(sorted(canonical_json(x) for x in sample)) + "\n").encode())
@@ -714,75 +1109,30 @@ def self_test() -> None:
         fail("self-test canonical order failed")
     if pg_array(["a", 'b"c']) != '{"a","b\\\"c"}':
         fail("self-test array encoding failed")
+    # A maintenance command is not a medical migration authorization.
+    example_id = "33333333-3333-4333-8333-333333333333"
+    try:
+        finalize_verified_operation("SYNTHETIC_DATABASE", example_id, "NOT_AUTHORIZED")
+        fail("unauthorized finalization accepted")
+    except MigrationError as exc:
+        if "explicit owner authorization" not in str(exc):
+            raise
+    try:
+        mark_interrupted_migration_failed("SYNTHETIC_DATABASE", example_id, "NOT_CONFIRMED")
+        fail("unconfirmed failure transition accepted")
+    except MigrationError as exc:
+        if "explicit failed-operation confirmation" not in str(exc):
+            raise
+    if canonical_timestamp("2026-10-08T12:00:00Z") != canonical_timestamp("2026-10-08T12:00:00+00:00"):
+        fail("self-test UTC fingerprint normalization failed")
+    if canonical_timestamp("2026-10-08T15:00:00+03:00") != canonical_timestamp("2026-10-08T12:00:00.000000Z"):
+        fail("self-test offset fingerprint normalization failed")
+    if table_fingerprint("source_locations", [{"verified_at": "2026-10-08T12:00:00Z"}]) != table_fingerprint("source_locations", [{"verified_at": "2026-10-08T12:00:00+00:00"}]):
+        fail("self-test timestamps yield different sealed fingerprints")
 
     with tempfile.TemporaryDirectory(prefix="health-migration-selftest-") as raw:
         package = Path(raw)
-        manifest = {
-            "schema_version": 2,
-            "status": "CAPTURED",
-            "capture_mode": "migration",
-            "source_location_mode": "new-health-primary",
-            "captured_at": "2026-01-01T00:00:00Z",
-            "old_healthdb_validation_pass": True,
-            "old_healthdb_freeze_operation_id": "MAINT-999",
-            "old_healthdb_freeze_state": "PREPARED",
-            "old_healthdb_other_unfinished_operations": 0,
-            "historical_sources_manifest_sha256": "0" * 64,
-            "tables": {},
-        }
-        (package / MANIFEST).write_text(canonical_json(manifest) + "\n", encoding="utf-8")
-        synthetic = {
-            "domains": [{"domain_code":"general","label":"General","active":True,"aliases":[],"metadata":{}}],
-            "analytes": [{"analyte_key":"synthetic","display_name":"Synthetic","aliases":[],"metadata":{}}],
-            "records": [{
-                "record_id":"REC-20260101-001","nnn":1,"record_date":"2026-01-01","title":"Synthetic",
-                "type":"medical-record","record_type":"synthetic","confidence":"test","status":"active",
-                "tags":["general"],"summary":"Synthetic only","body_text":"# Synthetic\nTest body",
-                "provenance_status":"not-applicable","source_label":None,"source_request_id":None,
-                "source_pages":None,"metadata":{}
-            }],
-            "record_domains": [{"record_id":"REC-20260101-001","domain_code":"general"}],
-            "sources": [{
-                "source_id":"SRC-20260101-001","logical_path":"synthetic/source","original_filename":"synthetic.txt",
-                "mime_type":"text/plain","size_bytes":1,"sha256":"a"*64,"source_date":"2026-01-01","metadata":{}
-            }],
-            "source_locations": [{
-                "source_id":"SRC-20260101-001","provider":"google-drive","account_alias":"HEALTH_PRIMARY",
-                "provider_object_id":"synthetic-object","location_role":"PRIMARY","verified_at":"2026-01-01T00:00:00Z"
-            }],
-            "record_sources": [{
-                "record_id":"REC-20260101-001","source_id":"SRC-20260101-001","role":"evidence",
-                "source_pages":None,"provenance":{}
-            }],
-            "cases": [{
-                "case_key":"REC-20260101-001","opening_record_id":"REC-20260101-001","closing_record_id":None,
-                "category":"episode","status":"open","title":"Synthetic","summary":None,"metadata":{}
-            }],
-            "case_links": [{
-                "case_key":"REC-20260101-001","record_id":"REC-20260101-001","relation":"OPEN",
-                "relation_date":"2026-01-01","note":None
-            }],
-            "labs": [{
-                "record_id":"REC-20260101-001","analyte_key":"synthetic","value":"1.0","unit":None,
-                "reference_range":None,"flag":None,"observed_at":None,"observed_on":"2026-01-01",
-                "source_id":"SRC-20260101-001","source_locator":None,"source_name":"Synthetic","note":None,
-                "metadata":{"literal_preserved":True}
-            }],
-            "medications": [],
-            "monitoring": [],
-            "plan_items": [],
-            "questions": [],
-            "id_reservations": [{
-                "nnn":1,"state":"used","record_id":"REC-20260101-001","operation_id":None,
-                "reserved_at":None,"metadata":{}
-            }],
-        }
-        for table in LOAD_ORDER:
-            with (package / f"{table}.jsonl").open("w", encoding="utf-8") as out:
-                for row in synthetic[table]:
-                    out.write(canonical_json(row) + "\n")
-        seal_package(package)
-        verify_package(package)
+        make_synthetic_package(package)
 
         sealed = read_manifest(package)
         original_freeze = sealed["old_healthdb_freeze_operation_id"]
@@ -842,6 +1192,20 @@ def main() -> None:
     p.add_argument("--authorization", required=True)
 
     sub.add_parser("self-test")
+    sub.add_parser("pg-roundtrip-test")
+    sub.add_parser("pg-full-cycle-test")
+    p = sub.add_parser("postcommit-verify")
+    p.add_argument("--operation-id", required=True)
+    p.add_argument("--db-url-env", default="SUPABASE_DB_URL")
+    p = sub.add_parser("finalize-verified-migration")
+    p.add_argument("--operation-id", required=True)
+    p.add_argument("--authorization", required=True)
+    p.add_argument("--db-url-env", default="SUPABASE_DB_URL")
+
+    p = sub.add_parser("mark-interrupted-failed")
+    p.add_argument("--operation-id", required=True)
+    p.add_argument("--confirm", required=True)
+    p.add_argument("--db-url-env", default="SUPABASE_DB_URL")
 
     args = parser.parse_args()
     if args.command == "seal":
@@ -853,7 +1217,7 @@ def main() -> None:
     elif args.command == "compare":
         compare_target(args.package, args.db_url_env, args.schema)
     elif args.command == "commit":
-        commit_stage(args.package, args.db_url_env, args.schema, args.operation_id, args.authorization)
+        fail("direct commit is disabled: live Drive revalidation must run in private scheduler migrate")
     elif args.command == "execute":
         execute_full_migration(
             args.package,
@@ -867,6 +1231,16 @@ def main() -> None:
         cleanup_stage(args.db_url_env, args.schema, args.authorization)
     elif args.command == "self-test":
         self_test()
+    elif args.command == "pg-roundtrip-test":
+        postgresql_roundtrip_test()
+    elif args.command == "pg-full-cycle-test":
+        local_full_cycle_test()
+    elif args.command == "postcommit-verify":
+        postcommit_verification(args.db_url_env, args.operation_id)
+    elif args.command == "finalize-verified-migration":
+        finalize_verified_operation(args.db_url_env, args.operation_id, args.authorization)
+    elif args.command == "mark-interrupted-failed":
+        mark_interrupted_migration_failed(args.db_url_env, args.operation_id, args.confirm)
 
 
 if __name__ == "__main__":

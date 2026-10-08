@@ -783,7 +783,7 @@ def recovery_evidence_contract(evidence: dict[str, Any], snapshot: dict[str, Any
     if (evidence["operation_id"] != operation_id
             or evidence["package_fingerprint"] != snapshot.get("package_fingerprint")):
         fail("postcommit recovery proof belongs to another migration")
-    if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}Z", str(evidence["backup_snapshot_id"])):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z", str(evidence["backup_snapshot_id"])):
         fail("postcommit invalid backup snapshot identifier")
     for key in ("backup_manifest_sha256", "source_manifest_sha256", "restore_evidence_sha256"):
         if not re.fullmatch(r"[a-f0-9]{64}", str(evidence[key])):

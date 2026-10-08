@@ -84,7 +84,7 @@ const uniqueValues = (values) =>
 function formatTableHeader(label) {
   return String(label ?? "").replace(
     /(^|[^\p{L}])количество(?=$|[^\p{L}])/giu,
-    "$1K-V"
+    "$1К-во"
   );
 }
 
@@ -298,28 +298,6 @@ function setupRecordFilters(initialTags = []) {
   });
 
   applyRecordFilters();
-}
-
-function setupClosedCaseFilters() {
-  const cards = [...document.querySelectorAll("#closed-case-list .case-card")];
-  if (!cards.length) return;
-
-  const apply = () => {
-    const dateFrom = document.querySelector("#closed-date-from")?.value || "";
-    const dateTo = document.querySelector("#closed-date-to")?.value || "";
-    const category = normalizeFilter(document.querySelector("#closed-category")?.value || "");
-
-    cards.forEach(card => {
-      const endDate = card.dataset.endDate || "";
-      const dateOk = (!dateFrom || !endDate || endDate >= dateFrom) && (!dateTo || !endDate || endDate <= dateTo);
-      const categoryOk = !category || normalizeFilter(card.dataset.category) === category;
-      card.hidden = !(dateOk && categoryOk);
-    });
-  };
-
-  ["#closed-date-from", "#closed-date-to"].forEach(id => document.querySelector(id)?.addEventListener("input", apply));
-  document.querySelector("#closed-category")?.addEventListener("change", apply);
-  apply();
 }
 
 async function assertReader(userId) {
@@ -716,24 +694,24 @@ async function renderCurrentState(mode = "all") {
     "medical-card": `<section><h2>Вопросы по медкарте</h2>
       ${medicalQuestions.length ? medicalQuestions.map(questionDetails).join("") : empty("Открытых вопросов по медкарте нет")}
     </section>`,
-    "chronic": `<section><h2>Хронические состояния</h2>
+    "chronic": `<section>${mode === "all" ? "<h2>Хронические состояния</h2>" : ""}
       ${chronic.length ? chronic.map(x => caseDetails(x)).join("") : empty()}
     </section>`,
-    "open-cases": `<section><h2>Открытые случаи</h2>
+    "open-cases": `<section>${mode === "all" ? "<h2>Открытые случаи</h2>" : ""}
       ${episodes.length ? episodes.map(x => caseDetails(x)).join("") : empty()}
     </section>`,
-    "medications": `<section><h2>Принимаемые препараты</h2>
+    "medications": `<section>${mode === "all" ? "<h2>Принимаемые препараты</h2>" : ""}
       ${filterableTable(["Препарат","Дозировка","Режим","REC"], medsRows, { id: "medications-table" })}
     </section>`,
-    "monitoring": `<section><h2>Мониторинг</h2>
+    "monitoring": `<section>${mode === "all" ? "<h2>Мониторинг</h2>" : ""}
       ${filterableTable(["Что контролировать","Периодичность","REC"], monitoringRows, { id: "monitoring-table" })}
     </section>`,
-    "visit-preparation": `<section><h2>Подготовка к визиту</h2>
+    "visit-preparation": `<section>${mode === "all" ? "<h2>Подготовка к визиту</h2>" : ""}
       ${visitPreparation(plan.data || [], questions.data || [])}
     </section>`,
-    "future-plan": `<section><h2>Будущий план</h2>
+    "future-plan": `<section>${mode === "all" ? "<h2>Будущий план</h2>" : ""}
       ${planKinds.length > 1 || planStatuses.length > 1 ? `
-        <div class="filter-bar" aria-label="Фильтр будущего плана">
+        <div class="filter-bar" ${mode === "future-plan" ? "data-sticky-filter" : ""} aria-label="Фильтр будущего плана">
           <span class="filter-bar-title">Фильтр</span>
           ${compactSelect("Вид", "plan-kind-filter", planKinds)}
           ${compactSelect("Статус", "plan-status-filter", planStatuses)}
@@ -756,7 +734,6 @@ async function renderCurrentState(mode = "all") {
     : sections[mode] || empty();
   view.innerHTML = `
     <h1>${esc(sectionNames[mode] || "Текущее состояние")}</h1>
-    ${mode === "all" ? '<p class="intro">Сводная информация и подготовка к визитам. Все медицинские сведения связаны с REC.</p>' : ""}
     ${content}
   `;
   bindFilterableTables();
@@ -782,31 +759,12 @@ async function renderClosedCases() {
     return bd.localeCompare(ad);
   });
 
-  const categories = uniqueValues(bundled.map(x => x.category));
-
   view.innerHTML = `
     <h1>Закрытые случаи</h1>
-    <p class="intro">Завершённые клинические случаи. Внутри каждой карточки — начало, закрывающая REC и полная импортированная цепочка связей.</p>
-    ${bundled.length ? `
-      <div class="filter-bar" aria-label="Фильтр закрытых случаев">
-        <span class="filter-bar-title">Фильтр</span>
-        <label>Дата закрытия от<input id="closed-date-from" type="date"></label>
-        <label>Дата закрытия до<input id="closed-date-to" type="date"></label>
-        ${categories.length > 1 ? `
-          <label>Категория
-            <select id="closed-category">
-              <option value="">Все</option>
-              ${categories.map(value => `<option value="${esc(value)}">${esc(value === "chronic" ? "Хроническое состояние" : "Случай / эпизод")}</option>`).join("")}
-            </select>
-          </label>
-        ` : ""}
-      </div>
-    ` : ""}
     <section class="case-stack" id="closed-case-list">
       ${bundled.length ? bundled.map(x => caseDetails(x, { closed: true })).join("") : empty("Закрытых случаев пока нет")}
     </section>
   `;
-  setupClosedCaseFilters();
 }
 
 async function renderCase(caseKey) {
@@ -921,8 +879,7 @@ async function renderRecords({ initialTags = [] } = {}) {
 
   view.innerHTML = `
     <h1>Записи</h1>
-    <p class="intro">Индекс REC: дата, теги, тип записи, подтверждение, краткое содержание и связь со случаем. Нажмите на заголовок столбца для сортировки.</p>
-    <div class="filter-bar" aria-label="Фильтр записей">
+    <div class="filter-bar" data-sticky-filter aria-label="Фильтр записей">
       <span class="filter-bar-title">Фильтр</span>
       <label>Дата от<input id="records-date-from" type="date"></label>
       <label>Дата до<input id="records-date-to" type="date"></label>

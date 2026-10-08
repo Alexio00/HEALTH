@@ -601,7 +601,7 @@ function visitPreparation(planItems, questions) {
         specialty: [specialty],
         title: specialty === "специалист"
           ? "Вопросы к специалисту — специальность не указана"
-          : `Вопросы для ${visitLabel(specialty)} — визит не запланирован`,
+          : `Вопросы к ${visitLabel(specialty)} — визит не запланирован`,
         visits: [], questions: []
       });
     }

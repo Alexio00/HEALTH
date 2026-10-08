@@ -842,7 +842,6 @@ async function renderCurrentState(mode = "all") {
     "future-plan": `<section>${mode === "all" ? "<h2>Будущий план</h2>" : ""}
       ${planKinds.length > 1 || planStatuses.length > 1 ? `
         <div class="filter-bar" ${mode === "future-plan" ? "data-sticky-filter" : ""} aria-label="Фильтр будущего плана">
-          <span class="filter-bar-title">Фильтр</span>
           ${compactSelect("Вид", "plan-kind-filter", planKinds)}
           ${compactSelect("Статус", "plan-status-filter", planStatuses)}
         </div>
@@ -1010,7 +1009,6 @@ async function renderRecords({ initialTags = [] } = {}) {
   view.innerHTML = `
     <h1>Записи</h1>
     <div class="filter-bar" data-sticky-filter aria-label="Фильтр записей">
-      <span class="filter-bar-title">Фильтр</span>
       <label>Дата от<input id="records-date-from" type="date"></label>
       <label>Дата до<input id="records-date-to" type="date"></label>
       <label>Тег

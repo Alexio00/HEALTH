@@ -1,4 +1,4 @@
-const CACHE = "health-shell-v12";
+const CACHE = "health-shell-v13";
 const SHELL = [
   "./",
   "./index.html",

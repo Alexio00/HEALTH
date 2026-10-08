@@ -33,6 +33,23 @@ for (const route of ["chronic","open-cases","medications","monitoring","visit-pr
 assert(html.includes('aria-expanded="false"'));
 assert(css.includes('.topbar nav.is-open { display: flex; }'));
 
+// No redundant visible "Фильтр" caption on either records or future-plan
+// filter bars. Keep the bars' aria-label for screen readers.
+assert(!js.includes('class="filter-bar-title"'));
+assert(js.includes('aria-label="Фильтр записей"'));
+assert(js.includes('aria-label="Фильтр будущего плана"'));
+// Center names above every filter field without centering input/select values.
+function cssDeclarations(selector) {
+  const marker = selector + " {";
+  const start = css.indexOf(marker);
+  assert(start !== -1, "CSS selector missing: " + selector);
+  return css.slice(start + marker.length, css.indexOf("}", start));
+}
+assert(cssDeclarations(".filter-bar label").includes("text-align: center;"));
+assert(cssDeclarations(".filter-bar-label").includes("text-align: center;"));
+assert(cssDeclarations(".filter-bar select").includes("text-align: start;"));
+
+
 // Regression: REC markup was inheriting pre-wrap from record-body. Indentation
 // in generated table templates became large empty areas above table headings.
 assert.match(css, /\.record-body\.rich-record-body\s*\{\s*white-space:\s*normal;/);

@@ -144,17 +144,18 @@ h3 { margin: 1.4rem 0 .6rem; }
   background: white;
   font-size: .8rem;
 }
-.filter-bar-title,
 .filter-bar-label {
   font-weight: 700;
   font-size: .8rem;
   line-height: 2.25rem;
+  text-align: center;
 }
 .filter-bar label {
   display: grid;
   gap: .2rem;
   font-size: .8rem;
   font-weight: 600;
+  text-align: center;
 }
 .filter-bar input,
 .filter-bar select {
@@ -163,6 +164,7 @@ h3 { margin: 1.4rem 0 .6rem; }
   padding: .38rem .48rem;
   border-radius: .45rem;
   font-size: .8rem;
+  text-align: start;
 }
 .active-filter-block { display: grid; gap: .2rem; align-self: stretch; }
 .active-filter-tags { display: flex; flex-wrap: wrap; gap: .3rem; min-height: 2rem; align-items: center; }

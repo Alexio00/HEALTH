@@ -11,6 +11,40 @@ button, input, select { font: inherit; }
 button { cursor: pointer; }
 .hidden { display: none !important; }
 .panel, .content { max-width: 1180px; margin: 0 auto; padding: 2rem 1rem; }
+.content { padding-top: 1rem; }
+/* Page title is a separate sticky layer below the global site header. */
+.content > h1 {
+  position: sticky;
+  top: var(--topbar-height, 4rem);
+  z-index: 8;
+  margin: 0 0 .55rem;
+  padding: .35rem 0 .5rem;
+  font-size: clamp(1.65rem, 4vw, 2.5rem);
+  line-height: 1.14;
+  background: color-mix(in srgb, #f5f5f5 97%, transparent);
+  border-bottom: 1px solid #ddd;
+  overflow-wrap: anywhere;
+}
+.content .filter-bar[data-sticky-filter] {
+  position: sticky;
+  top: calc(var(--topbar-height, 4rem) + var(--page-title-height, 3.6rem));
+  z-index: 7;
+  box-shadow: 0 3px 6px rgba(0,0,0,.05);
+}
+/* Floating table-head copies follow the window's vertical scroll and
+   their owning table wrapper's horizontal scroll. */
+.pinned-table-header {
+  position: fixed;
+  z-index: 6;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: #f0f0f0;
+  border: 1px solid #d8d8d8;
+  border-bottom: 0;
+  pointer-events: auto;
+}
+.pinned-table-header .data-table { margin: 0; }
+.pinned-table-header .data-table th { position: static; }
 #login { max-width: 440px; }
 form { display: grid; gap: 1rem; margin-top: 2rem; }
 label { display: grid; gap: .4rem; font-weight: 600; }
@@ -298,7 +332,8 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; }
 
 @media (max-width: 720px) {
-  .panel, .content { padding: 1.4rem .8rem; }
+  .panel { padding: 1.4rem .8rem; }
+  .content { padding: .7rem .8rem 1.4rem; }
   .topbar {
     --mobile-action-height: 3.25rem;
     align-items: center;
@@ -340,6 +375,8 @@ dd { margin: 0; overflow-wrap: anywhere; }
   :root { color: #f0f0f0; background: #101010; }
   input, select, .cards li, .record-body, .case-card, .table-wrap, .filter-bar { background: #181818; border-color: #333; }
   .topbar { background: color-mix(in srgb, #101010 92%, transparent); border-color: #333; }
+  .content > h1 { background: color-mix(in srgb, #101010 97%, transparent); border-color: #333; }
+  .pinned-table-header { background: #202020; border-color: #333; }
   .muted, .empty, .intro, .summary-date { color: #aaa; }
   .ghost { border-color: #555; }
   .case-card[open] > summary, .data-table th, .data-table td { border-color: #333; }

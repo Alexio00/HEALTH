@@ -90,45 +90,22 @@ This creates/replaces only `health_migration_stage`, loads the complete package,
 
 No public medical-domain row is modified by `stage`.
 
-## Recommended executable chain
+## Production execution boundary
 
-For full migration, prefer the fail-closed orchestration command rather than invoking stage/commit/compare manually:
+Standalone public `commit` and `execute` are disabled as unsafe entrypoints.
+Only the private `SHEDULLER/scripts/capture_old_healthdb.py migrate` path can
+supply a fresh live source attestation covering Registry, REC Docs, linked
+original bytes and Historical inventory. Staging/verification commands remain
+available for isolated testing.
 
-```bash
-python scripts/migration/full_migration.py execute <private-package> \
-  --operation-id <health-operation-uuid> \
-  --source-freeze-operation-id <old-healthdb-freeze-uuid> \
-  --authorization FULL_MIGRATION_AUTHORIZED
-```
+The production database transaction additionally requires an owner decision
+bound to the exact target operation UUID and old freeze ID in private
+`system_state/full_migration_readiness`. The literal authorization string
+alone is not sufficient. This approval is NOT granted by maintenance work.
 
-`execute` requires the explicit authorization token and requires the operator-confirmed source-freeze operation ID to match the ID cryptographically bound into the sealed package. It then runs staging, exact staging comparison, guarded transactional commit, and exact post-commit comparison against `public`. It stops at `COMMITTED_REGISTRY`; validation and finalization remain separate gates.
-
-If exact post-commit comparison fails, the command fails and the operation is not promoted to `VALIDATED` or `FINALIZED`.
-
-## Commit
-
-Commit is deliberately impossible without both:
-
-- a HEALTH operation already in `PREPARED`;
-- the literal owner-authorization token `FULL_MIGRATION_AUTHORIZED`.
-
-```bash
-python scripts/migration/full_migration.py commit <private-package> \
-  --operation-id <uuid> \
-  --authorization FULL_MIGRATION_AUTHORIZED
-```
-
-The commit:
-
-1. re-verifies the private package;
-2. re-verifies exact staging fingerprints;
-3. rejects any competing unfinished HEALTH operation;
-4. replaces the medical-domain tables in one PostgreSQL transaction;
-5. writes private snapshot counts/fingerprints into `system_state/full_migration_snapshot`;
-6. stores the source freeze operation ID/state and control metadata in `system_state/full_migration_snapshot`;
-7. advances only the supplied operation to `COMMITTED_REGISTRY`.
-
-It does **not** set VALIDATED or FINALIZED.
+The target remains COMMITTED_REGISTRY after commit and exact comparison.
+No script may infer FINALIZED or release the old freeze from a successful
+database commit alone.
 
 ## Mandatory post-commit gate
 

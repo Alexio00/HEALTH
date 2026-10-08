@@ -1168,6 +1168,42 @@ def self_test() -> None:
     except MigrationError as exc:
         if "explicit failed-operation confirmation" not in str(exc):
             raise
+    # A successful old MVP restore cannot finalize this migration: it has
+    # neither the operation-bound independent artifacts nor all 15 digests.
+    snap = {"package_fingerprint": "a" * 64}
+    old_mvp = {"operation_id": example_id, "package_fingerprint": "a" * 64,
+               "source_backup_status": "PASS", "database_restore_status": "PASS"}
+    try:
+        recovery_evidence_contract(old_mvp, snap, example_id)
+        fail("old MVP-only recovery declaration was accepted")
+    except MigrationError as exc:
+        if "artifact contract incomplete" not in str(exc):
+            raise
+    good = {
+        "operation_id": example_id, "package_fingerprint": "a" * 64,
+        "backup_snapshot_id": "2026-10-08T13-26-07Z",
+        "backup_manifest_sha256": "b" * 64,
+        "source_manifest_path": "source-manifests/source-id-locators-test.json",
+        "source_manifest_sha256": "c" * 64,
+        "restore_evidence_path": "recovery-evidence/proof-test.json",
+        "restore_evidence_sha256": "d" * 64,
+        "restore_run_id": "37784754289",
+        "restored_table_fingerprints": {t: "e" * 64 for t in LOAD_ORDER},
+    }
+    recovery_evidence_contract(good, snap, example_id)
+    for field, wrong in (("operation_id", "11111111-1111-4111-8111-111111111111"),
+                         ("package_fingerprint", "f" * 64),
+                         ("backup_manifest_sha256", "PASS"),
+                         ("source_manifest_path", "../stale.json"),
+                         ("restored_table_fingerprints", {"records": "e" * 64})):
+        altered = {**good, field: wrong}
+        try:
+            recovery_evidence_contract(altered, snap, example_id)
+            fail("tampered recovery contract accepted: " + field)
+        except MigrationError as exc:
+            if str(exc).startswith("tampered recovery contract accepted:"):
+                raise
+    print("PASS operation-bound recovery-evidence contract negative tests")
     if canonical_timestamp("2026-10-08T12:00:00Z") != canonical_timestamp("2026-10-08T12:00:00+00:00"):
         fail("self-test UTC fingerprint normalization failed")
     if canonical_timestamp("2026-10-08T15:00:00+03:00") != canonical_timestamp("2026-10-08T12:00:00.000000Z"):

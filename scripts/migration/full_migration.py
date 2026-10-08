@@ -663,6 +663,7 @@ def commit_stage(
 
     snapshot = {
         "status": "CAPTURED",
+        "operation_id": operation_id,
         "captured_at": manifest["captured_at"],
         "old_healthdb_validation_pass": manifest["old_healthdb_validation_pass"],
         "old_healthdb_freeze_operation_id": manifest["old_healthdb_freeze_operation_id"],

@@ -21,6 +21,11 @@ Pinned code:
 | SHEDULLER PR #22 | `1a36db61d9095b82c5d1b4818c7830fe15d92038` | Reviewed context only, excluded from image |
 | Diagnostic probe | `191952081ed29de5754165dac232836cf6abec70` | Immutable source for the test archive |
 
+At final readback, SHEDULLER PR #22 had advanced to
+`43f9a246e6bfd5bb69b1a366028095a43fae4e71`. Its initially inspected commit above
+remains historical context; neither version is included in the test image. No
+new-code review or production authorization is inferred from that reference.
+
 [Push CI](https://github.com/Alexio000/SHEDULLER/actions/runs/37907613658)
 and [PR CI](https://github.com/Alexio000/SHEDULLER/actions/runs/37907620709)
 completed successfully for the probe source HEAD. The workflow builds an

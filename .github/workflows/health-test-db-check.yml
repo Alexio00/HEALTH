@@ -3,6 +3,10 @@ name: HEALTH-TEST DB Connection
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/health-test-db-check.yml'
 
 permissions:
   contents: read
@@ -35,6 +39,30 @@ jobs:
             echo "::error::Secret is not a PostgreSQL URI"
             exit 1
           fi
+
+          # Validate only public connection structure; do not print any secret fields.
+          python3 - <<'PY'
+          import os
+          import sys
+          from urllib.parse import urlsplit
+          try:
+              parsed = urlsplit(os.environ["DB_URL"])
+              checks = (
+                  (parsed.username == "health_test_ci.yjmcesdayfmfissghzgm", "pooler role"),
+                  (parsed.hostname is not None and parsed.hostname.endswith(".pooler.supabase.com"), "pooler host"),
+                  (parsed.port == 5432, "session pooler port"),
+                  (parsed.path == "/postgres", "database name"),
+                  (bool(parsed.password), "password present"),
+              )
+          except (ValueError, KeyError):
+              print("::error::Invalid PostgreSQL URI structure")
+              sys.exit(1)
+          for success, label in checks:
+              if not success:
+                  print("::error::Secret URI does not match expected " + label)
+                  sys.exit(1)
+          print("PASS: expected restricted role and pooler URL structure")
+          PY
 
           error_file="$(mktemp)"
           trap 'rm -f "$error_file"' EXIT

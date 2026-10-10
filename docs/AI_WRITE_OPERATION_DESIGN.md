@@ -77,6 +77,10 @@ A routine FINALIZED requires verified source PRIMARY objects referenced by the n
 - SHEDULLER does read-only backup/verification, not routine clinical writes.
 - Full migration executor and recovery authority are separate, tightly gated trust classes.
 
+## Source and operation audit clarifications
+
+For new Sources: persist an upload correlation marker before the external call, use a new object instead of overwriting a linked original, and reconcile a lost response by marker, object identity and actual bytes. Hash equality alone is not object identity; ambiguous matches stop the write. Verify bytes and metadata before publication. Restrict external changes when possible; later changes remain a residual risk checked by integrity verification and backup.
+
 ## Not yet implemented
 
 The durable idempotency/approval journal, immutable revision history, atomic NNN allocator, verified Source saga, restricted trusted entrypoint, operation-scoped clinical validation and coherent incremental backup checkpoint must be designed and tested on synthetic fixtures before accepting any post-cutover writes. This document does not add SQL schema, functions, credentials or workflows.

@@ -18,7 +18,7 @@ Medical writes must use one logical operation:
 
 `PREPARED -> COMMITTED_REGISTRY -> VALIDATED -> FINALIZED`
 
-Interrupted work becomes `FAILED`.
+Interrupted work becomes `FAILED` only after the outcome is known. A lost routine SQL COMMIT acknowledgement is UNKNOWN until reconciled, not automatically FAILED. The routine recovery contract takes precedence for this case; full-migration recovery remains separate.
 
 The database must enforce a single unfinished mutating operation.
 

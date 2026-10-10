@@ -3,6 +3,10 @@ name: HEALTH-TEST DB Connection
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/health-test-db-check.yml'
 
 permissions:
   contents: read
@@ -115,3 +119,23 @@ jobs:
           fi
 
           echo "PASS: restricted database connection verified"
+
+      - name: Verify signed-owner gate under actual restricted connection
+        shell: bash
+        env:
+          DB_URL: ${{ secrets.HEALTH_TEST_WRITER_DB_URL }}
+        run: |
+          set -euo pipefail
+          result=$(PGCONNECT_TIMEOUT=10 psql "$DB_URL" -X -At -v ON_ERROR_STOP=1 \
+            -c "SELECT CASE WHEN
+              current_user = 'health_test_ci'
+              AND health_test_writer.v2_status('SYNTHETIC-OWNER-DRAFT-01')->>'exists' IN ('true','false')
+              AND NOT has_table_privilege(current_user,'public.records','UPDATE')
+              THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)
+          test "$result" = "PASS" || { echo "::error::Status RPC or privilege test failed"; exit 1; }
+          if PGCONNECT_TIMEOUT=10 psql "$DB_URL" -X -At -v ON_ERROR_STOP=1 \
+             -c "SELECT health_test_writer.v2_begin('SYNTHETIC-OWNER-DRAFT-01');" >/dev/null 2>&1; then
+            echo "::error::Unsigned DRAFT candidate was unexpectedly accepted"
+            exit 1
+          fi
+          echo "PASS: real limited SQL session can use status RPC but cannot begin unsigned DRAFT"

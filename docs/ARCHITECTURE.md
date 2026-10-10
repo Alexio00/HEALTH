@@ -31,10 +31,13 @@ HEALTH separates application code, structured health data, original source files
    - never writes medical data;
    - stable HEALTH IDs in application routes.
 
-5. **Future Health API**
-   - controlled server-side domain operations for AI writers after cutover-readiness work;
-   - owns transaction/validation logic;
-   - AI clients never receive unrestricted database credentials.
+5. **Owner-authorized AI writing — current and deferred options**
+   - **now, until cutover:** ordinary ChatGPT/AI changes continue only in the active Drive-native HealthDB through its connected Google Drive workflow and governing Manual/State;
+   - **new HEALTH MVP:** the PWA and ordinary AI consumption remain read-only; the owner-gated full-migration executor is not a general write service;
+   - **potential later option A:** a dedicated controlled Health API for AI writers, NOT IN DEVELOPMENT;
+   - **potential later option B:** limited PostgreSQL RPC/stored procedures callable through a suitably permissioned AI connector, NOT IN DEVELOPMENT;
+   - before post-cutover medical writes, a selected implementation must enforce authorized single-writer operations, immutable IDs, validation, source lifecycle and least privilege. Neither option is automatically accepted simply because a general SQL connector exists;
+   - see [write-path decision and rule mapping](WRITE_PATH_DECISION.md) and [API alternatives](API.md).
 
 6. **Independent scheduler**
    - private repository;

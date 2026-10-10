@@ -3,7 +3,7 @@
 **Status:** DESIGN / NOT IMPLEMENTED / NOT AUTHORIZED FOR PRODUCTION WRITES  
 **Recorded:** 2026-10-10  
 **Scope:** routine owner-authorized medical changes *after* HEALTH becomes canonical; no changes to the existing migration executor or daily backup workflows.  
-**Related decisions:** [WRITE_PATH_DECISION.md](WRITE_PATH_DECISION.md) and the more precise normative routine-write [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md), [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md), and [AI_WRITE_ACCEPTANCE_PLAN.md](AI_WRITE_ACCEPTANCE_PLAN.md). Both Health API and restricted PostgreSQL RPC remain deferred options.
+**Related decisions:** [AI_WRITE_AUDIT_CLARIFICATIONS.md](AI_WRITE_AUDIT_CLARIFICATIONS.md) (proportionate audit decisions and revised PWA oracle), [WRITE_PATH_DECISION.md](WRITE_PATH_DECISION.md) and the more precise normative routine-write [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md), [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md), and [AI_WRITE_ACCEPTANCE_PLAN.md](AI_WRITE_ACCEPTANCE_PLAN.md). Both Health API and restricted PostgreSQL RPC remain deferred options.
 
 ## 0. Repository and authority boundaries
 

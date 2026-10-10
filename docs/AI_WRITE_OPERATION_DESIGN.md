@@ -34,7 +34,7 @@ These are acceptance targets, **not deployed capabilities**. Existing SQL has a 
 | FINALIZED -> anything | Not allowed | New correction uses new operation referencing original | Never erase previous success |
 | Any other state movement | Not allowed for routine writer | Reject and audit | Do not mutate operation to bypass lock |
 
-The required state chain is logical; COMMITTED_REGISTRY/VALIDATED need not be separately committed in routine writes. The existing **one-time full migration** has a different audited recovery contract, intentionally retaining COMMITTED_REGISTRY while waiting for B-04. The future implementation must distinguish operation type and cannot mix these workflows.
+The required state chain is logical; COMMITTED_REGISTRY/VALIDATED need not be separately committed in routine writes. The existing **one-time full migration** has a different audited recovery contract, intentionally retaining COMMITTED_REGISTRY while waiting for B-04. The future implementation must distinguish operation type and cannot mix these workflows. The routine writer must check a protected operation class and owner binding before advancing its own operation. Free-text mode alone is not sufficient.
 
 ## Algorithm
 

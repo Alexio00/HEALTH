@@ -22,6 +22,15 @@ Interrupted work becomes `FAILED`.
 
 The database must enforce a single unfinished mutating operation.
 
+### Current writer and deferred post-cutover choices (owner decision 2026-10-10)
+
+- The Drive-native HealthDB is still canonical. For now, **medical changes remain owner-authorized ChatGPT/AI actions through the active Google Drive tools** and follow the current Drive HealthDB Project Manual/State. The old Google Sheets Change Log/ID Reservations protocol is not replaced by this public HEALTH manual.
+- New HEALTH accepts no routine AI medical writes before a separate owner cutover decision and accepted write-path tests. A migration runner is not a routine writer.
+- A dedicated Health API and a restricted PostgreSQL RPC/stored-procedure alternative are both **deferred possibilities and are NOT under development**. Neither is mandatory by name; the eventual backend must enforce equivalent guarantees. See [write-path decision](WRITE_PATH_DECISION.md).
+- SQL schema already creates `operations_single_writer_idx` to reject competing *active operation rows*. It does **not** automatically block privileged medical DML outside `operations`. Future roles/entrypoints must enforce this boundary; do not mistake an unrestricted SQL connector for an accepted write workflow.
+- Medical meaning, provenance, exact Labs literals, OPEN/CLOSES owner decisions, immutable REC IDs and unused retired IDs survive cutover. Google Sheets ranges, Google Docs volumes and Drive logical-transaction steps do not become SQL procedures verbatim.
+
+
 ## Provenance
 
 Do not invent missing data. Empty, absent and explicitly negative values are different states.
@@ -84,14 +93,17 @@ The legacy/current health database stays authoritative until the owner explicitl
 - New active medication intake MUST create exactly one open medical-card question:
   "Проверить лекарственные взаимодействия препарата «{name}» с другими
   принимаемыми препаратами", linked to the exact prescribing REC. Create it
-  in the same Health API logical write as the medication and make it idempotent.
+  in the same controlled logical write as the medication and make it idempotent, regardless of whether the future implementation uses a Health API or restricted PostgreSQL RPC.
   If the prescribing REC is ambiguous, do not invent a link; defer/flag the
   intake for owner resolution. A question is a pending check, not a completed
   drug-interaction assessment. Existing-medication bulk migration is not new
   intake and MUST NOT automatically create these questions.
-- The PWA is currently read-only. The server-side Health API write transaction
-  is a required implementation gate before allowing production medication writes.
-  A prompt-only instruction does not enforce it.
+- The PWA is currently read-only. Before **post-cutover** production medication
+  writes, an accepted controlled server-side write path must enforce that
+  transaction-linked interaction-check question. Health API and PostgreSQL RPC
+  are currently deferred alternatives; a prompt-only instruction does not
+  enforce the rule. The existing Drive-native writer stays governed by the
+  active Drive Manual until cutover.
 - Preserve medical REC body_text exactly. Format for reading at presentation time
   (paragraphs, headings, lists, tables); formatting is not a medical rewrite.
 - Display automatically recorded conversational/operational timestamps in

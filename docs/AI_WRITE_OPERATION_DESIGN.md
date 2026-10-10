@@ -85,6 +85,8 @@ For new Sources: persist an upload correlation marker before the external call, 
 
 **Validation freshness (AW-03):** bind approval and relevant semantic results to one proposed-change fingerprint and expected versions of every affected record/dependency. Recheck those versions inside the final transaction. No independent dependency-version mechanism for all 37 legacy checks is required now.
 
+**AW-06:** the interaction-check question uses a stable new-medication intake event ID and check kind, not only the prescribing REC. Separate events under the same REC yield separate questions; retries of one event do not duplicate it. Later new intake after closure requires a new event. Implementation is deferred.
+
 ## Not yet implemented
 
 The durable idempotency/approval journal, immutable revision history, atomic NNN allocator, verified Source saga, restricted trusted entrypoint, operation-scoped clinical validation and coherent incremental backup checkpoint must be designed and tested on synthetic fixtures before accepting any post-cutover writes. This document does not add SQL schema, functions, credentials or workflows.

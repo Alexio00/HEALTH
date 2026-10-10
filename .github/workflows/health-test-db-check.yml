@@ -29,7 +29,17 @@ jobs:
             sudo apt-get install -y -qq postgresql-client >/dev/null
           fi
 
-          result=$(psql "$DB_URL" -X -At -v ON_ERROR_STOP=1 \
+          # Report only a diagnostic CATEGORY; never echo a connection URL,
+          # server address, password, or raw psql stderr in Actions logs.
+          if [[ "$DB_URL" != postgresql://* && "$DB_URL" != postgres://* ]]; then
+            echo "::error::Secret is not a PostgreSQL URI"
+            exit 1
+          fi
+
+          error_file="$(mktemp)"
+          trap 'rm -f "$error_file"' EXIT
+
+          if ! result=$(PGCONNECT_TIMEOUT=10 psql "$DB_URL" -X -At -v ON_ERROR_STOP=1 \
             -c "SELECT CASE WHEN
               current_user = 'health_test_ci'
               AND has_function_privilege(
@@ -40,10 +50,25 @@ jobs:
               AND NOT has_table_privilege(
                 current_user, 'public.records', 'INSERT'
               )
-              THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null) || {
-            echo "::error::Database connection failed"
+              THEN 'PASS' ELSE 'FAIL' END;" 2>"$error_file"); then
+
+            category="unknown connection or SQL failure"
+            if grep -Eqi 'could not translate host name|Name or service not known|Temporary failure in name resolution' "$error_file"; then
+              category="DNS: invalid or unavailable pooler hostname"
+            elif grep -Eqi 'password authentication failed|SASL authentication failed|Tenant or user not found|no such user|invalid tenant' "$error_file"; then
+              category="authentication: username, project suffix or password"
+            elif grep -Eqi 'Connection refused|Network is unreachable|No route to host|timeout expired|Connection timed out' "$error_file"; then
+              category="network: pooler, host, port or firewall"
+            elif grep -Eqi 'invalid URI|invalid connection option|missing .* host|missing .* port|invalid integer' "$error_file"; then
+              category="connection-string formatting"
+            elif grep -Eqi 'SSL|certificate|TLS' "$error_file"; then
+              category="TLS/SSL configuration"
+            elif grep -Eqi 'permission denied|does not exist' "$error_file"; then
+              category="database object or SQL permission"
+            fi
+            echo "::error::Restricted database check failed; diagnostic category: $category"
             exit 1
-          }
+          fi
 
           if [[ "$result" != "PASS" ]]; then
             echo "::error::Restricted permissions check failed"

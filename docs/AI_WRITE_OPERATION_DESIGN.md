@@ -81,6 +81,10 @@ A routine FINALIZED requires verified source PRIMARY objects referenced by the n
 
 For new Sources: persist an upload correlation marker before the external call, use a new object instead of overwriting a linked original, and reconcile a lost response by marker, object identity and actual bytes. Hash equality alone is not object identity; ambiguous matches stop the write. Verify bytes and metadata before publication. Restrict external changes when possible; later changes remain a residual risk checked by integrity verification and backup.
 
+**Operation class (AW-02):** the trusted routine writer binds a protected operation class, owner/caller identity and scope to its own operation ID. The AI cannot supply or change that class; a routine writer refuses migration-class and foreign IDs. Existing free-text operation and mode fields do not establish this boundary by themselves.
+
+**Validation freshness (AW-03):** bind approval and relevant semantic results to one proposed-change fingerprint and expected versions of every affected record/dependency. Recheck those versions inside the final transaction. No independent dependency-version mechanism for all 37 legacy checks is required now.
+
 ## Not yet implemented
 
 The durable idempotency/approval journal, immutable revision history, atomic NNN allocator, verified Source saga, restricted trusted entrypoint, operation-scoped clinical validation and coherent incremental backup checkpoint must be designed and tested on synthetic fixtures before accepting any post-cutover writes. This document does not add SQL schema, functions, credentials or workflows.

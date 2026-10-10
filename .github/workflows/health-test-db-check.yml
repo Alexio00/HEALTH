@@ -1,0 +1,53 @@
+
+name: HEALTH-TEST DB Connection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Test restricted database connection
+        shell: bash
+        env:
+          DB_URL: ${{ secrets.HEALTH_TEST_WRITER_DB_URL }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${DB_URL:-}" ]]; then
+            echo "::error::Database secret is missing"
+            exit 1
+          fi
+
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -qq >/dev/null
+            sudo apt-get install -y -qq postgresql-client >/dev/null
+          fi
+
+          result=$(psql "$DB_URL" -X -At -v ON_ERROR_STOP=1 \
+            -c "SELECT CASE WHEN
+              current_user = 'health_test_ci'
+              AND has_function_privilege(
+                current_user,
+                'health_test_writer.v2_status(text)',
+                'EXECUTE'
+              )
+              AND NOT has_table_privilege(
+                current_user, 'public.records', 'INSERT'
+              )
+              THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null) || {
+            echo "::error::Database connection failed"
+            exit 1
+          }
+
+          if [[ "$result" != "PASS" ]]; then
+            echo "::error::Restricted permissions check failed"
+            exit 1
+          fi
+
+          echo "PASS: restricted database connection verified"

@@ -3,7 +3,7 @@
 **Status:** DESIGN / NOT IMPLEMENTED / NOT AUTHORIZED FOR PRODUCTION WRITES  
 **Recorded:** 2026-10-10  
 **Scope:** routine owner-authorized medical changes *after* HEALTH becomes canonical; no changes to the existing migration executor or daily backup workflows.  
-**Related decision:** [WRITE_PATH_DECISION in Draft PR #23](https://github.com/Alexio00/HEALTH/pull/23) (Health API and restricted PostgreSQL RPC are both deferred options).
+**Related decisions:** [WRITE_PATH_DECISION.md](WRITE_PATH_DECISION.md) and the more precise normative routine-write [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md), [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md), and [AI_WRITE_ACCEPTANCE_PLAN.md](AI_WRITE_ACCEPTANCE_PLAN.md). Both Health API and restricted PostgreSQL RPC remain deferred options.
 
 ## 0. Repository and authority boundaries
 
@@ -40,7 +40,7 @@
 | Google Docs revision ID | Optimistic concurrency for existing REC using a checked version/revision and retained previous text/history |
 | `MAINT-...` legacy Change Log IDs | New HEALTH `operations.operation_id` is a UUID; do **not** translate/reuse old freeze identifiers |
 
-The SQL state name `COMMITTED_REGISTRY` is intentionally kept for compatibility with existing HEALTH migration/finalization code; here it means a committed canonical PostgreSQL medical-data change, not a Google Sheet batch.
+The SQL state name `COMMITTED_REGISTRY` remains for compatibility. **Clarification for routine writes (design baseline):** it is an intermediate state inside the single final medical publication transaction, not an externally committed interim medical view. The separately audited full-migration runner intentionally commits a persistent `COMMITTED_REGISTRY` and awaits B-04, and must remain unchanged. See [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md).
 
 ## 3. Verified implementation baseline versus non-guarantees
 
@@ -82,19 +82,19 @@ Already in new HEALTH SQL (and the writer-slot index was independently confirmed
 
 ### 4.4 Canonical PostgreSQL transaction
 
-1. Begin the database transaction; recheck **ownership** of the active `PREPARED` operation using row locks. Verify request idempotency and expected REC versions before editing.
-2. Apply the record and all linked changes atomically: `records` body/metadata, `id_reservations` reserved→used, `record_domains`, `record_sources`, `case_links`, `labs`, and impacted `medications`, `monitoring`, `plan_items`, `questions`, as applicable.
-3. Verify structural invariants and relevant semantic decisions. New active medication must create its pending interaction question exactly once as part of the same logical operation.
-4. Transition `PREPARED → COMMITTED_REGISTRY` in this committed transaction. A transaction failure must leave no partial canonical DB change. The writer retains enough evidence to reconcile any already uploaded Drive file.
-5. Read back changed canonical rows and compare exactly to the approved change set before acknowledging success. Do not infer exact provenance/clinical validation from FK success alone.
+1. Complete owner/AI semantic checks and actual Source PRIMARY verification **before** the short publication transaction. Bind the exact approved candidate fingerprint, idempotency key, affected dependencies and expected REC revision.
+2. Start one PostgreSQL transaction; lock and recheck ownership of the active `PREPARED` operation and authorization/snapshot/version freshness.
+3. Apply **all** related medical edits, immutable prior-version evidence, and `id_reservations` reserved→used. Move the operation through `COMMITTED_REGISTRY`, `VALIDATED`, `FINALIZED` **inside this same uncommitted transaction**. Structural checks and impacted operation-scoped Validation stamps must PASS; create any new active-medication pending interaction question exactly once.
+4. Commit the new canonical rows and `FINALIZED` **atomically**. PostgreSQL PWA reads must not see any provisional medical rows. Any SQL exception rolls the whole publication back; separately uploaded Source originals remain under controlled journal/reconciliation.
+5. Read back by operation and idempotency key; if COMMIT acknowledgement is lost, report UNKNOWN until database reconciliation, not a fresh attempt.
 
 ### 4.5 Validation and finalization
 
-1. Run all affected machine checks, plus **operation-scoped and dependency-fresh** semantic `OPERATION_AUDIT` checks. Stamp actual results for the same `operation_id`, not reusable generic PASS markers.
-2. Preserve `COMMITTED_REGISTRY → VALIDATED → FINALIZED` state transitions only when checks are PASS, original source locations verified and owner decisions recorded. Validate that no competing canonical change occurred between semantic approval and finalization; lock/recheck changed rows/versions.
-3. If validation fails after canonical DB commit, **do not equate `FAILED` with a rollback**. Keep the slot occupied or enter an explicitly supervised remediation protocol until canonical consistency is restored, then close or mark `FAILED` with honest recovery evidence. No silent fail-open release of the single-writer gate.
-4. No ordinary REC mutation requires the special **full-migration B-04 finalization attestation**; that proof is operation-bound to the one-time full migration. Normal writes instead require their own accepted daily-write audit/rollback contract and participate in subsequent scheduler backups.
-5. `FINALIZED` means the full logical operation, including provider materialization and evidence, has completed. Return record ID, updated entities and precise operation state to the owner.
+1. Semantic prevalidation applies to the exact authorized candidate and source evidence; no inference or reusable generic PASS. Mechanical invariants and changed-dependency freshness must be rechecked in the final SQL transaction.
+2. The final transaction persists operation-specific PASS stamps and `FINALIZED` with all medical data; missing/FAIL/SKIP prevents public commit. Separate externally committed `COMMITTED_REGISTRY` is reserved for the one-time audited full-migration workflow, not ordinary writing.
+3. `FAILED` may release the ordinary writer slot only after proving **no final medical publication occurred**, and after staged Source and durable NNN reservation reconciliation. A timeout at COMMIT is UNKNOWN, not proof of rollback; a later issue with already `FINALIZED` data requires a separate corrective operation.
+4. An ordinary REC does **not** require migration-specific B-04 recovery attestation on every edit; the scheduler must later take a coherent published checkpoint with matching original Source inventory. This is independent of ordinary `FINALIZED`.
+5. `FINALIZED` confirms the verified Source PRIMARY and all linked clinical changes; report exact record IDs/affected objects after readback.
 
 ## 5. Semantics by operation
 
@@ -116,7 +116,7 @@ Already in new HEALTH SQL (and the writer-slot index was independently confirmed
 | REC ID allocation under competition | One owner and monotonic never-reused NNN; correct used/retired state | Ledger constraints exist, atomic allocator implementation **missing** |
 | Changed REC after initial read | CAS/version conflict; preserve previous content | Durable row version/audit scheme **missing** |
 | Original uploaded, DB commit fails | Recover/orphan/retry safely without deleting original or fabricating locator | Cross-provider saga not yet implemented |
-| PostgreSQL committed, semantic validation fails | Do not release writer slot on false success; reconcile/rollback with evidence | Dedicated routine writer recovery protocol **missing** |
+| Semantic validation fails before publication, or final SQL validation fails inside commit | No partial public medical rows; reject/roll back, reconcile NNN/Source journal | Future atomic publish writer and failure path **missing** |
 | Source unreadable/incorrect SHA | Do not finalize, keep authoritative REC/source provenance honest | Existing migration checks do not certify routine writer |
 | Active medication added | Same operation creates one pending interaction question linked to REC | Business rule documented; runtime enforcement **missing** |
 | Old Drive changed after migration, before cutover | No dual-write; final delta reconciliation before switching | Migration/cutover protocols exist, not a routine writer substitute |
@@ -131,7 +131,7 @@ Already in new HEALTH SQL (and the writer-slot index was independently confirmed
 - Map `FORMULA` and `OPERATION_AUDIT` to SQL-backed machine/semantic checks and per-operation freshness. PostgreSQL constraints alone cannot confirm clinical interpretation.
 - Decide implementation of ongoing MEDICATION/question idempotency and how owner decisions are attached to each mutating request.
 - Verify `NNN` capacity under the current SQL `1..999` check; a future expansion is a separate migration requiring careful format contract review.
-- Confirm use of the existing operational meaning of `COMMITTED_REGISTRY` in normal writes before changing any existing finalization code.
+- Maintain separate, explicitly tested routine versus migration state semantics; never modify the audited migration finalizer to implement ordinary atomic publication.
 
 ## 7. Candidate implementations — intentionally deferred
 

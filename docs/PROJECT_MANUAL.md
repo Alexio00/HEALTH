@@ -22,6 +22,13 @@ Interrupted work becomes `FAILED`.
 
 The database must enforce a single unfinished mutating operation.
 
+### Prepared design and acceptance documentation (no implementation)
+
+- [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md): normative future routine write states, atomic publication and fail-closed recovery, separate from the full-migration executor.
+- [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md): complete mapping of 37 active Drive-native Validation check names to PostgreSQL/semantic/legacy-only obligations, without copying medical details.
+- [AI_WRITE_ACCEPTANCE_PLAN.md](AI_WRITE_ACCEPTANCE_PLAN.md): synthetic fixtures, adverse acceptance scenarios, evidence format and independent review gates. Documentation PASS is not a production write-path PASS.
+- Health API, restricted PostgreSQL RPC and generic connectors are **not implemented or authorized** by these documents. No routine writes to new HEALTH until an independently accepted bounded writer and explicit owner cutover.
+
 ### Current writer and deferred post-cutover choices (owner decision 2026-10-10)
 
 - The Drive-native HealthDB is still canonical. For now, **medical changes remain owner-authorized ChatGPT/AI actions through the active Google Drive tools** and follow the current Drive HealthDB Project Manual/State. The old Google Sheets Change Log/ID Reservations protocol is not replaced by this public HEALTH manual.

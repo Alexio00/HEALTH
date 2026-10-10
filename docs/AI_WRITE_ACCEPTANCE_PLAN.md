@@ -4,6 +4,8 @@ Status: **TEST PLAN ONLY — NO TEST EXECUTION / NO WRITER IMPLEMENTATION**
 Prepared: 2026-10-10. Target: new HEALTH routine conversational AI write path **after separately authorized cutover**.  
 Normative inputs: [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md), [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md), [POST_CUTOVER_AI_WRITE_PROTOCOL.md](POST_CUTOVER_AI_WRITE_PROTOCOL.md), [WRITE_PATH_DECISION.md](WRITE_PATH_DECISION.md).
 
+See [AI_WRITE_AUDIT_CLARIFICATIONS.md](AI_WRITE_AUDIT_CLARIFICATIONS.md) for the six supplemental negative cases and the revised AW-V04 oracle.
+
 ## 1. Independent go/no-go decisions
 
 Do **not** combine these gates:
@@ -53,7 +55,7 @@ The test runner must control transaction boundaries and inject failures precisel
 | AW-P02 | Bounded AI identity attempts direct INSERT/UPDATE/DELETE on records/labs/operations without approved entrypoint | Every attempt denied; no state change or privilege leak |
 | AW-P03 | Browser owner authenticated and ANON call all write endpoints | INSERT/UPDATE/DELETE and privileged RPC denied; browser SELECT remains functional for allowed reader only |
 | AW-P04 | Stale orphan PREPARED encountered | No automatic timeout-based unlock; explicit reviewed recovery required |
-| AW-P05 | Privileged one-time migration identity attempts ordinary API route | Exception path cannot silently become a routine clinical writer; no privilege sharing |
+| AW-P05 | Privileged one-time migration identity attempts ordinary writer route | Exception path cannot silently become a routine clinical writer; no privilege sharing |
 
 **I — durable NNN, idempotency and revision**
 

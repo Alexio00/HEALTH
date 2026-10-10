@@ -63,8 +63,18 @@ jobs:
               category="authentication: username, project suffix or password"
             elif grep -Eqi 'Connection refused|Network is unreachable|No route to host|timeout expired|Connection timed out' "$error_file"; then
               category="network: pooler, host, port or firewall"
-            elif grep -Eqi 'invalid URI|invalid connection option|missing .* host|missing .* port|invalid integer' "$error_file"; then
-              category="connection-string formatting"
+            elif grep -Eqi 'invalid URI query parameter' "$error_file"; then
+              category="URI: unsupported query-string parameter"
+            elif grep -Eqi 'invalid percent-encoded token|invalid percent encoding|invalid percent-encoded' "$error_file"; then
+              category="URI: invalid percent-encoding in password or other field"
+            elif grep -Eqi 'invalid URI port|invalid integer value|invalid port' "$error_file"; then
+              category="URI: invalid port"
+            elif grep -Eqi 'missing .* host|missing .* port' "$error_file"; then
+              category="URI: missing host or port"
+            elif grep -Eqi 'invalid connection option' "$error_file"; then
+              category="URI: invalid connection option"
+            elif grep -Eqi 'invalid URI|URI cannot contain|malformed' "$error_file"; then
+              category="URI: malformed; check percent-encoding of password"
             elif grep -Eqi 'SSL|certificate|TLS' "$error_file"; then
               category="TLS/SSL configuration"
             elif grep -Eqi 'permission denied|does not exist' "$error_file"; then

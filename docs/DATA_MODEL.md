@@ -66,9 +66,11 @@ metadata.visit_specialties stores only explicit specialist associations.
 The absence of a matching plan item never authorizes inventing an appointment.
 
 New active medications require an idempotent, transactionally linked pending
-medical-card drug-interaction check. This must be implemented in the future
-Health API write path prior to production writes. Migration of existing
-medications must not create false new-prescription alerts.
+medical-card drug-interaction check. Any future authorized post-cutover AI write
+path must enforce this invariant, whether implemented through a dedicated
+Health API or a restricted PostgreSQL RPC/connector. Neither implementation
+is currently in development or approved for production writes. Migration of
+existing medications must not create false new-prescription alerts.
 
 ### operations
 Single-writer logical transaction state.

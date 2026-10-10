@@ -9,7 +9,7 @@ This contract applies to future routine ChatGPT/AI writes after an independently
 
 | ID | Decision | Consequence |
 | --- | --- | --- |
-| WD-01 | Ordinary medical changes are **atomically published**: rows, derived links, required validation stamps, NNN reserved-to-used and FINALIZED commit in **one SQL transaction**. | A read-only PWA cannot observe a half-finished operation. |
+| WD-01 | Ordinary medical changes are **atomically published**: rows, derived links, required validation stamps, NNN reserved-to-used and FINALIZED commit in **one SQL transaction**. | One SQL query sees one consistent committed snapshot; separate PWA requests may briefly display mixed versions across COMMIT. |
 | WD-02 | PREPARED is durable during preparation. Inside the final publish transaction, progress through COMMITTED_REGISTRY and VALIDATED to FINALIZED in order; only FINALIZED is externally committed. | Do not reinterpret the special persistent COMMITTED_REGISTRY of full migration. |
 | WD-03 | An approved, limited writer must enforce operation ownership for **all** medical DML. | operations_single_writer_idx blocks competing active rows, but alone does not block privileged direct table updates. |
 | WD-04 | A private unique idempotency key binds owner approval, requested change, scope and operation UUID. | Repeated requests or timeout retries must not create duplicate REC/Source. |
@@ -34,7 +34,7 @@ These are acceptance targets, **not deployed capabilities**. Existing SQL has a 
 | FINALIZED -> anything | Not allowed | New correction uses new operation referencing original | Never erase previous success |
 | Any other state movement | Not allowed for routine writer | Reject and audit | Do not mutate operation to bypass lock |
 
-The required state chain is logical; COMMITTED_REGISTRY/VALIDATED need not be separately committed in routine writes. The existing **one-time full migration** has a different audited recovery contract, intentionally retaining COMMITTED_REGISTRY while waiting for B-04. The future implementation must distinguish operation type and cannot mix these workflows.
+The required state chain is logical; COMMITTED_REGISTRY/VALIDATED need not be separately committed in routine writes. The existing **one-time full migration** has a different audited recovery contract, intentionally retaining COMMITTED_REGISTRY while waiting for B-04. The future implementation must distinguish operation type and cannot mix these workflows. The routine writer must check a protected operation class and owner binding before advancing its own operation. Free-text mode alone is not sufficient.
 
 ## Algorithm
 
@@ -76,6 +76,16 @@ A routine FINALIZED requires verified source PRIMARY objects referenced by the n
 - PWA stays SELECT-only; unapproved readers cannot access medical data.
 - SHEDULLER does read-only backup/verification, not routine clinical writes.
 - Full migration executor and recovery authority are separate, tightly gated trust classes.
+
+## Source and operation audit clarifications
+
+For new Sources: persist an upload correlation marker before the external call, use a new object instead of overwriting a linked original, and reconcile a lost response by marker, object identity and actual bytes. Hash equality alone is not object identity; ambiguous matches stop the write. Verify bytes and metadata before publication. Restrict external changes when possible; later changes remain a residual risk checked by integrity verification and backup.
+
+**Operation class (AW-02):** the trusted routine writer binds a protected operation class, owner/caller identity and scope to its own operation ID. The AI cannot supply or change that class; a routine writer refuses migration-class and foreign IDs. Existing free-text operation and mode fields do not establish this boundary by themselves.
+
+**Validation freshness (AW-03):** bind approval and relevant semantic results to one proposed-change fingerprint and expected versions of every affected record/dependency. Recheck those versions inside the final transaction. No independent dependency-version mechanism for all 37 legacy checks is required now.
+
+**AW-06:** the interaction-check question uses a stable new-medication intake event ID and check kind, not only the prescribing REC. Separate events under the same REC yield separate questions; retries of one event do not duplicate it. Later new intake after closure requires a new event. Implementation is deferred.
 
 ## Not yet implemented
 

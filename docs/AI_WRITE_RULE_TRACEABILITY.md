@@ -3,6 +3,8 @@
 Status: SPECIFICATION / NO SCHEMA OR DATA CHANGES. Reviewed: 2026-10-10.  
 Input: current Drive-native HealthDB Project Manual/State and read-only **Validation** tab (37 named active checks). These checks are old-backend evidence only: their current PASS state is **not** proof that PostgreSQL routine writes implement them. No REC, Labs rows, medical content or Source originals are reproduced in this public document.
 
+Audit clarification: [AI_WRITE_AUDIT_CLARIFICATIONS.md](AI_WRITE_AUDIT_CLARIFICATIONS.md).
+
 Companions: [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md) and [AI_WRITE_ACCEPTANCE_PLAN.md](AI_WRITE_ACCEPTANCE_PLAN.md).
 
 ## Mapping conventions

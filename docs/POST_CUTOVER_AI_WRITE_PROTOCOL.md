@@ -3,7 +3,7 @@
 **Status:** DESIGN / NOT IMPLEMENTED / NOT AUTHORIZED FOR PRODUCTION WRITES  
 **Recorded:** 2026-10-10  
 **Scope:** routine owner-authorized medical changes *after* HEALTH becomes canonical; no changes to the existing migration executor or daily backup workflows.  
-**Related decisions:** [WRITE_PATH_DECISION.md](WRITE_PATH_DECISION.md) and the more precise normative routine-write [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md), [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md), and [AI_WRITE_ACCEPTANCE_PLAN.md](AI_WRITE_ACCEPTANCE_PLAN.md). Both Health API and restricted PostgreSQL RPC remain deferred options.
+**Related decisions:** [AI_WRITE_AUDIT_CLARIFICATIONS.md](AI_WRITE_AUDIT_CLARIFICATIONS.md) (proportionate audit decisions and revised PWA oracle), [WRITE_PATH_DECISION.md](WRITE_PATH_DECISION.md) and the more precise normative routine-write [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md), [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md), and [AI_WRITE_ACCEPTANCE_PLAN.md](AI_WRITE_ACCEPTANCE_PLAN.md). Both Health API and restricted PostgreSQL RPC remain deferred options.
 
 ## 0. Repository and authority boundaries
 
@@ -85,7 +85,7 @@ Already in new HEALTH SQL (and the writer-slot index was independently confirmed
 1. Complete owner/AI semantic checks and actual Source PRIMARY verification **before** the short publication transaction. Bind the exact approved candidate fingerprint, idempotency key, affected dependencies and expected REC revision.
 2. Start one PostgreSQL transaction; lock and recheck ownership of the active `PREPARED` operation and authorization/snapshot/version freshness.
 3. Apply **all** related medical edits, immutable prior-version evidence, and `id_reservations` reserved→used. Move the operation through `COMMITTED_REGISTRY`, `VALIDATED`, `FINALIZED` **inside this same uncommitted transaction**. Structural checks and impacted operation-scoped Validation stamps must PASS; create any new active-medication pending interaction question exactly once.
-4. Commit the new canonical rows and `FINALIZED` **atomically**. PostgreSQL PWA reads must not see any provisional medical rows. Any SQL exception rolls the whole publication back; separately uploaded Source originals remain under controlled journal/reconciliation.
+4. Commit the new canonical rows and `FINALIZED` **atomically**. A single PostgreSQL query cannot see provisional rows, but multiple independent PWA reads may briefly straddle COMMIT. No cross-request screen snapshot guarantee is claimed. Any SQL exception rolls the whole publication back; separately uploaded Source originals remain under controlled journal/reconciliation.
 5. Read back by operation and idempotency key; if COMMIT acknowledgement is lost, report UNKNOWN until database reconciliation, not a fresh attempt.
 
 ### 4.5 Validation and finalization

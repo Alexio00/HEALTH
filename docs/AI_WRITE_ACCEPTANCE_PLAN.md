@@ -4,6 +4,8 @@ Status: **TEST PLAN ONLY — NO TEST EXECUTION / NO WRITER IMPLEMENTATION**
 Prepared: 2026-10-10. Target: new HEALTH routine conversational AI write path **after separately authorized cutover**.  
 Normative inputs: [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md), [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md), [POST_CUTOVER_AI_WRITE_PROTOCOL.md](POST_CUTOVER_AI_WRITE_PROTOCOL.md), [WRITE_PATH_DECISION.md](WRITE_PATH_DECISION.md).
 
+See [AI_WRITE_AUDIT_CLARIFICATIONS.md](AI_WRITE_AUDIT_CLARIFICATIONS.md) for the six supplemental negative cases and the revised AW-V04 oracle.
+
 ## 1. Independent go/no-go decisions
 
 Do **not** combine these gates:
@@ -53,7 +55,7 @@ The test runner must control transaction boundaries and inject failures precisel
 | AW-P02 | Bounded AI identity attempts direct INSERT/UPDATE/DELETE on records/labs/operations without approved entrypoint | Every attempt denied; no state change or privilege leak |
 | AW-P03 | Browser owner authenticated and ANON call all write endpoints | INSERT/UPDATE/DELETE and privileged RPC denied; browser SELECT remains functional for allowed reader only |
 | AW-P04 | Stale orphan PREPARED encountered | No automatic timeout-based unlock; explicit reviewed recovery required |
-| AW-P05 | Privileged one-time migration identity attempts ordinary API route | Exception path cannot silently become a routine clinical writer; no privilege sharing |
+| AW-P05 | Privileged one-time migration identity attempts ordinary writer route | Exception path cannot silently become a routine clinical writer; no privilege sharing |
 
 **I — durable NNN, idempotency and revision**
 
@@ -114,7 +116,7 @@ The test runner must control transaction boundaries and inject failures precisel
 | AW-V01 | Required semantic audit absent, stale, SKIP or FAIL | No publication; FINALIZED impossible |
 | AW-V02 | Alter approved candidate after its semantic PASS | Fingerprint/freshness mismatch; no publish |
 | AW-V03 | Force FK/CASE/ledger check failure inside final transaction | SQL rollback all medical rows, NNN used and FINALIZED together |
-| AW-V04 | Read PWA during controlled pauses at each logical transition | PWA sees entirely old published state or entirely new FINALIZED state, never mixed |
+| AW-V04 | Read PWA during controlled pauses at each logical transition | One SQL read sees a complete pre/post state. Multiple independent PWA requests may briefly mix versions; see AI_WRITE_AUDIT_CLARIFICATIONS.md |
 | AW-V05 | Post-FINALIZED discovery of semantic error | New correction operation retains original revision/operation evidence; original success state not rewritten |
 | AW-F01 | Crash after PREPARED while NNN unallocated | Reconcile operation, no ID phantom, no auto-unlock |
 | AW-F02 | Lose COMMIT acknowledgement at network boundary | Result UNKNOWN until DB readback; no duplicate retry or unsafe FAILED |

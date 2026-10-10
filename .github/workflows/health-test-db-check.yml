@@ -3,6 +3,10 @@ name: HEALTH-TEST DB Connection
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/health-test-db-check.yml'
 
 permissions:
   contents: read
@@ -53,10 +57,11 @@ jobs:
           except (ValueError, KeyError):
               print("::error::Invalid PostgreSQL URI structure")
               sys.exit(1)
-          for success, label in checks:
-              if not success:
+          failed = [label for success, label in checks if not success]
+          if failed:
+              for label in failed:
                   print("::error::Secret URI does not match expected " + label)
-                  sys.exit(1)
+              sys.exit(1)
           print("PASS: expected restricted role and pooler URL structure")
           PY
 

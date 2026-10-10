@@ -1,0 +1,78 @@
+name: HEALTH-TEST Owner-Approved Synthetic E2E
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  synthetic-owner-e2e:
+    if: github.actor_id == '308028794' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Owner approval with verified GitHub OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          AUDIENCE='health-test-synthetic-owner-yjmcesdayfmfissghzgm'
+          TOKEN="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')"
+          RESPONSE="$(curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data '{"request_key":"SYNTHETIC-GH-OIDC-20261010-01","digest":"88e9c1a76938067f5c2b72500701582ee27250b36c1aea443a6d885380fd0f50","confirm":"I_APPROVE_SYNTHETIC_TEST_ONLY"}' \
+            'https://yjmcesdayfmfissghzgm.supabase.co/functions/v1/health-test-gh-owner-approve')"
+          test "$(printf '%s' "$RESPONSE" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("accepted"))')" = 'True'
+          echo 'PASS: GitHub OIDC owner approval bound to one synthetic candidate digest'
+
+      - name: Restricted create and finalize atomically
+        shell: bash
+        env:
+          DB_URL: ${{ secrets.HEALTH_TEST_WRITER_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "${DB_URL:-}"
+          command -v psql >/dev/null || {
+            sudo apt-get update -qq >/dev/null
+            sudo apt-get install -y -qq postgresql-client >/dev/null
+          }
+          case "$DB_URL" in
+            postgresql://*|postgres://*) ;;
+            *) echo '::error::Missing PostgreSQL URL'; exit 1 ;;
+          esac
+          ROLE="$(PGCONNECT_TIMEOUT=10 psql "$DB_URL" -XAt -v ON_ERROR_STOP=1 -c 'select current_user;')"
+          test "$ROLE" = 'health_test_ci'
+
+          # One transaction: any error in commit or finalization rolls back
+          # the PREPARED row and NNN reservation together.
+          PGCONNECT_TIMEOUT=10 psql "$DB_URL" -Xq -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          DO $do$
+          DECLARE b jsonb; c jsonb;
+          BEGIN
+            b := health_test_writer.v2_begin('SYNTHETIC-GH-OIDC-20261010-01');
+            IF b->>'state' <> 'PREPARED' THEN
+              RAISE EXCEPTION 'begin state invalid';
+            END IF;
+            c := health_test_writer.v2_commit('SYNTHETIC-GH-OIDC-20261010-01');
+            IF c->>'state' <> 'FINALIZED' THEN
+              RAISE EXCEPTION 'finalized state not reached';
+            END IF;
+          END
+          $do$;
+          COMMIT;
+          SQL
+
+          STATE="$(PGCONNECT_TIMEOUT=10 psql "$DB_URL" -XAt -v ON_ERROR_STOP=1 \
+            -c "select health_test_writer.v2_status('SYNTHETIC-GH-OIDC-20261010-01')->>'state';")"
+          test "$STATE" = 'FINALIZED'
+          REPLAY="$(PGCONNECT_TIMEOUT=10 psql "$DB_URL" -XAt -v ON_ERROR_STOP=1 \
+            -c "select health_test_writer.v2_commit('SYNTHETIC-GH-OIDC-20261010-01')->>'replayed';")"
+          test "$REPLAY" = 'true'
+          echo 'PASS: restricted PostgreSQL role, PREPARED -> FINALIZED, replay/idempotency'

@@ -9,7 +9,7 @@ This contract applies to future routine ChatGPT/AI writes after an independently
 
 | ID | Decision | Consequence |
 | --- | --- | --- |
-| WD-01 | Ordinary medical changes are **atomically published**: rows, derived links, required validation stamps, NNN reserved-to-used and FINALIZED commit in **one SQL transaction**. | A read-only PWA cannot observe a half-finished operation. |
+| WD-01 | Ordinary medical changes are **atomically published**: rows, derived links, required validation stamps, NNN reserved-to-used and FINALIZED commit in **one SQL transaction**. | One SQL query sees one consistent committed snapshot; separate PWA requests may briefly display mixed versions across COMMIT. |
 | WD-02 | PREPARED is durable during preparation. Inside the final publish transaction, progress through COMMITTED_REGISTRY and VALIDATED to FINALIZED in order; only FINALIZED is externally committed. | Do not reinterpret the special persistent COMMITTED_REGISTRY of full migration. |
 | WD-03 | An approved, limited writer must enforce operation ownership for **all** medical DML. | operations_single_writer_idx blocks competing active rows, but alone does not block privileged direct table updates. |
 | WD-04 | A private unique idempotency key binds owner approval, requested change, scope and operation UUID. | Repeated requests or timeout retries must not create duplicate REC/Source. |

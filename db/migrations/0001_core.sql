@@ -169,7 +169,7 @@ create index labs_analyte_idx on labs(analyte_key, observed_at);
 create table medications (
   medication_id bigint generated always as identity primary key,
   name text not null,
-  status text not null check (status in ('active','inactive')),
+  status text not null check (status in ('active','inactive','planned')),
   dose text,
   schedule text,
   started_on date,

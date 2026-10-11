@@ -62,15 +62,22 @@ The live recovery pointer was not changed and still references run
 SHEDULLER is a private personal repository owned by Alexio000, with admin access
 available to the authenticated owner account. Repository secrets include
 `SUPABASE_DB_URL` and `RCLONE_CONFIG`; environment inventory is empty.
-Secret values were not retrieved. Effective role/token bindings of those Actions
-values are UNKNOWN; an empty environment list does not prove absence of all
-alternative deployment credentials. Production `health_backup_reader` is absent;
-service_role can mutate clinical tables and app_readers, while operations is
-SELECT-only. The management audit's TLSv1.3 is not actual local executor TLS.
+Secret values were not retrieved into the chat or local reports. Fresh owner-
+dispatched read-only Actions inventory run `38167449902`, attempt 1, exact
+SHEDULLER candidate `4af32f0025bd9700296bf611a0b00c8b18115e96` passed. Its actual
+DB URL authenticates as `postgres`: BYPASSRLS, CREATE ROLE/DB, ownership and
+INSERT/UPDATE/DELETE/TRUNCATE on all eleven inspected clinical/control tables,
+including `operations`. Client TLSv1.3 is observed in the same psql session;
+configured sslmode is `require`, not verify-full. The pooler/database leg's
+pg_stat_ssl=false is reported separately. This is not owner migration executor
+TLS. Other equivalent credential scopes remain unestablished. Production
+`health_backup_reader` is absent. The separate service_role catalog privileges
+do not describe the actual Actions postgres role.
 
 The local secured backup token has canDelete/canEdit/canShare=true on the new
 exact corpus folder. Declared primary scope is drive.readonly; backup scope is
-drive. The actual Actions token may differ. C-M02 retention isolation is not
+drive. The actual Actions token was also checked and has all four capabilities
+on the exact verified recovery folder. C-M02 retention isolation is not
 established. C-M01 transition remains open until a complete substitute backup,
 restore/Auth/Source/schedule chain is demonstrated. Working credentials, schedules
 and permissions were preserved.
@@ -107,9 +114,10 @@ administrator simulations. COMMIT acknowledgement loss is simulated, not network
 fault injection. Actual Supabase restricted-role/clinical acceptance is NOT_RUN.
 Both unique schemas and the unique login were removed and cleanup readback passed.
 
-Code validation now runs these tests and the 11 offline recovery-binding tests.
-CI PASS is required on the new exact PR head; local PASS does not imply that CI
-has run or that the general Writer is accepted.
+Code validation now runs these tests in a separate empty disposable database
+and the 11 offline recovery-binding tests. Run `38166844907`, exact head
+`4fed7602cb61c2503c5d07c9afee07e6456f1a07`: SUCCESS. Later head changes require
+their own CI result; this PASS does not accept the general Writer.
 
 ## Remaining acceptance
 

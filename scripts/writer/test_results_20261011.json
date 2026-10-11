@@ -1,0 +1,234 @@
+{
+  "scope": "SYNTHETIC_COMPONENT_ONLY",
+  "database": "PostgreSQL TEST",
+  "clinical_acceptance": false,
+  "network_restricted_role": "NOT_RUN",
+  "approval_and_semantic_inputs": "SIMULATED",
+  "results": [
+    {
+      "name": "approval_missing",
+      "passed": true,
+      "detail": "approval missing/expired/tampered"
+    },
+    {
+      "name": "baseline_20_rules",
+      "passed": true,
+      "detail": "typed empty/positive fixture, no semantic acceptance"
+    },
+    {
+      "name": "candidate_tampered",
+      "passed": true,
+      "detail": "approval missing/expired/tampered"
+    },
+    {
+      "name": "case_close_atomic",
+      "passed": true,
+      "detail": "accepted, replayed once, audit verified, rolled back"
+    },
+    {
+      "name": "catalog_role_direct_dml",
+      "passed": true,
+      "detail": "catalog only; network execution NOT_RUN"
+    },
+    {
+      "name": "catalog_role_helper_execute",
+      "passed": true,
+      "detail": "catalog only; network execution NOT_RUN"
+    },
+    {
+      "name": "catalog_role_publish_entry",
+      "passed": true,
+      "detail": "catalog only; network execution NOT_RUN"
+    },
+    {
+      "name": "derived_question_delete",
+      "passed": true,
+      "detail": "derived row removed, REC preserved, operation audit verified, all rolled back"
+    },
+    {
+      "name": "expiry",
+      "passed": true,
+      "detail": "approval missing/expired/tampered"
+    },
+    {
+      "name": "identity_change_denied",
+      "passed": true,
+      "detail": "immutable REC identity"
+    },
+    {
+      "name": "lab_precision_rejected",
+      "passed": true,
+      "detail": "structural validation failed"
+    },
+    {
+      "name": "medication_with_question_atomic",
+      "passed": true,
+      "detail": "accepted, replayed once, audit verified, rolled back"
+    },
+    {
+      "name": "medication_without_question",
+      "passed": true,
+      "detail": "interaction question missing or duplicated"
+    },
+    {
+      "name": "partial_case_close",
+      "passed": true,
+      "detail": "structural validation failed"
+    },
+    {
+      "name": "raw_sql_table_denied",
+      "passed": true,
+      "detail": "unsupported table/action"
+    },
+    {
+      "name": "rec_purge_denied",
+      "passed": true,
+      "detail": "REC allocation/purge requires separate protocol"
+    },
+    {
+      "name": "rec_soft_cancel",
+      "passed": true,
+      "detail": "accepted, replayed once, audit verified, rolled back"
+    },
+    {
+      "name": "rec_update",
+      "passed": true,
+      "detail": "accepted, replayed once, audit verified, rolled back"
+    },
+    {
+      "name": "rule_1_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_11_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_14_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_18_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_2_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_23_single_writer",
+      "passed": true,
+      "detail": "unique_violation"
+    },
+    {
+      "name": "rule_24_receipt_structure",
+      "passed": true,
+      "detail": "invalid hash detected"
+    },
+    {
+      "name": "rule_25_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_26_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_3_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_32_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_33_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_34_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_35_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_36_receipt_parent",
+      "passed": true,
+      "detail": "foreign_key_violation"
+    },
+    {
+      "name": "rule_4_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_5_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_6_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_7_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "rule_8_corruption",
+      "passed": true,
+      "detail": "mutation detected and rollback fingerprint verified"
+    },
+    {
+      "name": "semantic_missing",
+      "passed": true,
+      "detail": "semantic/source evidence missing or stale"
+    },
+    {
+      "name": "semantic_stale",
+      "passed": true,
+      "detail": "semantic/source evidence missing or stale"
+    },
+    {
+      "name": "semantic_wrong_candidate",
+      "passed": true,
+      "detail": "semantic/source evidence missing or stale"
+    },
+    {
+      "name": "source_delete_denied",
+      "passed": true,
+      "detail": "unsupported table/action"
+    },
+    {
+      "name": "source_null_hash_rejected",
+      "passed": true,
+      "detail": "source binding invalid"
+    },
+    {
+      "name": "stale_row_denied",
+      "passed": true,
+      "detail": "stale or missing row"
+    },
+    {
+      "name": "stale_snapshot",
+      "passed": true,
+      "detail": "stale domain snapshot"
+    }
+  ]
+}

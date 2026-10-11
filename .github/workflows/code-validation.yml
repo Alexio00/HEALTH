@@ -78,7 +78,9 @@ jobs:
       - name: Writer synthetic suite and restricted TCP role acceptance
         env:
           PGPASSWORD: health-synthetic
-        run: python3 scripts/writer/test_network.py --out /tmp/health-writer-network.json
+        run: |
+          createdb -h 127.0.0.1 -U postgres health_writer_network_ci
+          python3 scripts/writer/test_network.py --database health_writer_network_ci --out /tmp/health-writer-network.json
       - name: Offline recovery artifact binding tests
         run: python3 scripts/validation/test_recovery_artifact.py
       - name: Public repository secret-pattern guard

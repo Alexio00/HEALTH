@@ -24,7 +24,9 @@ class DatabaseCallError(RuntimeError):
         self.sqlstate=sqlstate
         super().__init__('database_call_failed:'+role+':'+(sqlstate or 'NO_SERVER_SQLSTATE'))
 
-def run_suite(container=None):
+def run_suite(container=None,database='postgres'):
+    if database!='postgres' and not re.fullmatch(r'health_writer_network_[a-z0-9_]+',database):
+        raise RuntimeError('disposable_database_name_required')
     suffix=uuid.uuid4().hex[:12]; plain='health_writer_fixture_'+suffix
     schema='health_writer_fixture_'+uuid.uuid4().hex[:12]
     login='health_writer_network_'+suffix; password=secrets.token_hex(24)
@@ -43,7 +45,7 @@ def run_suite(container=None):
             command=['docker','exec','-i','-e','PGPASSWORD','-e','PGCONNECT_TIMEOUT',container,'psql']
             if restricted:command+=['-h','127.0.0.1']
         else:command=['psql','-h','127.0.0.1']
-        command+=['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-U',role,'-d','postgres']
+        command+=['-X','-q','-A','-t','-v','ON_ERROR_STOP=1','-U',role,'-d',database]
         p=subprocess.run(command,input='\\set VERBOSITY verbose\n'+sql,text=True,encoding='utf-8',capture_output=True,env=child,timeout=45)
         if expected is not None:
             # Verify the actual server's error code, never a failure at SET ROLE.
@@ -163,10 +165,10 @@ def run_suite(container=None):
             if remaining!='0':raise RuntimeError('cleanup_readback_failed')
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--docker-container');p.add_argument('--out',type=Path,required=True)
+    p=argparse.ArgumentParser();p.add_argument('--docker-container');p.add_argument('--database',default='postgres');p.add_argument('--out',type=Path,required=True)
     a=p.parse_args()
     try:
-        result=run_suite(a.docker_container);result['cleanup']='schema/unique-login removed and readback verified'
+        result=run_suite(a.docker_container,a.database);result['cleanup']='schema/unique-login removed and readback verified'
         a.out.write_text(json.dumps(result,indent=2),encoding='utf-8')
         print(json.dumps({k:v for k,v in result.items() if k!='checks'}))
     except Exception as e:

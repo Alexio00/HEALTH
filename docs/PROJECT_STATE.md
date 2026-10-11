@@ -1,11 +1,23 @@
 # Project State
 
-Status: FULL MIGRATION TECHNICAL GO (A+B ACCEPTED); OWNER APPROVED START IN CHAT; EXECUTION PENDING SAFE LAUNCHER AND PER-OP GATES; CUTOVER NO-GO
+Status: FULL MIGRATION FINALIZED/PASS OBSERVED IN TARGET; EXECUTION/APPROVAL RECEIPTS UNDER RECONCILIATION; WRITER TEST COMPONENT CANDIDATE; CUTOVER NO-GO
+
+## Current observation — 2026-10-11
+
+The live target full-migration operation is FINALIZED/PASS (finalized at 08:09:06.67552 UTC). Fresh read-only full-migration invariants returned 27/27 PASS. These are current target observations, not an acceptance of the original executor, independently retained owner finalization approval, local TLS/trust boundary or all semantic/recovery evidence. The original execution receipt and acceptance receipt must be reconciled before declaring operational acceptance. Do not rerun import/reset/finalization to reconstruct missing evidence.
+
+A successful newer restore run and digest-only artifact were observed; its corresponding private proof, manifests and actual Source byte readback still need independent binding checks before replacing the live recovery evidence pointer. Historical code/CI acceptance below remains historical and cannot authorize a later execution retroactively.
+
+The new Writer candidate in `scripts/writer/` is isolated synthetic component evidence only: 45/45 TEST checks (42 behavior/structure plus three catalog grant checks), with simulated approvals/semantic receipts and actual restricted network acceptance NOT_RUN. It has not been integrated into existing v2/public routines or enabled in production. See [reconciliation work package](PRODUCTION_ACCEPTANCE_RECONCILIATION.md) and [37-rule applicability](../scripts/writer/RULE_APPLICABILITY.md).
+
+C-M01 credential boundaries, C-M02 independent retention, actual local bootstrap/TLS acceptance, Source/clinical Writer integration, A-05 replacement PRIMARY, real PWA original-opening acceptance, coherent fresh backup/restore and empty final old delta remain required. Old Drive remains canonical; cutover and archive deletion are not authorized by the observed FINALIZED state.
+
+Earlier 2026-10-08 sections describe readiness and historical decisions at their original date; this current observation supersedes their execution-pending statements.
 
 ## Canonical boundary
 
 - Existing Drive-native HealthDB remains the canonical source of truth until explicit cutover.
-- Full migration has not begun.
+- Full migration has reached FINALIZED/PASS in the target; the original execution/approval evidence is being reconciled.
 - No cutover has occurred.
 - Legacy HealthDB GitHub repositories are not migration inputs.
 
@@ -43,7 +55,7 @@ MVP operational acceptance is PASS:
 - Live Supabase project: ACTIVE_HEALTHY, PostgreSQL 17.
 - Live Auth invariants: PASS on 2026-10-08.
 - Live browser/database security invariants: PASS on 2026-10-08.
-- Canonical timestamped migration ledger: 9 migrations.
+- Canonical production timestamped migration ledger: 11 migrations observed on 2026-10-11; older restore evidence below used the then-current 9.
 - Public HEALTH code validation: PASS for commit `1cf7a08bbf440cc9047cbcf40bd3b3e1048a36e0`, run `37751436255`.
 - A real GitHub scheduled daily pipeline was observed: run `37743776377` SUCCESS. It produced five database dumps, copied/verified Sources, proved primary inventory unchanged, and passed database/source verification plus five-file round-trip SHA-256.
 - Latest scheduled database backup used for fresh restore evidence: `2026-10-08T07-30-49Z`.
@@ -111,7 +123,7 @@ workflow and remaining A-05 recovery/PWA acceptance are documented in
 (private; authorized maintainers only). This reference is part of the
 pre-migration handoff, not a claim that a full-dataset recovery has run.
 
-**Full migration has not been run. Cutover has not been authorized.**
+**The target full migration is FINALIZED/PASS. Operational acceptance remains pending evidence reconciliation; cutover has not been authorized.**
 
 ## Non-blocking advisor status
 
@@ -131,6 +143,8 @@ Full migration readiness is not the same as cutover readiness.
 - Legacy `HEALTH_DB_old` retention/deletion is a separate post-cutover decision after recovery evidence is accepted.
 
 ## Full-migration gate
+
+Current action: reconcile the already observed execution and its receipts. Do not rerun the migration/finalizer. The following startup description is historical and is retained for audit traceability; it does not describe the current execution state or provide a new authorization.
 
 Historic passes are retained. Independent auditor B accepts all five B-04 Major remediations; final independent auditor A independently gives overall full-migration technical GO on the pinned revision pair. The owner has provided explicit authorization in chat, but the required old freeze, per-operation UUID-bound authorization and vetted executor must be prepared together before any production write; no operation has begun. This technical GO does not waive mandatory real post-commit independent recovery or the later cutover requirements. B-04 full-dataset backup/restore proof cannot be produced until after the separately authorized full migration commits; this proof is mandatory **before FINALIZED**, not a prerequisite to starting a controlled owner-authorized migration. No full migration or cutover is authorized.
 

@@ -7,7 +7,7 @@ import re
 
 TABLES = ['records','domains','record_domains','sources','source_locations','record_sources','cases','case_links','analytes','labs','medications','monitoring','plan_items','questions','id_reservations','operations']
 
-def render(schema, catalog):
+def render(schema, catalog, constraint_catalog=None):
     if not re.fullmatch(r'health_writer_fixture_[a-z0-9]{8,32}', schema):
         raise ValueError('new private fixture schema required')
     ddl = ['BEGIN;', 'SET LOCAL statement_timeout=\'30s\';', f'CREATE SCHEMA {schema};', f"COMMENT ON SCHEMA {schema} IS 'HEALTH_SYNTHETIC_WRITER_FIXTURE_V1';", f'REVOKE ALL ON SCHEMA {schema} FROM PUBLIC,anon,authenticated,service_role;']
@@ -25,13 +25,29 @@ def render(schema, catalog):
         if not columns: raise ValueError('catalog missing '+table)
         ddl.append(f'CREATE TABLE {schema}.{table} ('+','.join(columns)+');')
         ddl.append(f'ALTER TABLE {schema}.{table} ENABLE ROW LEVEL SECURITY;')
-    ddl.append(f'CREATE UNIQUE INDEX fixture_operations_single_writer ON {schema}.operations ((true)) WHERE state IN (\'PREPARED\',\'COMMITTED_REGISTRY\',\'VALIDATED\');')
+    if constraint_catalog is None:
+        ddl.append(f'CREATE UNIQUE INDEX fixture_operations_single_writer ON {schema}.operations ((true)) WHERE state IN (\'PREPARED\',\'COMMITTED_REGISTRY\',\'VALIDATED\');')
+    else:
+        # Reviewed administrator metadata, never caller-supplied SQL. All tables
+        # exist before constraints; create referenced PK/UNIQUE before FKs.
+        constraints=constraint_catalog['constraints']
+        for c in sorted(constraints,key=lambda x:x['contype']=='f'):
+            if c['table_name'] not in TABLES or not re.fullmatch('[a-z_][a-z0-9_]*',c['conname']):
+                raise ValueError('unsafe constraint metadata')
+            definition=c['definition']
+            for table in TABLES:
+                definition=re.sub(r'REFERENCES (?:public\.)?'+table+r'\(',f'REFERENCES {schema}.{table}(',definition)
+            ddl.append(f'ALTER TABLE {schema}.{c["table_name"]} ADD CONSTRAINT {c["conname"]} {definition};')
+        for i in constraint_catalog['indexes']:
+            if i['table_name'] not in TABLES: raise ValueError('unsafe index metadata')
+            ddl.append(i['definition'].replace(' ON public.',f' ON {schema}.')+';')
     here=pathlib.Path(__file__).resolve().parent
     for file in ['fixture_runtime.sql','structural_checks.sql']:
         ddl.append((here/file).read_text().replace('__SCHEMA__',schema))
-    ddl += [f'ALTER TABLE {schema}.candidates ENABLE ROW LEVEL SECURITY;', f'ALTER TABLE {schema}.semantic_receipts ENABLE ROW LEVEL SECURITY;', f'ALTER TABLE {schema}.publish_audit ENABLE ROW LEVEL SECURITY;', f'ALTER TABLE {schema}.expected_labs ENABLE ROW LEVEL SECURITY;', f'GRANT USAGE ON SCHEMA {schema} TO health_test_writer_role;', f'GRANT EXECUTE ON FUNCTION {schema}.publish(text) TO health_test_writer_role;', 'COMMIT;']
+    ddl += [f'ALTER TABLE {schema}.candidates ENABLE ROW LEVEL SECURITY;', f'ALTER TABLE {schema}.semantic_receipts ENABLE ROW LEVEL SECURITY;', f'ALTER TABLE {schema}.publish_audit ENABLE ROW LEVEL SECURITY;', f'ALTER TABLE {schema}.expected_labs ENABLE ROW LEVEL SECURITY;', f'GRANT USAGE ON SCHEMA {schema} TO health_test_writer_role;', f'GRANT EXECUTE ON FUNCTION {schema}.publish(text) TO health_test_writer_role;', f'GRANT EXECUTE ON FUNCTION {schema}.status(text) TO health_test_writer_role;', 'COMMIT;']
     return '\n'.join(ddl)
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--schema',required=True);p.add_argument('--catalog',type=pathlib.Path,required=True);p.add_argument('--out',type=pathlib.Path,required=True)
-    a=p.parse_args();a.out.write_text(render(a.schema,json.loads(a.catalog.read_text())),encoding='utf-8')
+    p.add_argument('--constraints',type=pathlib.Path)
+    a=p.parse_args();a.out.write_text(render(a.schema,json.loads(a.catalog.read_text(encoding='utf-8')),json.loads(a.constraints.read_text(encoding='utf-8')) if a.constraints else None),encoding='utf-8')

@@ -117,3 +117,19 @@ BEGIN
  RETURN jsonb_build_object('state','FINALIZED','replayed',false,'test_only',true);
 END $fn$;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA __SCHEMA__ FROM PUBLIC;
+
+-- TEST-only recovery lookup after an uncertain client acknowledgement.
+-- Return operation metadata only; keep clinical snapshots administrator-only.
+CREATE FUNCTION __SCHEMA__.status(p_key text) RETURNS jsonb
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $fn$
+ SELECT CASE WHEN a.request_key IS NOT NULL
+  THEN jsonb_build_object('state','FINALIZED','operation_id',a.operation_id,
+      'candidate_sha',a.candidate_sha,'after_sha',a.after_sha,'test_only',true)
+  WHEN c.request_key IS NOT NULL
+  THEN jsonb_build_object('state','CANDIDATE','candidate_sha',c.candidate_sha,'test_only',true)
+  ELSE jsonb_build_object('state','NOT_FOUND','test_only',true) END
+ FROM (SELECT p_key request_key) k
+ LEFT JOIN __SCHEMA__.candidates c USING(request_key)
+ LEFT JOIN __SCHEMA__.publish_audit a USING(request_key)
+$fn$;
+REVOKE ALL ON FUNCTION __SCHEMA__.status(text) FROM PUBLIC;

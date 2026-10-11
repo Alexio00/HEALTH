@@ -6,7 +6,14 @@ The full migration operation is already FINALIZED/PASS in the live target. This 
 
 ## Required execution evidence
 
-Collect the original execution receipt, independently retained owner finalization permission, exact HEALTH/SHEDULLER SHAs, image digest, trust bootstrap raw-byte digest, TLS observation and acceptance receipt referenced by the live stamps. Match times, operation UUID, package fingerprint and all proof file hashes. Record missing items as missing; do not reconstruct a past authorization from a later technical review.
+Current owner permission to continue the handoff is available. Bind its real
+source/time to the target UUID/package separately from prior execution history;
+do not ask for another general finalization permission. Collect the original
+execution receipt, prior execution's approval representation, exact
+HEALTH/SHEDULLER SHAs, image digest, TLS observation and acceptance receipt
+referenced by the live stamps. The current approval does not establish the prior
+executor or reconstruct a past signature. See `WORK_ACCEPTANCE_20261011.md` for
+fresh verification and the remaining evidence requests.
 
 `verify_recovery_artifact.py` checks a downloaded GitHub artifact against its independently fetched digest, and binds the contained attestation to the private restore proof, database MANIFEST, Source manifest and SOURCE-EVIDENCE sidecar. It is offline and read-only. Its PASS means digest/binding checks only. Actual live database fingerprints, Source byte readback, authenticated run metadata and owner approval remain independent checks. It never finalizes or changes the live recovery pointer.
 

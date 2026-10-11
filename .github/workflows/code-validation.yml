@@ -75,5 +75,11 @@ jobs:
             echo "FAIL: service_role directly bypassed migration control gate"
             exit 1
           fi
+      - name: Writer synthetic suite and restricted TCP role acceptance
+        env:
+          PGPASSWORD: health-synthetic
+        run: python3 scripts/writer/test_network.py --out /tmp/health-writer-network.json
+      - name: Offline recovery artifact binding tests
+        run: python3 scripts/validation/test_recovery_artifact.py
       - name: Public repository secret-pattern guard
         run: python3 scripts/validation/public_secret_guard.py

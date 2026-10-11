@@ -27,6 +27,43 @@ The clinical fixture tables deliberately omit most original PK/FK/check constrai
 
 After recording the synthetic results, remove only the newly created schema, first confirming its unique name and schema comment `HEALTH_SYNTHETIC_WRITER_FIXTURE_V1`. The review run cleaned its fixture. No PUBLIC grants or existing TEST role memberships were changed.
 
+## Local TCP and production-constraint component acceptance
+
+`test_network.py` repeats the 45 synthetic checks plus the retired/used NNN
+regression, then builds a second disposable fixture with 62 reviewed production
+PK/FK/CHECK/UNIQUE constraints and 17 non-constraint indexes from
+`constraints_v1.json` (production read-only catalog, 2026-10-11). This narrows the
+constraint-parity gap; production RLS policies, trigger behavior, Auth and v2
+integration are not reproduced or accepted by this harness.
+
+The harness creates a unique synthetic SCRAM login with only the fixture Writer
+role, authenticates via TCP, and asserts exact SQLSTATE `42501` for 11 privileged
+actions, including direct clinical DML, self-approval, receipt/audit tampering,
+helper calls and role escalation. It also tests actual publication and audit,
+expiry/revocation/tampering, transaction rollback, missing receipt, concurrent
+stale writers, dependency mutation and replay digest conflict. The new
+`status(text)` returns only operation/digest metadata to reconcile an uncertain
+client acknowledgement. Acknowledgement loss is simulated; this is not a
+network-disconnect fault injection test.
+
+The local 2026-10-11 run passed all 30 component assertions (including the prior
+45-check suite and catalog reproduction). Approval and source receipts remain
+administrator simulations. This is local PostgreSQL TCP evidence, not actual
+Supabase restricted-role network or clinical acceptance. The original catalog
+assertions retain their original meaning; this harness adds separate evidence.
+
+```sh
+# Disposable PostgreSQL 17 on 127.0.0.1:5432, synthetic postgres administrator.
+PGPASSWORD=health-synthetic python scripts/writer/test_network.py --out /tmp/writer.json
+# Or a disposable local container; no host ports or external network required.
+python scripts/writer/test_network.py --docker-container <disposable-name> --out /private/writer.json
+```
+
+Only run against a disposable database. The harness creates role names used by
+the fixture and grants the synthetic `health_test_ci` role its fixture membership.
+Both uniquely named schemas and the uniquely named login are removed and
+readback-verified; the disposable server's shared no-login fixture roles remain.
+
 ## Production integration prerequisites
 
 1. Review and integrate the 20 structural prototypes with real HEALTH constraints, `validation_checks`/`validation_results`, allocator and immutable revision audit. Current rule-number correspondence is partial component coverage; see `RULE_APPLICABILITY.md`.

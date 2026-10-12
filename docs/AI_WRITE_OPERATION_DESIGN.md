@@ -1,5 +1,7 @@
 # Routine AI write: state machine and recovery contract
 
+> Historical design/decision text below is retained for traceability. The owner selected the implemented bounded SQL Writer and authorized canonical cutover on 2026-10-13. Current runtime behavior is [Writer operation](WRITER_OPERATOR.md); current operational authority is the live private Project State/Manual. Statements below about a deferred RPC or Drive remaining canonical describe the earlier decision, not the current implementation.
+
 Status: DESIGN ONLY / NOT IMPLEMENTED / NOT PRODUCTION AUTHORIZATION
 Date: 2026-10-10
 

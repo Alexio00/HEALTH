@@ -31,13 +31,14 @@ HEALTH separates application code, structured health data, original source files
    - never writes medical data;
    - stable HEALTH IDs in application routes.
 
-5. **Owner-authorized AI writing — current and deferred options**
-   - **now, until cutover:** ordinary ChatGPT/AI changes continue only in the active Drive-native HealthDB through its connected Google Drive workflow and governing Manual/State;
-   - **new HEALTH MVP:** the PWA and ordinary AI consumption remain read-only; the owner-gated full-migration executor is not a general write service;
-   - **potential later option A:** a dedicated controlled Health API for AI writers, NOT IN DEVELOPMENT;
-   - **potential later option B:** limited PostgreSQL RPC/stored procedures callable through a suitably permissioned AI connector, NOT IN DEVELOPMENT;
-   - before post-cutover medical writes, a selected implementation must enforce authorized single-writer operations, immutable IDs, validation, source lifecycle and least privilege. Neither option is automatically accepted simply because a general SQL connector exists;
-   - see [write-path decision and rule mapping](WRITE_PATH_DECISION.md) and [API alternatives](API.md).
+5. **Owner-authorized AI writing — implemented bounded SQL path**
+   - conversational owner requests remain the interface;
+   - the private chat operator prepares exact intents/candidates using restricted RPC; separate verifier credentials provide current semantic/literal-lab/Source evidence;
+   - signed GitHub owner authorization binds the exact accepted main commit and digest; no medical payload or service key is given to the ordinary Writer;
+   - accepted canonical cutover was authorized on 2026-10-13; confirm actual activation through the private live Project State/runtime;
+   - old Drive Registry/REC Docs remain preserved snapshots and are not dual-write targets;
+   - PWA remains read-only; a dedicated Health API is an optional future choice;
+   - see [Writer operation](WRITER_OPERATOR.md) and [current documentation map](CURRENT_DOCUMENTATION.md).
 
 6. **Independent scheduler**
    - private repository;
@@ -75,4 +76,4 @@ HEALTH separates application code, structured health data, original source files
 
 ## Current source-of-truth boundary
 
-The Drive-native HealthDB remains authoritative until explicit cutover. Full migration is copy-first and does not delete or rewrite the source system.
+The owner authorized canonical Supabase cutover on 2026-10-13. Its actual completion is governed by private Project State/runtime readback. Full migration was copy-first; old medical data, original files and snapshots are retained until a separate disposal decision.

@@ -1,3 +1,19 @@
+# Current production decision — 2026-10-13
+
+The owner accepted the currently verified Supabase baseline and authorized canonical cutover and activation of the implemented bounded Writer. The live private governing Project State and actual runtime readback identify whether activation has completed; a repository commit is not activation evidence.
+
+The canonical domain is complete SQL REC text plus structured/derived data. Original Source bytes remain in the registered Google Drive PRIMARY root. Old Registry/REC Docs, the old project and original files are retained, with no dual-writing or disposal authorized. Each clinical change still requires its exact owner intent, current independent semantic/source review and accepted runtime SHA.
+
+The complete daily backup is enabled for 03:00 Europe/Moscow (GitHub scheduling may delay delivery), retains one verified ACTIVE archive and moves the previous archive to Trash after successful verification. Capacity is owner-assumed; no quota query is required. Recovery keeps Writer disabled, clears its pin and upload authority, and preserves pending journals and NNN.
+
+See [Writer operation](WRITER_OPERATOR.md), [current documentation map](CURRENT_DOCUMENTATION.md) and the private governing documents for the operational contract and current evidence. Manual owner PWA testing was waived; this is not a user-test PASS.
+
+---
+
+# Historical project-state record through 2026-10-12
+
+The following dated evidence and pending-gate descriptions remain historical. They do not override the current owner decision or supply current target-operation PASS.
+
 # Project State
 
 Status: CANONICAL WRITER INSTALLED DISABLED; FULL BACKUP WITH WRITER RECOVERY ACCEPTED; OWNER CUTOVER PENDING

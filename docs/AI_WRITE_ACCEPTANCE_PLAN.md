@@ -1,5 +1,7 @@
 # AI routine-write acceptance pack (synthetic tests and independent review)
 
+> Historical design/decision text below is retained for traceability. The owner selected the implemented bounded SQL Writer and authorized canonical cutover on 2026-10-13. Current runtime behavior is [Writer operation](WRITER_OPERATOR.md); current operational authority is the live private Project State/Manual. Statements below about a deferred RPC or Drive remaining canonical describe the earlier decision, not the current implementation.
+
 Status: **TEST PLAN ONLY — NO TEST EXECUTION / NO WRITER IMPLEMENTATION**  
 Prepared: 2026-10-10. Target: new HEALTH routine conversational AI write path **after separately authorized cutover**.  
 Normative inputs: [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md), [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md), [POST_CUTOVER_AI_WRITE_PROTOCOL.md](POST_CUTOVER_AI_WRITE_PROTOCOL.md), [WRITE_PATH_DECISION.md](WRITE_PATH_DECISION.md).

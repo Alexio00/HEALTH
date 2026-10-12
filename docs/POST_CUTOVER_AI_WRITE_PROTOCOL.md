@@ -1,6 +1,8 @@
 # Post-cutover AI write protocol — design specification
 
-**Status:** CANONICAL IMPLEMENTATION INSTALLED DISABLED / OWNER CUTOVER PENDING  
+> Historical design/decision text below is retained for traceability. The owner selected the implemented bounded SQL Writer and authorized canonical cutover on 2026-10-13. Current runtime behavior is [Writer operation](WRITER_OPERATOR.md); current operational authority is the live private Project State/Manual. Statements below about a deferred RPC or Drive remaining canonical describe the earlier decision, not the current implementation.
+
+**Status:** CANONICAL IMPLEMENTATION ACCEPTED / OWNER CUTOVER AUTHORIZED 2026-10-13; LIVE ACTIVATION READBACK GOVERNS
 
 The implemented bounded RPC path, private chat operator, automatic exact GitHub
 authorization and current test/production boundary are described in

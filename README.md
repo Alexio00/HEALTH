@@ -11,11 +11,11 @@ This repository contains only application code, database schema/migrations, API 
 - PostgreSQL (Supabase-compatible) as the canonical structured database.
 - Provider-neutral source model: logical source identity is separated from physical storage location.
 - Read-only PWA hosted on GitHub Pages.
-- Until cutover, ordinary owner-authorized AI writes stay in the canonical Drive-native HealthDB.
+- The owner authorized Supabase canonical cutover on 2026-10-13. Actual activation is confirmed by the live private governing Project State and runtime readback.
 - Post-cutover AI writes use the bounded Writer RPC path and private chat operator described in [Writer operation](docs/WRITER_OPERATOR.md).
 - Independent backups of database and source files.
 - Scheduled jobs live outside this public repository.
-- The legacy/current health database remains authoritative until an explicit cutover.
+- Old Drive Registry/REC Docs and originals remain preserved; they are not routine write targets after confirmed cutover. Their disposal requires a separate owner decision.
 
 ## Repository layout
 
@@ -33,8 +33,9 @@ This repository contains only application code, database schema/migrations, API 
 
 ## Security boundary
 
-The current disposable Writer integration candidate and its remaining runtime
-boundaries are described in [Source and authorization tests](docs/WRITER_SOURCE_AUTHORIZATION_TEST_BOUNDARY.md).
+The implemented runtime and production verification boundary are described in
+[Writer operation](docs/WRITER_OPERATOR.md). Earlier component tests are retained
+as historical evidence in [Source and authorization tests](docs/WRITER_SOURCE_AUTHORIZATION_TEST_BOUNDARY.md).
 
 Use aliases and environment variables for operational accounts and provider identifiers. Commit only `.env.example`, never real `.env` files.
 

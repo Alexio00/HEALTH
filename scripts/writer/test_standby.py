@@ -17,7 +17,7 @@ import build_standby
 
 HERE=Path(__file__).resolve().parent
 
-def run(container=None,port=5432):
+def run(container=None,port=5432,extra_suite=None):
     database='health_writer_standby_'+uuid.uuid4().hex[:12]
     roles=['health_standby_'+uuid.uuid4().hex[:12] for _ in range(4)]
     passwords=[secrets.token_hex(24) for _ in roles]
@@ -146,6 +146,10 @@ def run(container=None,port=5432):
         check('backup_shared_lock_blocks_publish',call(0,'SELECT health_writer.finalize(%s);',(key,),denied='P0001') and digest()==snap)
         with connections[1].cursor() as cur:cur.execute('SELECT pg_advisory_unlock_shared(63741020261013);')
         check('publish_after_backup_unlock',api(0,'finalize',key)['state']=='FINALIZED')
+        if extra_suite:
+            extra_suite({'admin':admin,'check':check,'call':call,'api':api,'prepare':prepare,
+              'authorize':authorize,'receipts':receipts,'digest':digest,'roles':roles,
+              'passwords':passwords,'database':database,'port':port})
         key='disabled_again';prepare(key);admin('UPDATE health_writer.runtime_policy SET enabled=false;')
         check('runtime_disable_stops_existing_prepare',call(0,'SELECT health_writer.propose(%s,%s,NULL);',(key,json.dumps(delta())),denied='P0001'))
         return {'status':'LOCAL_CANONICAL_STANDBY_API_PASS','checks':checks,'assertions':len(checks),'approval_and_semantic_inputs':'SIMULATED','production_deployment':False,'production_enablement':False,'cleanup':'synthetic database and logins removed'}

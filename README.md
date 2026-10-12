@@ -12,7 +12,7 @@ This repository contains only application code, database schema/migrations, API 
 - Provider-neutral source model: logical source identity is separated from physical storage location.
 - Read-only PWA hosted on GitHub Pages.
 - Until cutover, ordinary owner-authorized AI writes stay in the canonical Drive-native HealthDB.
-- Future post-cutover AI writes require a controlled, least-privilege write path; dedicated Health API and restricted PostgreSQL RPC/connector are deferred options, not currently in development.
+- Post-cutover AI writes use the bounded Writer RPC path and private chat operator described in [Writer operation](docs/WRITER_OPERATOR.md).
 - Independent backups of database and source files.
 - Scheduled jobs live outside this public repository.
 - The legacy/current health database remains authoritative until an explicit cutover.
@@ -20,9 +20,11 @@ This repository contains only application code, database schema/migrations, API 
 ## Repository layout
 
 - `docs/` — architecture, data model, security, migration, recovery and project state.
-- `supabase/migrations/` — canonical timestamped Supabase migration history.\n- `db/migrations/` — earlier aggregated migration snapshots retained for reference.
+- `supabase/migrations/` — canonical timestamped Supabase migration history.
+- `db/migrations/` — earlier aggregated migration snapshots retained for reference.
 - `db/tests/` — schema/invariant tests.
-- `api/` — future Health API contract/design notes; no routine write service implemented.
+- `api/` — API contracts and design notes.
+- `scripts/writer/` — bounded canonical Writer, private chat operator and synthetic integration tests.
 - `frontend/` — read-only PWA.
 - `scripts/migration/` — fail-closed full-migration package/staging/fingerprint tooling.
 - `scripts/validation/` — validation tooling.

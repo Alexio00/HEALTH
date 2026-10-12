@@ -24,6 +24,10 @@ ALTER TABLE health_writer.runtime_policy ENABLE ROW LEVEL SECURITY;
 ALTER TABLE health_writer.semantic_verifier_principals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE health_writer.lab_check_context ENABLE ROW LEVEL SECURITY;
 ALTER TABLE health_writer.lab_evidence ENABLE ROW LEVEL SECURITY;
+ALTER TABLE health_writer.candidates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE health_writer.semantic_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE health_writer.expected_labs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE health_writer.publish_audit ENABLE ROW LEVEL SECURITY;
 
 CREATE FUNCTION health_writer.require_enabled() RETURNS void
 LANGUAGE plpgsql SET search_path=pg_catalog,pg_temp AS $fn$

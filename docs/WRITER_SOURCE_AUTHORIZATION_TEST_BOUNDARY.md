@@ -1,5 +1,10 @@
 # Source and authorization integration candidate
 
+This document records the earlier component-stage boundary. The canonical
+runtime, resumable upload and private chat operator now implemented are described
+in [Writer operation](WRITER_OPERATOR.md). Historical component PASS remains
+bound to its original test inputs and is not production activation evidence.
+
 The disposable PostgreSQL Writer now journals a Source upload before any provider
 creation. The Source and its physical location can be inserted only when the
 planned full rows, operation, provider marker and current candidate match a fresh

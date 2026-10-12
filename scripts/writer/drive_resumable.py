@@ -131,6 +131,15 @@ def offset(headers,size):
     return int(match[1])+1
 
 class ResumableDriveProvider(DriveProvider):
+    def _upload_metadata(self,marker,source_id):
+        return {'name':'synthetic-resumable-'+marker+'.bin','parents':[self.folder],
+                'mimeType':'application/octet-stream','properties':{
+                    'health_marker':marker,'health_source_id':source_id,'health_synthetic':'true'}}
+    def _request(self,marker,*args,**kwargs):
+        # A SQL journal rechecks revocation/folder policy before every request.
+        # The existing disposable SQLite journal has no authorization RPC.
+        if hasattr(self.journal,'authorize'):self.journal.authorize(marker)
+        return self.writer_wire.request(*args,**kwargs)
     """New TEST folder or exact journal-bound recovery; unknown files stop recovery."""
     def __init__(self,folder,writer,verifier,journal,writer_wire,verifier_wire):
         self.folder=identifier(folder);self.writer=writer;self.verifier=verifier;self.created={}
@@ -151,15 +160,15 @@ class ResumableDriveProvider(DriveProvider):
             row=self.journal.plan(marker,self.folder,source_id,sha,size)
             if row['object_id']:return self._complete(marker,source_id,row['object_id'],size)
             if row['session_uri']:
-                status,headers,data=self.writer_wire.request(row['session_uri'],'PUT',headers={'Content-Length':'0','Content-Range':'bytes */'+str(size)})
+                status,headers,data=self._request(marker,row['session_uri'],'PUT',headers={'Content-Length':'0','Content-Range':'bytes */'+str(size)})
                 if status in (200,201):return self._reply(marker,source_id,data,size)
                 if status!=308:raise SagaError('resumable_status_rejected')
                 start=offset(headers,size)
             else:
                 self.journal.starting(marker)
                 # SQL intent must already exist; this journal persists session before bytes.
-                meta={'name':'synthetic-resumable-'+marker+'.bin','parents':[self.folder],'mimeType':'application/octet-stream','properties':{'health_marker':marker,'health_source_id':source_id,'health_synthetic':'true'}}
-                status,headers,data=self.writer_wire.request('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id','POST',json.dumps(meta).encode(),{'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':'application/octet-stream','X-Upload-Content-Length':str(size)})
+                meta=self._upload_metadata(marker,source_id)
+                status,headers,data=self._request(marker,'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id','POST',json.dumps(meta).encode(),{'Content-Type':'application/json; charset=UTF-8','X-Upload-Content-Type':'application/octet-stream','X-Upload-Content-Length':str(size)})
                 if status!=200:raise SagaError('resumable_initiation_rejected')
                 url=session_uri(header(headers,'Location'));self.journal.session(marker,url);row=self.journal.get(marker);start=0
             chunks=0
@@ -168,7 +177,7 @@ class ResumableDriveProvider(DriveProvider):
                     f.seek(start);block=f.read(min(CHUNK,size-start))
                     if not block:raise SagaError('resumable_local_file_changed')
                     end=start+len(block)-1
-                    status,headers,data=self.writer_wire.request(row['session_uri'],'PUT',block,{'Content-Type':'application/octet-stream','Content-Length':str(len(block)),'Content-Range':f'bytes {start}-{end}/{size}'})
+                    status,headers,data=self._request(marker,row['session_uri'],'PUT',block,{'Content-Type':'application/octet-stream','Content-Length':str(len(block)),'Content-Range':f'bytes {start}-{end}/{size}'})
                     chunks+=1
                     if status in (200,201):
                         if end!=size-1:raise SagaError('resumable_completed_before_all_bytes')

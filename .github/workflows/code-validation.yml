@@ -109,6 +109,19 @@ jobs:
         run: python3 scripts/writer/test_source_saga.py --out /tmp/health-source-saga.json
       - name: Durable resumable upload fault and credential boundaries
         run: python3 scripts/writer/test_drive_resumable.py
+      - name: SQL resumable journal restricted TCP and worker restart acceptance
+        env:
+          PGPASSWORD: health-synthetic
+        run: |
+          python3 -m venv "$RUNNER_TEMP/health-upload-journal-venv"
+          "$RUNNER_TEMP/health-upload-journal-venv/bin/pip" install --require-hashes -r scripts/writer/requirements.txt
+          createdb -h 127.0.0.1 -U postgres health_writer_durable_upload_ci
+          "$RUNNER_TEMP/health-upload-journal-venv/bin/python" scripts/writer/test_postgres_upload_journal.py --database health_writer_durable_upload_ci --out /tmp/health-upload-journal.json
+      - name: Disabled canonical Writer API and validation registry
+        env:
+          PGPASSWORD: health-synthetic
+        run: |
+          "$RUNNER_TEMP/health-upload-journal-venv/bin/python" scripts/writer/test_standby.py --out /tmp/health-writer-standby.json
       - name: SQL Source journal and separate verifier TCP integration
         env:
           PGPASSWORD: health-synthetic

@@ -1,6 +1,6 @@
-# Isolated Writer component candidate
+# Writer components and disabled canonical integration candidate
 
-This directory contains a TEST-only typed delta engine and reproducible synthetic checks. It is not a production migration, a replacement for the existing `health_test_writer.v2_*` protocol, an owner approval service, or a medical verifier. No existing clinical rows are copied into the fixture. Approval and semantic receipt inputs are simulated by the administrator only.
+The original fixture modules contain a TEST-only typed delta engine and reproducible synthetic checks. `build_standby.py` separately renders a disabled canonical integration candidate; it does not connect, deploy, enable Writer or authorize a clinical operation. Component approval and semantic receipt inputs are simulated by the administrator only. Clinical acceptance is separate from test mechanics.
 
 ## Verified component behavior
 
@@ -117,3 +117,41 @@ Private SECURITY DEFINER entrypoints revoke PUBLIC execute and pin search_path;
 only the bounded writer role receives execute. Design references:
 [Supabase database functions](https://supabase.com/docs/guides/database/functions),
 [RLS guidance](https://supabase.com/docs/guides/database/postgres/row-level-security).
+
+## Persistent SQL resumable journal and canonical standby candidate
+
+`PostgresUploadJournal` uses the worker's persistent Session connection and
+bounded SECURITY DEFINER routines. It journals the Source and session before
+uploading bytes, validates caller/operation/folder/hash/length, serializes worker
+ownership and resumes the same Google object after restart or acknowledgement
+loss. Session URIs are private capability material. Revocation is checked before
+every external upload request. Recording an already returned provider outcome
+does not approve Source publication. SQLite fault tests remain separate evidence.
+
+`SourceDriveProvider` allows create-only binary Source uploads into an explicitly
+registered owner folder, with a separate read-only Google identity for byte
+verification. File replacement, original purge and unbounded inventory methods
+are disabled. SQL session key `63741020261013` coordinates it with the complete
+backup's shared capture lock across both repositories.
+
+`build_standby.py` routes clinical references into `public` and keeps controls
+in private `health_writer`. The candidate installs disabled. Executor,
+authorization and verifier groups have separate bounded routines, no direct
+clinical/control DML, and no helper access. Intents bind an immutable chat command
+digest and conversation reference. A proposal computes an exact after-state in
+a rolled-back subtransaction; inserts require explicit values for all columns
+so planning consumes no sequence/default-clock effects. Clinical triggers cause
+the operation to stop until individually reviewed.
+
+Publication requires independent literal evidence for changed lab rows; it
+preserves unchanged historical rows without reusing a historical semantic PASS.
+Ten semantic receipts remain mandatory for the exact candidate and after-state.
+New namespaced `WRITER_V1_RULE_01..37` results preserve the existing canonical
+registry. Rule 13 is explicitly SKIP for plain SQL body_text operations; this
+does not assert successful Markdown renderer testing. Code, migration and
+primary folder bindings are checked before mutation. No migration rerun or
+physical original/archive purge is exposed.
+
+Local restricted TCP tests and actual disposable Google/SQL transport recovery
+are separate evidence. The standby suite's approval/semantic inputs are
+synthetic; a green suite alone never declares clinical or production readiness.

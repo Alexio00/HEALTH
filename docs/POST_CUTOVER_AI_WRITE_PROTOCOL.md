@@ -1,6 +1,12 @@
 # Post-cutover AI write protocol — design specification
 
-**Status:** DESIGN / NOT IMPLEMENTED / NOT AUTHORIZED FOR PRODUCTION WRITES  
+**Status:** CANONICAL IMPLEMENTATION INSTALLED DISABLED / OWNER CUTOVER PENDING  
+
+The implemented bounded RPC path, private chat operator, automatic exact GitHub
+authorization and current test/production boundary are described in
+[Writer operation](WRITER_OPERATOR.md). This document preserves the earlier
+design rationale. Statements below about deferred or absent RPC implementation
+are historical; they do not override the installed runtime or authorize cutover.
 **Recorded:** 2026-10-10  
 **Scope:** routine owner-authorized medical changes *after* HEALTH becomes canonical; no changes to the existing migration executor or daily backup workflows.  
 **Related decisions:** [AI_WRITE_AUDIT_CLARIFICATIONS.md](AI_WRITE_AUDIT_CLARIFICATIONS.md) (proportionate audit decisions and revised PWA oracle), [WRITE_PATH_DECISION.md](WRITE_PATH_DECISION.md) and the more precise normative routine-write [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md), [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md), and [AI_WRITE_ACCEPTANCE_PLAN.md](AI_WRITE_ACCEPTANCE_PLAN.md). Both Health API and restricted PostgreSQL RPC remain deferred options.

@@ -47,7 +47,7 @@ Physical provider locator:
 - role: PRIMARY/BACKUP
 
 ### record_sources
-Many-to-many REC ↔ source mapping with page/provenance metadata.
+Many-to-many REC в†” source mapping with page/provenance metadata.
 
 ### cases / case_links
 Normalized cases and OPEN / CONTINUES / CLOSES / FOLLOWUP relations.
@@ -68,8 +68,9 @@ The absence of a matching plan item never authorizes inventing an appointment.
 New active medications require an idempotent, transactionally linked pending
 medical-card drug-interaction check. Any future authorized post-cutover AI write
 path must enforce this invariant, whether implemented through a dedicated
-Health API or a restricted PostgreSQL RPC/connector. Neither implementation
-is currently in development or approved for production writes. Migration of
+Health API or a restricted PostgreSQL RPC/connector. The bounded SQL Writer is implemented and owner-authorized; actual enablement is
+verified through private Project State/runtime. A dedicated Health API remains
+an optional future design. Migration of
 existing medications must not create false new-prescription alerts.
 
 ### operations

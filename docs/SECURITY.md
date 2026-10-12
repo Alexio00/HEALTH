@@ -79,3 +79,7 @@ Before full migration and again before cutover:
 - verify the browser still has SELECT-only access and anonymous access remains denied.
 
 The database scripts intentionally fail closed for database/Auth-user invariants. Dashboard-only Auth settings must be checked explicitly because they are not proven by SQL alone.
+
+## Canonical Writer authorization bridge
+
+`public.health_writer_authorize_v1` is the sole reviewed public SECURITY DEFINER exception. It has a fixed private destination, exact versioned body, `postgres` ownership and a fixed `pg_catalog,pg_temp` search path. Only the server `service_role` may execute it; it additionally requires an authenticator session with matching server JWT claims. The broker validates signed owner/workflow/code/digest identity first. Browser, writing and verifier roles cannot invoke it. The invariant script checks the exact body hash and ACL, rejects extra elevated public functions and fails on drift. Private bounded Writer functions are separately protected by their explicit role grants and current runtime guards.

@@ -1,93 +1,51 @@
-# Backup and Recovery
+# Complete backup and recovery
 
-## Database
+The accepted private scheduler produces one coherent complete archive containing
+all captured PostgreSQL schemas and tables, Auth data, portable roles/settings
+and memberships, migration history, the complete primary Source corpus, Source
+identity/locator bindings, frozen original lineage and checksums. Capture uses
+the restricted read-only backup role and the same exclusion boundary as Writer.
+Private Auth/session data makes the whole archive sensitive; no payload belongs
+in public logs or GitHub artifacts.
 
-The daily portable PostgreSQL backup contains:
+Each daily run uploads a candidate to the independent owner's private Drive,
+downloads the entire archive, checks every member and Source byte/graph binding,
+restores the database and roles in isolation, and exercises the restored Auth
+HTTP lifecycle. It promotes the verified new archive before moving the exact
+previous active set to Drive Trash. An upload or verification failure preserves
+the previous active backup. There is one active set; trashed archives consume
+capacity until provider expiry. No permanent-delete or empty-Trash operation is
+used. The owner's future-capacity assumption is explicit and quota is not queried.
 
-- roles/settings where portable;
-- public schema;
-- public data;
-- Supabase migration-history schema;
-- Supabase migration-history data;
-- SHA-256 manifest;
-- run/commit verification metadata.
+The schedule targets 03:00 Europe/Moscow (00:00 UTC). GitHub delivery can be
+delayed. The accepted executor commit and enabled flag gate the replacement daily
+pipeline; private operational evidence identifies actual activation. Historical
+CLI/public-only backups and B-04 migration finalization remain earlier scopes,
+not the current complete archive format or a reason to rerun migration.
 
-The private scheduler uses the official Supabase CLI dump path and verifies every compressed SQL file before upload and again after round-trip download.
+Full provider recreation and independent full-byte verification of a replacement
+Source root are exercised at backup activation. Daily verification restores and
+checks archived Source bytes/graph, but does not recreate the entire cloud Source
+corpus each day. Changed recovery executors require renewed full acceptance.
+Source IDs and medical identities survive physical provider locator changes.
 
-The canonical reconstruction history also lives in `supabase/migrations/`. Backup migration-history files preserve the live ledger so disaster recovery can reconcile the restored project with the repository.
+Recovery first verifies the exact captured table and role fingerprints. It then
+deliberately disables Writer, clears its code pin and disables upload folders.
+Pending operations, NNN reservations, authorizations, reviews, audit rows and
+resumable session references remain preserved. Recovery never automatically
+resumes publishing or pending external uploads. A verified recreated Source root,
+current accepted code and pending-operation reconciliation precede a separately
+accepted reactivation. See [Writer operation](WRITER_OPERATOR.md) and
+[Auth recovery](AUTH_RECOVERY.md).
 
-## Auth
+The private operational contract is
+[SHEDULLER complete backup pipeline](https://github.com/Alexio000/SHEDULLER/blob/main/docs/COMPLETE_BACKUP_PIPELINE.md).
+Historical migration recovery evidence remains in the private
+[B-04/A-05 guide](https://github.com/Alexio000/SHEDULLER/blob/main/docs/AUDIT_B04_A05_RECOVERY.md).
+Neither an old PASS nor a synthetic recovery is evidence for a new live archive.
+Current run/head, authenticated artifact digest, archive round trip, actual
+isolated restore and final cloud rotation readback must be verified together.
 
-Supabase Auth identity is recovered explicitly rather than assumed to be part of the public-schema dump.
-
-See `docs/AUTH_RECOVERY.md`.
-
-A replacement owner Auth UUID may differ from the original. This is safe because the only browser-authorization binding in the HEALTH public schema is `app_readers`; the recovery procedure rebinds it after restore.
-
-## Sources
-
-Use copy semantics, not destructive mirror semantics.
-
-Deleting a primary source must not automatically delete its backup copy.
-
-Track and verify:
-
-- source ID;
-- checksum;
-- size;
-- copy status;
-- last verified timestamp;
-- before/after primary inventory.
-
-## Verification
-
-A backup job is incomplete until verification succeeds.
-
-Minimum daily verification:
-
-- all expected dump files exist and are non-empty;
-- SHA-256 manifest matches every dump file;
-- the latest backup downloads back successfully;
-- round-trip SHA-256 matches;
-- source one-way check passes;
-- primary Sources inventory remains unchanged.
-
-## Restore drills
-
-A checksum round-trip proves stored bytes, not database restorability.
-
-Perform a real restore drill:
-
-- before full migration if the backup format/tooling changed;
-- immediately after the first full-migration backup;
-- periodically thereafter;
-- after major PostgreSQL/Supabase CLI changes.
-
-A restore drill must use an isolated target, restore the dump, reconcile migration history, execute Auth recovery, run database/security invariants, and compare expected record/source relations and snapshot fingerprints.
-
-For post-full-migration recovery, private backup verification writes operation-bound Source locator and byte evidence into the exact new immutable database backup snapshot. The isolated restore independently reads and SHA-256-checks every linked original from backup against the restored DB. Restore evidence includes the operation UUID, package fingerprint, snapshot ID, independent DB/Source manifest digests, actual GitHub workflow run ID/attempt and exact 15-table fingerprints. Private `SHEDULLER/.github/workflows/finalize-migration.yml` rechecks physical artifacts and authenticated completed run before FINALIZED. An old MVP PASS does not qualify.
-
-For the detailed implementation contract and remaining independent acceptance
-steps, see the **private** [SHEDULLER B-04/A-05 recovery audit guide](https://github.com/Alexio000/SHEDULLER/blob/main/docs/AUDIT_B04_A05_RECOVERY.md).
-Access is restricted to authorized maintainers. It is the operational reference
-for validating a specific post-full-migration backup, Source manifest, restored
-snapshot and authenticated restore run; a text-only PASS is insufficient.
-
-## Disaster recovery objective
-
-Recovery must be possible from:
-
-1. PostgreSQL backup;
-2. source backup;
-3. public code/schema/migrations/docs repository;
-4. manifests/checksums;
-5. documented Auth recovery;
-6. documented restore procedure.
-
-Provider object IDs may change after restore; health IDs and logical links must not.
-
-**A-05 before cutover:** private `SHEDULLER/scripts/relocate_sources.py` implements original Source relocation to a replacement Drive PRIMARY with independent SHA-256 and atomic restored-DB physical locator rebind, preserving canonical source_id. Cutover still requires a real isolated full-dataset loss-of-PRIMARY exercise and opening actual originals through PWA as the replacement owner. Synthetic code tests cannot replace this acceptance gate.
-
-## Retention
-
-Backup deletion is intentionally not automated by the current copy-first scheduler. Introduce destructive retention only under a separate owner-approved policy. Until then, monitor backup storage growth and keep timestamped database backups immutable.
+Old projects, legacy Registry/REC Docs and original sources remain preserved
+until a separate owner disposal decision. Backup rotation never authorizes
+deletion of those originals.

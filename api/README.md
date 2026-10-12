@@ -1,7 +1,3 @@
-# API
+# Health API placeholder
 
-Server-side Health API implementation lives here.
-
-The browser must never call write operations directly. AI clients receive domain operations, not unrestricted database credentials.
-
-Initial implementation choice is intentionally deferred until the live Supabase project is connected and the Edge Functions / PostgreSQL RPC trade-off is tested against the MVP.
+No dedicated Health API is deployed here. The implemented bounded SQL Writer and private chat operator live under `scripts/writer/`; see [Writer operation](../docs/WRITER_OPERATOR.md). The browser remains read-only. Earlier dedicated-API ideas are historical future options, not the current write path.

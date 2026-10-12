@@ -75,3 +75,18 @@ class SourceDriveProvider(ResumableDriveProvider):
     def find_all(self):raise SagaError('source_unbounded_inventory_rejected')
     def replace_created_for_test(self,*args,**kwargs):raise SagaError('source_file_replacement_forbidden')
     def trash_created(self):raise SagaError('source_file_purge_requires_separate_owner_protocol')
+
+class SourceUploader(SourceDriveProvider):
+    """Upload worker holds no independent-reader/backup credential.
+
+    Owner metadata is sufficient to recover its own transport outcome. It is
+    never evidence of an independent byte check or authority to publish Source.
+    """
+    def __init__(self,folder,writer,journal,writer_wire=None):
+        if not isinstance(journal,PostgresUploadJournal):raise SagaError('source_sql_journal_required')
+        self.folder=identifier(folder);self.writer=writer;self.verifier=writer;self.journal=journal;self.created={}
+        self.writer_wire=writer_wire or Wire(writer.token);self.verifier_wire=None
+        if writer.request('/drive/v3/about?fields=user(emailAddress)')['user']['emailAddress']!=OWNER:raise SagaError('source_owner_identity_rejected')
+        meta=writer.request('/drive/v3/files/'+self.folder+'?fields=id,mimeType,owners(emailAddress),capabilities(canAddChildren),trashed')
+        if meta.get('id')!=self.folder or meta.get('owners')!=[{'emailAddress':OWNER}] or meta.get('mimeType')!='application/vnd.google-apps.folder' or meta.get('trashed') is not False or meta.get('capabilities',{}).get('canAddChildren') is not True:raise SagaError('source_owner_folder_rejected')
+    def readback(self,*args,**kwargs):raise SagaError('independent_source_verifier_required')

@@ -4,7 +4,7 @@ CREATE TABLE health_writer.runtime_policy (
  enabled boolean NOT NULL DEFAULT false,
  code_sha text CHECK(code_sha ~ '^[a-f0-9]{40}$'),
  migration_operation uuid NOT NULL,
- primary_folder text NOT NULL DEFAULT '17vWXjLYgyI8PZD2x-OdZxQJRI0YXqr9v' CHECK(primary_folder ~ '^[A-Za-z0-9_-]{8,128}$'),
+ primary_folder text CHECK(primary_folder ~ '^[A-Za-z0-9_-]{8,128}$'),
  CHECK(NOT enabled OR code_sha IS NOT NULL)
 );
 INSERT INTO health_writer.runtime_policy(singleton,enabled,migration_operation)
@@ -32,8 +32,10 @@ BEGIN
    JOIN public.operations o ON o.operation_id=p.migration_operation
    WHERE p.singleton AND p.enabled AND p.code_sha IS NOT NULL
      AND o.state='FINALIZED' AND o.result='PASS' AND o.finalized_at IS NOT NULL
+     AND EXISTS(SELECT 1 FROM health_writer.upload_folders f WHERE f.folder=p.primary_folder AND f.enabled)
      AND EXISTS(SELECT 1 FROM health_writer.approval_policy a WHERE a.singleton AND a.workflow_sha=p.code_sha))
  THEN RAISE EXCEPTION 'Writer disabled or migration not finalized'; END IF;
+ IF NOT health_writer.records_schema_valid() THEN RAISE EXCEPTION 'immutable baseline or record schema changed'; END IF;
  IF NOT pg_try_advisory_xact_lock(63741020261013) THEN
   RAISE EXCEPTION 'Source capture or another worker active'; END IF;
 END $fn$;
@@ -125,12 +127,14 @@ BEGIN
   UPDATE public.id_reservations SET state='used',record_id=metadata->>'proposed_record_id',updated_at=pinned_time
    WHERE operation_id=p.operation_id AND state='reserved';
   a:=health_writer.checkpoint();
+  IF NOT health_writer.records_schema_valid() THEN RAISE EXCEPTION 'record schema or immutable legacy exception invalid'; END IF;
   RAISE EXCEPTION USING ERRCODE='P0099',MESSAGE='projection rollback';
  EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL; END;
  payload:=jsonb_build_object('changes',p_changes,'intent_sha',p.intent_sha,'ledger_updated_at',pinned_time);
  IF p_manifest IS NOT NULL THEN payload:=payload||jsonb_build_object('source_manifest',p_manifest); END IF;
  INSERT INTO health_writer.candidates VALUES(p_key,payload,health_writer.sha(payload),false,
   least(i.expires_at,clock_timestamp()+interval '10 minutes'),health_writer.sha(b),health_writer.sha(a));
+ INSERT INTO health_writer.candidate_projections VALUES(p_key,b,a);
  RETURN jsonb_build_object('candidate_sha',health_writer.sha(payload),'before_sha',health_writer.sha(b),'after_sha',health_writer.sha(a));
 END $fn$;
 

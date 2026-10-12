@@ -35,13 +35,21 @@ on:
         type: choice
         options: [prepare, publish, tls]
         default: prepare
+      canonical_control_schema:
+        type: string
+        required: false
+        description: Isolated administrator-created canonical TEST control schema
+      canonical_clinical_schema:
+        type: string
+        required: false
+        description: Isolated synthetic clinical TEST schema
 
 permissions:
   contents: read
 
 jobs:
   static:
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.supabase_fixture_schema == ''
+    if: github.event_name != 'workflow_dispatch' || (github.event.inputs.supabase_fixture_schema == '' && github.event.inputs.canonical_control_schema == '')
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -138,10 +146,42 @@ jobs:
         run: python3 scripts/writer/test_supabase_durable.py --self-test
       - name: Exact owner actor workflow and payload policy
         run: node scripts/writer/test_owner_claims.mjs
+      - name: Canonical owner and opaque payload boundaries
+        run: node scripts/writer/test_canonical_owner_claims.mjs
       - name: Pinned Session CA role and passfile boundaries
         run: python3 scripts/writer/test_session_pooler_tls.py
       - name: Public repository secret-pattern guard
         run: python3 scripts/validation/public_secret_guard.py
+  canonical-supabase:
+    if: github.event_name == 'workflow_dispatch' && github.actor_id == '308028794' && github.ref == 'refs/heads/test/writer-delta-and-production-acceptance-20261011' && inputs.canonical_control_schema != '' && inputs.expected_writer_sha == github.sha
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Install hash-pinned restricted TCP client
+        run: |
+          python3 -m venv "$RUNNER_TEMP/canonical-writer-venv"
+          "$RUNNER_TEMP/canonical-writer-venv/bin/pip" install --require-hashes -r scripts/writer/requirements.txt
+      - name: Run canonical synthetic Supabase phase
+        env:
+          HEALTH_TEST_WRITER_DB_URL: ${{ secrets.HEALTH_TEST_WRITER_DB_URL }}
+          HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
+          CONTROL_SCHEMA: ${{ inputs.canonical_control_schema }}
+          CLINICAL_SCHEMA: ${{ inputs.canonical_clinical_schema }}
+          PHASE: ${{ inputs.supabase_probe_phase }}
+          EXPECTED_SHA: ${{ inputs.expected_writer_sha }}
+        run: '"$RUNNER_TEMP/canonical-writer-venv/bin/python" scripts/writer/test_canonical_supabase.py --control "$CONTROL_SCHEMA" --clinical "$CLINICAL_SCHEMA" --phase "$PHASE" --pin "$EXPECTED_SHA" --out "$RUNNER_TEMP/canonical-writer-network.json"'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-writer-${{ inputs.supabase_probe_phase }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/canonical-writer-network.json
+          if-no-files-found: error
+          retention-days: 7
   supabase-durable:
     permissions:
       contents: read

@@ -62,6 +62,9 @@ BEGIN
    detail:=detail||(SELECT jsonb_build_object('evidence_sha',evidence_sha,'methodology',methodology,'receipt_checked_at',checked_at)
      FROM health_writer.semantic_receipts WHERE request_key=p_key AND rule_id=i);
   END IF;
+  IF i=11 THEN
+   detail:=detail||jsonb_build_object('legacy_id_date_exceptions',health_writer.legacy_record_exception_report());
+  END IF;
   INSERT INTO public.validation_results(operation_id,check_key,status,checked_at,details)
    VALUES(p.operation_id,'WRITER_V1_RULE_'||lpad(i::text,2,'0'),status,clock_timestamp(),detail);
  END LOOP;

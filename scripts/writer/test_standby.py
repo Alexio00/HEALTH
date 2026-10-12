@@ -86,7 +86,7 @@ def run(container=None,port=5432,extra_suite=None):
             c=psycopg2.connect(host='127.0.0.1',port=port,user=role,password=pw,dbname=database,connect_timeout=10);c.autocommit=True;connections.append(c)
         admin(f"INSERT INTO health_writer.approval_policy VALUES(true,'{roles[2]}','308028794','1408460030',repeat('a',40)); INSERT INTO health_writer.semantic_verifier_principals VALUES('{roles[3]}'); INSERT INTO health_writer.source_verifier_principals VALUES('{roles[3]}');")
         check('default_disabled',call(0,"SELECT health_writer.submit_intent('disabled','{}');",denied='P0001'))
-        admin("UPDATE health_writer.runtime_policy SET enabled=true,code_sha=repeat('a',40);")
+        admin("INSERT INTO health_writer.upload_folders VALUES('syntheticfolder123',true); UPDATE health_writer.runtime_policy SET enabled=true,code_sha=repeat('a',40),primary_folder='syntheticfolder123';")
         for name,sql in {
           'direct_public_dml':'UPDATE public.records SET title=title;',
           'self_enable':'UPDATE health_writer.runtime_policy SET enabled=true;',
@@ -99,8 +99,11 @@ def run(container=None,port=5432,extra_suite=None):
           'lab_context_forge':'INSERT INTO health_writer.lab_check_context VALUES(1,\'1\',\'x\',\'x\',\'x\');'
         }.items():check(name,call(0,sql,denied='42501'))
         key='canonical_update';i=command(key)
+        check('unapproved_intent_cannot_read_context',call(0,'SELECT health_writer.request_context(%s);',(key,),denied='42501'))
         check('unapproved_intent_stops_prepare',call(0,'SELECT health_writer.prepare(%s);',(key,),denied='P0001'))
         authorize(key,'intent',i['intent_sha']);p=api(0,'prepare',key)
+        check('owned_approved_context_available',api(0,'request_context',key)['intent_sha']==i['intent_sha'])
+        check('foreign_context_denied',call(1,'SELECT health_writer.request_context(%s);',(key,),denied='42501'))
         check('canonical_operation_prepared',p['state']=='PREPARED' and admin(f"SELECT operation FROM public.operations WHERE operation_id='{p['operation_id']}';")=='HEALTH_WRITER_DELTA_V1')
         check('test_account_alias_rejected',call(0,'SELECT health_writer.plan_source(%s,%s,%s,%s);',(key,'{}','google-drive','primary'),denied='P0001'))
         snap=digest();changes=delta();c=propose(key,changes)
@@ -111,6 +114,8 @@ def run(container=None,port=5432,extra_suite=None):
         check('candidate_replay_conflict',call(0,'SELECT health_writer.propose(%s,%s,NULL);',(key,json.dumps(bad)),denied='P0001'))
         check('unapproved_candidate_cannot_publish',call(0,'SELECT health_writer.finalize(%s);',(key,),denied='P0001') and digest()==snap)
         authorize(key,'candidate',c['candidate_sha'])
+        check('writer_cannot_read_verifier_projection',call(0,'SELECT health_writer.review_candidate(%s);',(key,),denied='42501'))
+        check('verifier_reads_exact_proposed_states',api(3,'review_candidate',key)['after_sha']==c['after_sha'])
         check('missing_semantics_cannot_publish',call(0,'SELECT health_writer.finalize(%s);',(key,),denied='P0001') and digest()==snap)
         receipts(key,c)
         result=api(0,'finalize',key)
@@ -147,6 +152,26 @@ def run(container=None,port=5432,extra_suite=None):
         check('backup_shared_lock_blocks_publish',call(0,'SELECT health_writer.finalize(%s);',(key,),denied='P0001') and digest()==snap)
         with connections[1].cursor() as cur:cur.execute('SELECT pg_advisory_unlock_shared(63741020261013);')
         check('publish_after_backup_unlock',api(0,'finalize',key)['state']=='FINALIZED')
+        # One historical exception is synthetic and local; production binding
+        # is installed only from the exact owner-approved live baseline hash.
+        admin("INSERT INTO public.records SELECT (jsonb_populate_record(NULL::public.records,to_jsonb(r)||jsonb_build_object('record_id','REC-20201010-910','nnn',910,'record_date','2020-10-11','title','Synthetic historical mismatch'))).* FROM public.records r WHERE nnn=1;")
+        admin("INSERT INTO public.id_reservations SELECT (jsonb_populate_record(NULL::public.id_reservations,to_jsonb(i)||jsonb_build_object('nnn',910,'record_id','REC-20201010-910','state','used'))).* FROM public.id_reservations i WHERE nnn=1;")
+        check('unapproved_legacy_mismatch_fails',admin('SELECT health_writer.records_schema_valid();')=='f')
+        admin("INSERT INTO health_writer.legacy_record_exceptions SELECT true,record_id,health_writer.sha(to_jsonb(r)),health_writer.sha(jsonb_build_array(to_jsonb(r))),repeat('d',64),'SYNTHETIC_OWNER_EXCEPTION',true FROM public.records r WHERE nnn=910;")
+        check('exact_unchanged_legacy_exception_passes',admin('SELECT health_writer.records_schema_valid();')=='t')
+        check('writer_cannot_register_or_rebind_exception',call(0,"UPDATE health_writer.legacy_record_exceptions SET row_sha=repeat('a',64);",denied='42501'))
+        check('writer_cannot_call_internal_exception_helper',call(0,'SELECT health_writer.records_schema_valid();',denied='42501'))
+        key='legacy_preserved';prepare(key);c=propose(key,delta('Synthetic with preserved history'));authorize(key,'candidate',c['candidate_sha']);receipts(key,c)
+        check('publication_preserves_exact_legacy_row',api(0,'finalize',key)['state']=='FINALIZED' and admin('SELECT health_writer.records_schema_valid();')=='t')
+        check('current_audit_discloses_exact_owner_exception',admin("SELECT jsonb_array_length(v.details->'legacy_id_date_exceptions')=1 AND v.details->'legacy_id_date_exceptions'->0->>'owner_decision_ref'='SYNTHETIC_OWNER_EXCEPTION' AND (v.details->'legacy_id_date_exceptions'->0->>'unchanged')::boolean FROM public.validation_results v JOIN health_writer.prepared_requests p USING(operation_id) WHERE p.request_key='legacy_preserved' AND v.check_key='WRITER_V1_RULE_11';")=='t')
+        key='legacy_change_blocked';prepare(key);snap=digest()
+        changes=json.loads(admin("SELECT jsonb_build_array(jsonb_build_object('table','records','action','UPDATE','key',jsonb_build_object('record_id',r.record_id),'expected_sha',health_writer.sha(to_jsonb(r)),'row',jsonb_build_object('title','Changed historic row'))) FROM public.records r WHERE nnn=910;"))
+        check('any_legacy_row_change_stops_projection',call(0,'SELECT health_writer.propose(%s,%s,NULL);',(key,json.dumps(changes)),denied='P0001') and digest()==snap)
+        api(0,'abandon',key)
+        check('new_unregistered_date_mismatch_fails',admin("BEGIN; INSERT INTO public.records SELECT (jsonb_populate_record(NULL::public.records,to_jsonb(r)||jsonb_build_object('record_id','REC-20201010-911','nnn',911))).* FROM public.records r WHERE nnn=910; SELECT health_writer.records_schema_valid(); ROLLBACK;")=='f')
+        check('disabled_exception_fails',admin('BEGIN; UPDATE health_writer.legacy_record_exceptions SET enabled=false; SELECT health_writer.records_schema_valid(); ROLLBACK;')=='f')
+        check('other_record_schema_fields_remain_strict',admin("BEGIN; UPDATE public.records SET title='' WHERE nnn=1; SELECT health_writer.records_schema_valid(); ROLLBACK;")=='f')
+        check('fixing_legacy_date_invalidates_exception',admin("BEGIN; UPDATE public.records SET record_date='2020-10-10' WHERE nnn=910; SELECT health_writer.records_schema_valid(); ROLLBACK;")=='f')
         if extra_suite:
             extra_suite({'admin':admin,'check':check,'call':call,'api':api,'prepare':prepare,
               'authorize':authorize,'receipts':receipts,'digest':digest,'roles':roles,

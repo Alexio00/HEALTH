@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import parse_qs,unquote,urlsplit
 
 CA_SHA='700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7'
-POLICIES={'ffvqgbslvjocbwfurxrv':{'postgres','health_backup_reader','health_writer'},'yjmcesdayfmfissghzgm':{'health_test_ci'}}
+POLICIES={'ffvqgbslvjocbwfurxrv':{'postgres','health_backup_reader','health_writer','health_writer_verifier_login'},'yjmcesdayfmfissghzgm':{'health_test_ci'}}
 class SafeStop(RuntimeError):pass
 
 def install_ca(destination):

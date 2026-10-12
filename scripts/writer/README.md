@@ -164,3 +164,25 @@ semantic inputs in that test remain explicitly synthetic. An independent
 read-only check of the existing canonical Source graph also read and verified
 all 26 registered original objects (60,806,209 bytes) with the newly authorized
 Reader account; it made no Source or clinical mutations.
+The owner-approved legacy date/ID policy is a one-row, whole-row SHA binding in
+private legacy_record_exceptions. The global schema check remains strict for all
+other rows and all other fields. Changing any part of the historical row,
+removing it, fixing its date, or disabling the exception stops publication. Rule
+11's current operation audit explicitly includes the bound exception and owner
+decision. No ordinary Writer or verifier can register or rebind an exception.
+
+Private request_context and review_candidate routines expose an owned approved
+intent's context and a separate verifier's exact before/after projection. Row
+hashes are computed by PostgreSQL; callers never need a general SQL/hash helper.
+SourceUploader carries only the owner upload credential and cannot claim an
+independent readback. The separate verifier reads provider bytes and records the
+exact Source/candidate evidence. chat_worker.py sends only opaque request UUIDs
+and SHA-256 to the owner-dispatched authorization workflow; medical changes and
+review evidence remain in protected local files. It never synthesizes semantic
+PASS receipts. The new signed broker pins project, actor, repository, workflow,
+branch, commit and audience, including the current immutable GitHub subject form.
+
+Production migration 20261012200609_health_writer_standby_v1.sql is staged with
+the exact owner-approved legacy baseline guard, runtime disabled, no credential
+or private Drive-folder configuration, and no clinical data rewrite. Installation,
+real Supabase network acceptance and enabling are separate recorded steps.

@@ -107,6 +107,8 @@ jobs:
           python3 scripts/writer/test_durable.py --database health_writer_durable_ci --out /tmp/health-writer-durable.json
       - name: Source upload correlation and actual synthetic byte readback
         run: python3 scripts/writer/test_source_saga.py --out /tmp/health-source-saga.json
+      - name: Durable resumable upload fault and credential boundaries
+        run: python3 scripts/writer/test_drive_resumable.py
       - name: SQL Source journal and separate verifier TCP integration
         env:
           PGPASSWORD: health-synthetic

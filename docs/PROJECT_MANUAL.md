@@ -22,21 +22,15 @@ Interrupted work becomes `FAILED` only after the outcome is known. A lost routin
 
 The database must enforce a single unfinished mutating operation.
 
-### Prepared design and acceptance documentation (no implementation)
+### Implemented routine Writer
 
-- [AI_WRITE_OPERATION_DESIGN.md](AI_WRITE_OPERATION_DESIGN.md): normative future routine write states, atomic publication and fail-closed recovery, separate from the full-migration executor.
-- [AI_WRITE_RULE_TRACEABILITY.md](AI_WRITE_RULE_TRACEABILITY.md): complete mapping of 37 active Drive-native Validation check names to PostgreSQL/semantic/legacy-only obligations, without copying medical details.
-- [AI_WRITE_ACCEPTANCE_PLAN.md](AI_WRITE_ACCEPTANCE_PLAN.md): synthetic fixtures, adverse acceptance scenarios, evidence format and independent review gates. Documentation PASS is not a production write-path PASS.
-- [AI_WRITE_AUDIT_CLARIFICATIONS.md](AI_WRITE_AUDIT_CLARIFICATIONS.md): targeted audit decisions and additional synthetic scenarios. Its clarified AW-V04 oracle supersedes the earlier overstrong cross-request PWA assertion.
-- Health API, restricted PostgreSQL RPC and generic connectors are **not implemented or authorized** by these documents. No routine writes to new HEALTH until an independently accepted bounded writer and explicit owner cutover.
+The canonical implementation is installed in the private `health_writer` schema. The owner selected this path and authorized Supabase cutover on 2026-10-13. Confirm the live private Project State and enabled runtime before clinical writing. See [Writer operation](WRITER_OPERATOR.md).
 
-### Current writer and deferred post-cutover choices (owner decision 2026-10-10)
+The writing login has bounded RPC only; the verifier uses separate credentials and current exact candidate/source receipts. Neither may directly modify medical tables or private controls, become the owner, or self-authorize. The private operator dispatches exact signed owner authorization automatically, transmitting only opaque request identifiers and digests to GitHub. Medical payload stays private.
 
-- The Drive-native HealthDB is still canonical. For now, **medical changes remain owner-authorized ChatGPT/AI actions through the active Google Drive tools** and follow the current Drive HealthDB Project Manual/State. The old Google Sheets Change Log/ID Reservations protocol is not replaced by this public HEALTH manual.
-- New HEALTH accepts no routine AI medical writes before a separate owner cutover decision and accepted write-path tests. A migration runner is not a routine writer.
-- A dedicated Health API and a restricted PostgreSQL RPC/stored-procedure alternative are both **deferred possibilities and are NOT under development**. Neither is mandatory by name; the eventual backend must enforce equivalent guarantees. See [write-path decision](WRITE_PATH_DECISION.md).
-- SQL schema already creates `operations_single_writer_idx` to reject competing *active operation rows*. It does **not** automatically block privileged medical DML outside `operations`. Future roles/entrypoints must enforce this boundary; do not mistake an unrestricted SQL connector for an accepted write workflow.
-- Medical meaning, provenance, exact Labs literals, OPEN/CLOSES owner decisions, immutable REC IDs and unused retired IDs survive cutover. Google Sheets ranges, Google Docs volumes and Drive logical-transaction steps do not become SQL procedures verbatim.
+Old Drive Registry and REC Docs/volumes are retained snapshots after cutover. Do not dual-write. The migration executor is not a routine Writer. A dedicated Health API remains optional and is not needed for the accepted bounded SQL path. A generic administrative SQL connector does not replace this path.
+
+The earlier [design](AI_WRITE_OPERATION_DESIGN.md), [acceptance plan](AI_WRITE_ACCEPTANCE_PLAN.md), [rule mapping](AI_WRITE_RULE_TRACEABILITY.md) and [audit clarifications](AI_WRITE_AUDIT_CLARIFICATIONS.md) retain their dated design/acceptance scope. They do not assert that the now implemented RPC is still deferred or that historical PASS applies to a new medical operation.
 
 
 ## Provenance
@@ -109,8 +103,8 @@ The legacy/current health database stays authoritative until the owner explicitl
 - The PWA is currently read-only. Before **post-cutover** production medication
   writes, an accepted controlled server-side write path must enforce that
   transaction-linked interaction-check question. Health API and PostgreSQL RPC
-  are currently deferred alternatives; a prompt-only instruction does not
-  enforce the rule. The existing Drive-native writer stays governed by the
+  were earlier deferred alternatives; the current bounded SQL Writer enforces
+  the accepted operation contract. Historical Drive writes were governed by the
   active Drive Manual until cutover.
 - Preserve medical REC body_text exactly. Format for reading at presentation time
   (paragraphs, headings, lists, tables); formatting is not a medical rewrite.

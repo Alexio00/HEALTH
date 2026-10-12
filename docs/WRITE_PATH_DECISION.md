@@ -1,5 +1,7 @@
 # HEALTH write-path decision and cutover gap review
 
+> Historical design/decision text below is retained for traceability. The owner selected the implemented bounded SQL Writer and authorized canonical cutover on 2026-10-13. Current runtime behavior is [Writer operation](WRITER_OPERATOR.md); current operational authority is the live private Project State/Manual. Statements below about a deferred RPC or Drive remaining canonical describe the earlier decision, not the current implementation.
+
 Status: DECISION RECORDED / IMPLEMENTATION DEFERRED
 Date: 2026-10-10
 Scope: architecture and future operational writing only. This document authorizes no production medical write, migration, or cutover.

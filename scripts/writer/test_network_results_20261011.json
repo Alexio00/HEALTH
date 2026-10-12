@@ -1,0 +1,160 @@
+{
+  "status": "LOCAL_TCP_COMPONENT_PASS",
+  "checks": [
+    {
+      "name": "existing_synthetic_suite",
+      "passed": true,
+      "checks": 45,
+      "method": "admin synthetic mechanics; receipts simulated"
+    },
+    {
+      "name": "production_constraints_reproduced",
+      "passed": true,
+      "constraints": 62,
+      "non_constraint_indexes": 17,
+      "scope": "constraints/indexes only; production policies/triggers not reproduced"
+    },
+    {
+      "name": "actual_tcp_restricted_identity",
+      "passed": true,
+      "authentication": "SCRAM login; no SET ROLE"
+    },
+    {
+      "name": "direct_record_update",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "direct_record_insert",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "direct_record_delete",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "clinical_snapshot_read",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "candidate_self_approval",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "semantic_receipt_forgery",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "audit_tamper",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "allocator_bypass",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "raw_delta_bypass",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "raw_checkpoint_read",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "owner_escalation",
+      "passed": true,
+      "sqlstate": "42501"
+    },
+    {
+      "name": "denials_preserve_fingerprint",
+      "passed": true
+    },
+    {
+      "name": "status_not_found",
+      "passed": true
+    },
+    {
+      "name": "missing_approval",
+      "passed": true,
+      "sqlstate": "P0001"
+    },
+    {
+      "name": "expired_approval",
+      "passed": true,
+      "sqlstate": "P0001"
+    },
+    {
+      "name": "revocation_at_publish",
+      "passed": true
+    },
+    {
+      "name": "tampered_payload",
+      "passed": true
+    },
+    {
+      "name": "restricted_publish",
+      "passed": true
+    },
+    {
+      "name": "atomic_audit_after_state",
+      "passed": true
+    },
+    {
+      "name": "status_private_metadata_only",
+      "passed": true
+    },
+    {
+      "name": "commit_acknowledgement_reconciliation",
+      "passed": true,
+      "method": "actual COMMIT followed by status/replay; acknowledgement loss simulated, no fault injection"
+    },
+    {
+      "name": "transaction_rollback",
+      "passed": true
+    },
+    {
+      "name": "semantic_missing_over_tcp",
+      "passed": true
+    },
+    {
+      "name": "parallel_stale_domain_rejected",
+      "passed": true,
+      "sqlstate": "P0001"
+    },
+    {
+      "name": "dependency_mutation",
+      "passed": true
+    },
+    {
+      "name": "finalized_replay_digest_conflict",
+      "passed": true
+    },
+    {
+      "name": "real_fk_constraint_denial",
+      "passed": true,
+      "sqlstate": "23503",
+      "method": "admin tests actual reproduced FK, not omitted fixture constraints"
+    }
+  ],
+  "synthetic_checks": 45,
+  "extra_retired_ledger_regression": true,
+  "production_constraints": 62,
+  "production_non_constraint_indexes": 17,
+  "component_assertions": 30,
+  "actual_tcp_privilege_denials": 11,
+  "approvals": "SIMULATED",
+  "source_receipts": "SIMULATED",
+  "supabase_network_acceptance": "NOT_RUN",
+  "clinical_acceptance": "NOT_RUN",
+  "production_enablement": false,
+  "cleanup": "schema/unique-login removed and readback verified"
+}

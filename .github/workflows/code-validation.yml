@@ -20,12 +20,36 @@ on:
       - "supabase/**"
       - ".github/workflows/code-validation.yml"
   workflow_dispatch:
+    inputs:
+      supabase_fixture_schema:
+        description: Administrator-created disposable TEST fixture schema; empty runs local validation
+        required: false
+        type: string
+      expected_writer_sha:
+        description: Exact reviewed Writer commit for the TEST network probe
+        required: false
+        type: string
+      supabase_probe_phase:
+        description: Durable prepare or approved synthetic publish phase
+        required: false
+        type: choice
+        options: [prepare, publish, tls]
+        default: prepare
+      canonical_control_schema:
+        type: string
+        required: false
+        description: Isolated administrator-created canonical TEST control schema
+      canonical_clinical_schema:
+        type: string
+        required: false
+        description: Isolated synthetic clinical TEST schema
 
 permissions:
   contents: read
 
 jobs:
   static:
+    if: github.event_name != 'workflow_dispatch' || (github.event.inputs.supabase_fixture_schema == '' && github.event.inputs.canonical_control_schema == '')
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -75,5 +99,152 @@ jobs:
             echo "FAIL: service_role directly bypassed migration control gate"
             exit 1
           fi
+      - name: Writer synthetic suite and restricted TCP role acceptance
+        env:
+          PGPASSWORD: health-synthetic
+        run: |
+          createdb -h 127.0.0.1 -U postgres health_writer_network_ci
+          python3 scripts/writer/test_network.py --database health_writer_network_ci --out /tmp/health-writer-network.json
+      - name: Offline recovery artifact binding tests
+        run: python3 scripts/validation/test_recovery_artifact.py
+      - name: Durable Writer allocator and preparation over restricted TCP
+        env:
+          PGPASSWORD: health-synthetic
+        run: |
+          createdb -h 127.0.0.1 -U postgres health_writer_durable_ci
+          python3 scripts/writer/test_durable.py --database health_writer_durable_ci --out /tmp/health-writer-durable.json
+      - name: Source upload correlation and actual synthetic byte readback
+        run: python3 scripts/writer/test_source_saga.py --out /tmp/health-source-saga.json
+      - name: Durable resumable upload fault and credential boundaries
+        run: python3 scripts/writer/test_drive_resumable.py
+      - name: SQL resumable journal restricted TCP and worker restart acceptance
+        env:
+          PGPASSWORD: health-synthetic
+        run: |
+          python3 -m venv "$RUNNER_TEMP/health-upload-journal-venv"
+          "$RUNNER_TEMP/health-upload-journal-venv/bin/pip" install --require-hashes -r scripts/writer/requirements.txt
+          createdb -h 127.0.0.1 -U postgres health_writer_durable_upload_ci
+          "$RUNNER_TEMP/health-upload-journal-venv/bin/python" scripts/writer/test_postgres_upload_journal.py --database health_writer_durable_upload_ci --out /tmp/health-upload-journal.json
+      - name: Disabled canonical Writer API and validation registry
+        env:
+          PGPASSWORD: health-synthetic
+        run: |
+          "$RUNNER_TEMP/health-upload-journal-venv/bin/python" scripts/writer/test_standby.py --out /tmp/health-writer-standby.json
+      - name: SQL Source journal and separate verifier TCP integration
+        env:
+          PGPASSWORD: health-synthetic
+        run: |
+          createdb -h 127.0.0.1 -U postgres health_writer_durable_source_ci
+          python3 scripts/writer/test_source_integration.py --database health_writer_durable_source_ci --out /tmp/health-source-sql.json
+      - name: Exact authorization bridge restricted TCP tests
+        env:
+          PGPASSWORD: health-synthetic
+        run: |
+          createdb -h 127.0.0.1 -U postgres health_writer_durable_authorization_ci
+          python3 scripts/writer/test_authorization.py --database health_writer_durable_authorization_ci --out /tmp/health-writer-authorization.json
+      - name: Supabase TEST connection boundary negatives
+        run: python3 scripts/writer/test_supabase_durable.py --self-test
+      - name: Exact owner actor workflow and payload policy
+        run: node scripts/writer/test_owner_claims.mjs
+      - name: Canonical owner and opaque payload boundaries
+        run: node scripts/writer/test_canonical_owner_claims.mjs
+      - name: Pinned Session CA role and passfile boundaries
+        run: python3 scripts/writer/test_session_pooler_tls.py
       - name: Public repository secret-pattern guard
         run: python3 scripts/validation/public_secret_guard.py
+  canonical-supabase:
+    if: github.event_name == 'workflow_dispatch' && github.actor_id == '308028794' && github.ref == 'refs/heads/test/writer-delta-and-production-acceptance-20261011' && inputs.canonical_control_schema != '' && inputs.expected_writer_sha == github.sha
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Install hash-pinned restricted TCP client
+        run: |
+          python3 -m venv "$RUNNER_TEMP/canonical-writer-venv"
+          "$RUNNER_TEMP/canonical-writer-venv/bin/pip" install --require-hashes -r scripts/writer/requirements.txt
+      - name: Run canonical synthetic Supabase phase
+        env:
+          HEALTH_TEST_WRITER_DB_URL: ${{ secrets.HEALTH_TEST_WRITER_DB_URL }}
+          HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
+          CONTROL_SCHEMA: ${{ inputs.canonical_control_schema }}
+          CLINICAL_SCHEMA: ${{ inputs.canonical_clinical_schema }}
+          PHASE: ${{ inputs.supabase_probe_phase }}
+          EXPECTED_SHA: ${{ inputs.expected_writer_sha }}
+        run: '"$RUNNER_TEMP/canonical-writer-venv/bin/python" scripts/writer/test_canonical_supabase.py --control "$CONTROL_SCHEMA" --clinical "$CLINICAL_SCHEMA" --phase "$PHASE" --pin "$EXPECTED_SHA" --out "$RUNNER_TEMP/canonical-writer-network.json"'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: canonical-writer-${{ inputs.supabase_probe_phase }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/canonical-writer-network.json
+          if-no-files-found: error
+          retention-days: 7
+  supabase-durable:
+    permissions:
+      contents: read
+      id-token: write
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.actor_id == '308028794' &&
+      github.ref == 'refs/heads/test/writer-delta-and-production-acceptance-20261011' &&
+      github.event.inputs.supabase_fixture_schema != '' &&
+      github.event.inputs.supabase_probe_phase != 'tls' &&
+      github.event.inputs.expected_writer_sha == github.sha
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.inputs.expected_writer_sha }}
+          persist-credentials: false
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+      - name: Owner-dispatched exact TEST restricted network probe
+        env:
+          HEALTH_TEST_WRITER_DB_URL: ${{ secrets.HEALTH_TEST_WRITER_DB_URL }}
+          HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
+          FIXTURE_SCHEMA: ${{ github.event.inputs.supabase_fixture_schema }}
+          EXPECTED_SHA: ${{ github.event.inputs.expected_writer_sha }}
+          PROBE_PHASE: ${{ github.event.inputs.supabase_probe_phase }}
+        run: |
+          python3 -c 'from scripts.writer.session_pooler_tls import install_ca; import os; install_ca(os.environ["RUNNER_TEMP"]+"/health-ca.pem")'
+          python3 scripts/writer/test_supabase_durable.py --schema "$FIXTURE_SCHEMA" --expected-sha "$EXPECTED_SHA" --ca "$RUNNER_TEMP/health-ca.pem" --phase "$PROBE_PHASE" --out "$RUNNER_TEMP/health-durable-supabase.json"
+      - name: Upload sanitized TEST network proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: health-durable-supabase-${{ github.event.inputs.supabase_probe_phase }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/health-durable-supabase.json
+          if-no-files-found: error
+          retention-days: 7
+  supabase-session-tls:
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.actor_id == '308028794' &&
+      github.ref == 'refs/heads/test/writer-delta-and-production-acceptance-20261011' &&
+      github.event.inputs.supabase_probe_phase == 'tls' &&
+      github.event.inputs.expected_writer_sha == github.sha
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+      - name: Restricted TEST Session CA hostname and read-only probe
+        env:
+          HEALTH_TEST_WRITER_DB_URL: ${{ secrets.HEALTH_TEST_WRITER_DB_URL }}
+          HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
+        run: python3 scripts/writer/session_pooler_tls.py --project yjmcesdayfmfissghzgm --role health_test_ci --ca "$RUNNER_TEMP/health-ca.pem" --out "$RUNNER_TEMP/session-tls.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: writer-session-tls-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/session-tls.json
+          if-no-files-found: error
+          retention-days: 7

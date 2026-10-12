@@ -1,0 +1,1034 @@
+[
+  {
+    "type": "text",
+    "attname": "analyte_key",
+    "relname": "analytes",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "display_name",
+    "relname": "analytes",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text[]",
+    "attname": "aliases",
+    "relname": "analytes",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::text[]"
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "analytes",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "text",
+    "attname": "case_key",
+    "relname": "case_links",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "record_id",
+    "relname": "case_links",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "relation",
+    "relname": "case_links",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "created_at",
+    "relname": "case_links",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "date",
+    "attname": "relation_date",
+    "relname": "case_links",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "note",
+    "relname": "case_links",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "case_key",
+    "relname": "cases",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "opening_record_id",
+    "relname": "cases",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "closing_record_id",
+    "relname": "cases",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "category",
+    "relname": "cases",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "status",
+    "relname": "cases",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "title",
+    "relname": "cases",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "summary",
+    "relname": "cases",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "cases",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "created_at",
+    "relname": "cases",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "updated_at",
+    "relname": "cases",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "text",
+    "attname": "domain_code",
+    "relname": "domains",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "label",
+    "relname": "domains",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "boolean",
+    "attname": "active",
+    "relname": "domains",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "true"
+  },
+  {
+    "type": "text[]",
+    "attname": "aliases",
+    "relname": "domains",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::text[]"
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "domains",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "integer",
+    "attname": "nnn",
+    "relname": "id_reservations",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "state",
+    "relname": "id_reservations",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "record_id",
+    "relname": "id_reservations",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "uuid",
+    "attname": "operation_id",
+    "relname": "id_reservations",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "reserved_at",
+    "relname": "id_reservations",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "updated_at",
+    "relname": "id_reservations",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "id_reservations",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "bigint",
+    "attname": "lab_id",
+    "relname": "labs",
+    "attnotnull": true,
+    "attidentity": "a",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "record_id",
+    "relname": "labs",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "analyte_key",
+    "relname": "labs",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "value",
+    "relname": "labs",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "unit",
+    "relname": "labs",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "reference_range",
+    "relname": "labs",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "flag",
+    "relname": "labs",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "observed_at",
+    "relname": "labs",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "source_id",
+    "relname": "labs",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "source_locator",
+    "relname": "labs",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "labs",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "created_at",
+    "relname": "labs",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "date",
+    "attname": "observed_on",
+    "relname": "labs",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "source_name",
+    "relname": "labs",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "note",
+    "relname": "labs",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "bigint",
+    "attname": "medication_id",
+    "relname": "medications",
+    "attnotnull": true,
+    "attidentity": "a",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "name",
+    "relname": "medications",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "status",
+    "relname": "medications",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "dose",
+    "relname": "medications",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "schedule",
+    "relname": "medications",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "date",
+    "attname": "started_on",
+    "relname": "medications",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "date",
+    "attname": "ended_on",
+    "relname": "medications",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "basis_record_id",
+    "relname": "medications",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "medications",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "updated_at",
+    "relname": "medications",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "bigint",
+    "attname": "monitoring_id",
+    "relname": "monitoring",
+    "attnotnull": true,
+    "attidentity": "a",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "title",
+    "relname": "monitoring",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "status",
+    "relname": "monitoring",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "cadence_text",
+    "relname": "monitoring",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "basis_record_id",
+    "relname": "monitoring",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "monitoring",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "updated_at",
+    "relname": "monitoring",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "bigint",
+    "attname": "plan_item_id",
+    "relname": "plan_items",
+    "attnotnull": true,
+    "attidentity": "a",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "title",
+    "relname": "plan_items",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "status",
+    "relname": "plan_items",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "date",
+    "attname": "due_on",
+    "relname": "plan_items",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "basis_record_id",
+    "relname": "plan_items",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "plan_items",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "updated_at",
+    "relname": "plan_items",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "bigint",
+    "attname": "question_id",
+    "relname": "questions",
+    "attnotnull": true,
+    "attidentity": "a",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "question",
+    "relname": "questions",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "status",
+    "relname": "questions",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "basis_record_id",
+    "relname": "questions",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "resolved_by_record_id",
+    "relname": "questions",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "questions",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "updated_at",
+    "relname": "questions",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "text",
+    "attname": "record_id",
+    "relname": "record_domains",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "domain_code",
+    "relname": "record_domains",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "record_id",
+    "relname": "record_sources",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "source_id",
+    "relname": "record_sources",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "role",
+    "relname": "record_sources",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'evidence'::text"
+  },
+  {
+    "type": "text",
+    "attname": "source_pages",
+    "relname": "record_sources",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "jsonb",
+    "attname": "provenance",
+    "relname": "record_sources",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "text",
+    "attname": "record_id",
+    "relname": "records",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "integer",
+    "attname": "nnn",
+    "relname": "records",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "date",
+    "attname": "record_date",
+    "relname": "records",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "title",
+    "relname": "records",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "type",
+    "relname": "records",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "record_type",
+    "relname": "records",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "confidence",
+    "relname": "records",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "status",
+    "relname": "records",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text[]",
+    "attname": "tags",
+    "relname": "records",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::text[]"
+  },
+  {
+    "type": "text",
+    "attname": "summary",
+    "relname": "records",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "body_text",
+    "relname": "records",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "provenance_status",
+    "relname": "records",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "source_label",
+    "relname": "records",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "source_request_id",
+    "relname": "records",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "source_pages",
+    "relname": "records",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "records",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "created_at",
+    "relname": "records",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "updated_at",
+    "relname": "records",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "text",
+    "attname": "source_id",
+    "relname": "source_locations",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "provider",
+    "relname": "source_locations",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "account_alias",
+    "relname": "source_locations",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "provider_object_id",
+    "relname": "source_locations",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "location_role",
+    "relname": "source_locations",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "created_at",
+    "relname": "source_locations",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "verified_at",
+    "relname": "source_locations",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "source_id",
+    "relname": "sources",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "logical_path",
+    "relname": "sources",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "original_filename",
+    "relname": "sources",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "mime_type",
+    "relname": "sources",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "bigint",
+    "attname": "size_bytes",
+    "relname": "sources",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "text",
+    "attname": "sha256",
+    "relname": "sources",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "date",
+    "attname": "source_date",
+    "relname": "sources",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "type": "jsonb",
+    "attname": "metadata",
+    "relname": "sources",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::jsonb"
+  },
+  {
+    "type": "timestamp with time zone",
+    "attname": "created_at",
+    "relname": "sources",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "relname": "operations",
+    "attname": "operation_id",
+    "type": "uuid",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "gen_random_uuid()"
+  },
+  {
+    "relname": "operations",
+    "attname": "operation",
+    "type": "text",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "relname": "operations",
+    "attname": "mode",
+    "type": "text",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "relname": "operations",
+    "attname": "scope",
+    "type": "text[]",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "'{}'::text[]"
+  },
+  {
+    "relname": "operations",
+    "attname": "state",
+    "type": "text",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "relname": "operations",
+    "attname": "result",
+    "type": "text",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "relname": "operations",
+    "attname": "notes",
+    "type": "text",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  },
+  {
+    "relname": "operations",
+    "attname": "created_at",
+    "type": "timestamp with time zone",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "relname": "operations",
+    "attname": "updated_at",
+    "type": "timestamp with time zone",
+    "attnotnull": true,
+    "attidentity": "",
+    "default_expr": "now()"
+  },
+  {
+    "relname": "operations",
+    "attname": "finalized_at",
+    "type": "timestamp with time zone",
+    "attnotnull": false,
+    "attidentity": "",
+    "default_expr": null
+  }
+]

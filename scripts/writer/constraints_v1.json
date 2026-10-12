@@ -1,0 +1,484 @@
+{
+  "source": "production read-only catalog",
+  "observed_at": "2026-10-11",
+  "canonical_migrations": 11,
+  "scope": "PK/FK/CHECK/UNIQUE constraints and non-constraint indexes only; policies/triggers not reproduced",
+  "constraints": [
+    {
+      "conname": "analytes_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (analyte_key)",
+      "table_name": "analytes"
+    },
+    {
+      "conname": "case_links_case_key_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (case_key) REFERENCES cases(case_key) ON DELETE CASCADE",
+      "table_name": "case_links"
+    },
+    {
+      "conname": "case_links_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (case_key, record_id, relation)",
+      "table_name": "case_links"
+    },
+    {
+      "conname": "case_links_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (record_id) REFERENCES records(record_id) ON DELETE CASCADE",
+      "table_name": "case_links"
+    },
+    {
+      "conname": "case_links_relation_check",
+      "contype": "c",
+      "definition": "CHECK ((relation = ANY (ARRAY['OPEN'::text, 'CONTINUES'::text, 'CLOSES'::text, 'FOLLOWUP'::text])))",
+      "table_name": "case_links"
+    },
+    {
+      "conname": "cases_case_key_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (case_key) REFERENCES records(record_id) ON DELETE RESTRICT",
+      "table_name": "cases"
+    },
+    {
+      "conname": "cases_category_check",
+      "contype": "c",
+      "definition": "CHECK ((category = ANY (ARRAY['chronic'::text, 'episode'::text])))",
+      "table_name": "cases"
+    },
+    {
+      "conname": "cases_closing_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (closing_record_id) REFERENCES records(record_id) ON DELETE RESTRICT",
+      "table_name": "cases"
+    },
+    {
+      "conname": "cases_closing_shape",
+      "contype": "c",
+      "definition": "CHECK ((((status = 'open'::text) AND (closing_record_id IS NULL)) OR ((status = 'closed'::text) AND (closing_record_id IS NOT NULL))))",
+      "table_name": "cases"
+    },
+    {
+      "conname": "cases_opening_identity",
+      "contype": "c",
+      "definition": "CHECK ((case_key = opening_record_id))",
+      "table_name": "cases"
+    },
+    {
+      "conname": "cases_opening_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (opening_record_id) REFERENCES records(record_id) ON DELETE RESTRICT",
+      "table_name": "cases"
+    },
+    {
+      "conname": "cases_opening_record_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (opening_record_id)",
+      "table_name": "cases"
+    },
+    {
+      "conname": "cases_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (case_key)",
+      "table_name": "cases"
+    },
+    {
+      "conname": "cases_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text])))",
+      "table_name": "cases"
+    },
+    {
+      "conname": "domains_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (domain_code)",
+      "table_name": "domains"
+    },
+    {
+      "conname": "id_reservations_nnn_check",
+      "contype": "c",
+      "definition": "CHECK (((nnn >= 1) AND (nnn <= 999)))",
+      "table_name": "id_reservations"
+    },
+    {
+      "conname": "id_reservations_operation_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (operation_id) REFERENCES operations(operation_id) ON DELETE RESTRICT",
+      "table_name": "id_reservations"
+    },
+    {
+      "conname": "id_reservations_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (nnn)",
+      "table_name": "id_reservations"
+    },
+    {
+      "conname": "id_reservations_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (record_id) REFERENCES records(record_id) ON DELETE RESTRICT",
+      "table_name": "id_reservations"
+    },
+    {
+      "conname": "id_reservations_record_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (record_id)",
+      "table_name": "id_reservations"
+    },
+    {
+      "conname": "id_reservations_state_check",
+      "contype": "c",
+      "definition": "CHECK ((state = ANY (ARRAY['used'::text, 'reserved'::text, 'retired'::text])))",
+      "table_name": "id_reservations"
+    },
+    {
+      "conname": "id_reservations_state_shape",
+      "contype": "c",
+      "definition": "CHECK ((((state = 'used'::text) AND (record_id IS NOT NULL)) OR ((state = 'reserved'::text) AND (operation_id IS NOT NULL) AND (record_id IS NULL)) OR ((state = 'retired'::text) AND (record_id IS NULL))))",
+      "table_name": "id_reservations"
+    },
+    {
+      "conname": "labs_analyte_key_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (analyte_key) REFERENCES analytes(analyte_key) ON DELETE RESTRICT",
+      "table_name": "labs"
+    },
+    {
+      "conname": "labs_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (lab_id)",
+      "table_name": "labs"
+    },
+    {
+      "conname": "labs_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (record_id) REFERENCES records(record_id) ON DELETE CASCADE",
+      "table_name": "labs"
+    },
+    {
+      "conname": "labs_source_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (source_id) REFERENCES sources(source_id) ON DELETE RESTRICT",
+      "table_name": "labs"
+    },
+    {
+      "conname": "medications_basis_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (basis_record_id) REFERENCES records(record_id) ON DELETE RESTRICT",
+      "table_name": "medications"
+    },
+    {
+      "conname": "medications_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (medication_id)",
+      "table_name": "medications"
+    },
+    {
+      "conname": "medications_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text, 'planned'::text])))",
+      "table_name": "medications"
+    },
+    {
+      "conname": "monitoring_basis_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (basis_record_id) REFERENCES records(record_id) ON DELETE RESTRICT",
+      "table_name": "monitoring"
+    },
+    {
+      "conname": "monitoring_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (monitoring_id)",
+      "table_name": "monitoring"
+    },
+    {
+      "conname": "monitoring_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['active'::text, 'completed'::text, 'cancelled'::text])))",
+      "table_name": "monitoring"
+    },
+    {
+      "conname": "operations_mode_check",
+      "contype": "c",
+      "definition": "CHECK ((mode = ANY (ARRAY['maintenance'::text, 'import'::text])))",
+      "table_name": "operations"
+    },
+    {
+      "conname": "operations_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (operation_id)",
+      "table_name": "operations"
+    },
+    {
+      "conname": "operations_state_check",
+      "contype": "c",
+      "definition": "CHECK ((state = ANY (ARRAY['PREPARED'::text, 'COMMITTED_REGISTRY'::text, 'VALIDATED'::text, 'FINALIZED'::text, 'FAILED'::text])))",
+      "table_name": "operations"
+    },
+    {
+      "conname": "plan_items_basis_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (basis_record_id) REFERENCES records(record_id) ON DELETE RESTRICT",
+      "table_name": "plan_items"
+    },
+    {
+      "conname": "plan_items_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (plan_item_id)",
+      "table_name": "plan_items"
+    },
+    {
+      "conname": "plan_items_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['planned'::text, 'done'::text, 'cancelled'::text])))",
+      "table_name": "plan_items"
+    },
+    {
+      "conname": "questions_basis_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (basis_record_id) REFERENCES records(record_id) ON DELETE RESTRICT",
+      "table_name": "questions"
+    },
+    {
+      "conname": "questions_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (question_id)",
+      "table_name": "questions"
+    },
+    {
+      "conname": "questions_resolution_shape",
+      "contype": "c",
+      "definition": "CHECK ((((status = 'open'::text) AND (resolved_by_record_id IS NULL)) OR (status = 'closed'::text)))",
+      "table_name": "questions"
+    },
+    {
+      "conname": "questions_resolved_by_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (resolved_by_record_id) REFERENCES records(record_id) ON DELETE RESTRICT",
+      "table_name": "questions"
+    },
+    {
+      "conname": "questions_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text])))",
+      "table_name": "questions"
+    },
+    {
+      "conname": "record_domains_domain_code_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (domain_code) REFERENCES domains(domain_code) ON DELETE RESTRICT",
+      "table_name": "record_domains"
+    },
+    {
+      "conname": "record_domains_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (record_id, domain_code)",
+      "table_name": "record_domains"
+    },
+    {
+      "conname": "record_domains_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (record_id) REFERENCES records(record_id) ON DELETE CASCADE",
+      "table_name": "record_domains"
+    },
+    {
+      "conname": "record_sources_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (record_id, source_id, role)",
+      "table_name": "record_sources"
+    },
+    {
+      "conname": "record_sources_record_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (record_id) REFERENCES records(record_id) ON DELETE CASCADE",
+      "table_name": "record_sources"
+    },
+    {
+      "conname": "record_sources_source_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (source_id) REFERENCES sources(source_id) ON DELETE RESTRICT",
+      "table_name": "record_sources"
+    },
+    {
+      "conname": "records_nnn_check",
+      "contype": "c",
+      "definition": "CHECK (((nnn >= 1) AND (nnn <= 999)))",
+      "table_name": "records"
+    },
+    {
+      "conname": "records_nnn_key",
+      "contype": "u",
+      "definition": "UNIQUE (nnn)",
+      "table_name": "records"
+    },
+    {
+      "conname": "records_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (record_id)",
+      "table_name": "records"
+    },
+    {
+      "conname": "records_record_id_check",
+      "contype": "c",
+      "definition": "CHECK ((record_id ~ '^REC-[0-9]{8}-[0-9]{3}$'::text))",
+      "table_name": "records"
+    },
+    {
+      "conname": "source_locations_location_role_check",
+      "contype": "c",
+      "definition": "CHECK ((location_role = ANY (ARRAY['PRIMARY'::text, 'BACKUP'::text])))",
+      "table_name": "source_locations"
+    },
+    {
+      "conname": "source_locations_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (source_id, provider, account_alias, location_role)",
+      "table_name": "source_locations"
+    },
+    {
+      "conname": "source_locations_provider_account_alias_provider_object_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (provider, account_alias, provider_object_id)",
+      "table_name": "source_locations"
+    },
+    {
+      "conname": "source_locations_source_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (source_id) REFERENCES sources(source_id) ON DELETE CASCADE",
+      "table_name": "source_locations"
+    },
+    {
+      "conname": "sources_logical_path_key",
+      "contype": "u",
+      "definition": "UNIQUE (logical_path)",
+      "table_name": "sources"
+    },
+    {
+      "conname": "sources_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (source_id)",
+      "table_name": "sources"
+    },
+    {
+      "conname": "sources_sha256_check",
+      "contype": "c",
+      "definition": "CHECK (((sha256 IS NULL) OR (sha256 ~ '^[0-9a-fA-F]{64}$'::text)))",
+      "table_name": "sources"
+    },
+    {
+      "conname": "sources_size_bytes_check",
+      "contype": "c",
+      "definition": "CHECK (((size_bytes IS NULL) OR (size_bytes >= 0)))",
+      "table_name": "sources"
+    },
+    {
+      "conname": "sources_source_id_check",
+      "contype": "c",
+      "definition": "CHECK ((source_id ~ '^SRC-[0-9]{8}-[0-9]{3,}$'::text))",
+      "table_name": "sources"
+    }
+  ],
+  "indexes": [
+    {
+      "definition": "CREATE UNIQUE INDEX case_links_one_close_idx ON public.case_links USING btree (case_key) WHERE (relation = 'CLOSES'::text)",
+      "index_name": "case_links_one_close_idx",
+      "table_name": "case_links",
+      "indisunique": true
+    },
+    {
+      "definition": "CREATE UNIQUE INDEX case_links_one_open_idx ON public.case_links USING btree (case_key) WHERE (relation = 'OPEN'::text)",
+      "index_name": "case_links_one_open_idx",
+      "table_name": "case_links",
+      "indisunique": true
+    },
+    {
+      "definition": "CREATE INDEX case_links_record_id_idx ON public.case_links USING btree (record_id)",
+      "index_name": "case_links_record_id_idx",
+      "table_name": "case_links",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE INDEX cases_closing_record_id_idx ON public.cases USING btree (closing_record_id)",
+      "index_name": "cases_closing_record_id_idx",
+      "table_name": "cases",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE INDEX id_reservations_operation_id_idx ON public.id_reservations USING btree (operation_id)",
+      "index_name": "id_reservations_operation_id_idx",
+      "table_name": "id_reservations",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE INDEX labs_analyte_idx ON public.labs USING btree (analyte_key, observed_at)",
+      "index_name": "labs_analyte_idx",
+      "table_name": "labs",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE UNIQUE INDEX labs_exact_source_row_idx ON public.labs USING btree (record_id, observed_on, analyte_key, value, unit, reference_range, flag, source_name, note) NULLS NOT DISTINCT",
+      "index_name": "labs_exact_source_row_idx",
+      "table_name": "labs",
+      "indisunique": true
+    },
+    {
+      "definition": "CREATE INDEX labs_record_idx ON public.labs USING btree (record_id)",
+      "index_name": "labs_record_idx",
+      "table_name": "labs",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE INDEX labs_source_id_idx ON public.labs USING btree (source_id)",
+      "index_name": "labs_source_id_idx",
+      "table_name": "labs",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE INDEX medications_basis_record_id_idx ON public.medications USING btree (basis_record_id)",
+      "index_name": "medications_basis_record_id_idx",
+      "table_name": "medications",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE INDEX monitoring_basis_record_id_idx ON public.monitoring USING btree (basis_record_id)",
+      "index_name": "monitoring_basis_record_id_idx",
+      "table_name": "monitoring",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE UNIQUE INDEX operations_single_writer_idx ON public.operations USING btree ((true)) WHERE (state = ANY (ARRAY['PREPARED'::text, 'COMMITTED_REGISTRY'::text, 'VALIDATED'::text]))",
+      "index_name": "operations_single_writer_idx",
+      "table_name": "operations",
+      "indisunique": true
+    },
+    {
+      "definition": "CREATE INDEX plan_items_basis_record_id_idx ON public.plan_items USING btree (basis_record_id)",
+      "index_name": "plan_items_basis_record_id_idx",
+      "table_name": "plan_items",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE INDEX questions_basis_record_id_idx ON public.questions USING btree (basis_record_id)",
+      "index_name": "questions_basis_record_id_idx",
+      "table_name": "questions",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE INDEX questions_resolved_by_record_id_idx ON public.questions USING btree (resolved_by_record_id)",
+      "index_name": "questions_resolved_by_record_id_idx",
+      "table_name": "questions",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE INDEX record_domains_domain_code_idx ON public.record_domains USING btree (domain_code)",
+      "index_name": "record_domains_domain_code_idx",
+      "table_name": "record_domains",
+      "indisunique": false
+    },
+    {
+      "definition": "CREATE INDEX record_sources_source_id_idx ON public.record_sources USING btree (source_id)",
+      "index_name": "record_sources_source_id_idx",
+      "table_name": "record_sources",
+      "indisunique": false
+    }
+  ]
+}

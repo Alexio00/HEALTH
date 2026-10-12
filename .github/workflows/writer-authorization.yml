@@ -1,0 +1,43 @@
+name: HEALTH Writer exact authorization
+run-name: Writer authorization ${{ inputs.kind }} ${{ inputs.request_key }}
+on:
+  workflow_dispatch:
+    inputs:
+      request_key:
+        type: string
+        required: true
+        description: Opaque Writer request UUID; no medical identifiers
+      kind:
+        type: choice
+        options: [intent, candidate]
+        required: true
+      digest:
+        type: string
+        required: true
+        description: Exact SHA-256 only; no medical payload
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  authorization:
+    if: github.actor_id == '308028794' && github.ref == 'refs/heads/main' && vars.HEALTH_WRITER_ACCEPTED_SHA == github.sha
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Approve exact digest through signed owner identity
+        env:
+          WRITER_REQUEST_KEY: ${{ inputs.request_key }}
+          WRITER_APPROVAL_KIND: ${{ inputs.kind }}
+          WRITER_APPROVAL_DIGEST: ${{ inputs.digest }}
+          HEALTH_WRITER_ACCEPTED_SHA: ${{ vars.HEALTH_WRITER_ACCEPTED_SHA }}
+          WRITER_APPROVAL_OUT: ${{ runner.temp }}/writer-approval.json
+        run: python3 scripts/writer/signed_canonical_authorization.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: writer-exact-approval-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/writer-approval.json
+          if-no-files-found: error
+          retention-days: 7

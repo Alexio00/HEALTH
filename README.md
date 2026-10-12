@@ -31,6 +31,9 @@ This repository contains only application code, database schema/migrations, API 
 
 ## Security boundary
 
+The current disposable Writer integration candidate and its remaining runtime
+boundaries are described in [Source and authorization tests](docs/WRITER_SOURCE_AUTHORIZATION_TEST_BOUNDARY.md).
+
 Use aliases and environment variables for operational accounts and provider identifiers. Commit only `.env.example`, never real `.env` files.
 
 Real health data must stay in the configured private database and private source storage.

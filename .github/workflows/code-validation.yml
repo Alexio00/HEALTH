@@ -107,11 +107,28 @@ jobs:
           python3 scripts/writer/test_durable.py --database health_writer_durable_ci --out /tmp/health-writer-durable.json
       - name: Source upload correlation and actual synthetic byte readback
         run: python3 scripts/writer/test_source_saga.py --out /tmp/health-source-saga.json
+      - name: SQL Source journal and separate verifier TCP integration
+        env:
+          PGPASSWORD: health-synthetic
+        run: |
+          createdb -h 127.0.0.1 -U postgres health_writer_durable_source_ci
+          python3 scripts/writer/test_source_integration.py --database health_writer_durable_source_ci --out /tmp/health-source-sql.json
+      - name: Exact authorization bridge restricted TCP tests
+        env:
+          PGPASSWORD: health-synthetic
+        run: |
+          createdb -h 127.0.0.1 -U postgres health_writer_durable_authorization_ci
+          python3 scripts/writer/test_authorization.py --database health_writer_durable_authorization_ci --out /tmp/health-writer-authorization.json
       - name: Supabase TEST connection boundary negatives
         run: python3 scripts/writer/test_supabase_durable.py --self-test
+      - name: Exact owner actor workflow and payload policy
+        run: node scripts/writer/test_owner_claims.mjs
       - name: Public repository secret-pattern guard
         run: python3 scripts/validation/public_secret_guard.py
   supabase-durable:
+    permissions:
+      contents: read
+      id-token: write
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.actor_id == '308028794' &&

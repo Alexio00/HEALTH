@@ -19,11 +19,11 @@ import build_fixture
 HERE = Path(__file__).resolve().parent
 
 class CallError(RuntimeError):
-    def __init__(self, code):
+    def __init__(self, code, constraint=None):
         self.code = code
-        super().__init__('sqlstate:' + (code or 'UNAVAILABLE'))
+        super().__init__('sqlstate:' + (code or 'UNAVAILABLE') + ((';constraint:' + constraint) if constraint else ''))
 
-def run(container=None, database='postgres'):
+def run(container=None, database='postgres', extra_suite=None):
     if database != 'postgres' and not re.fullmatch(r'health_writer_durable_[a-z0-9_]+', database):
         raise RuntimeError('disposable_database_required')
     schema = 'health_writer_fixture_' + uuid.uuid4().hex[:12]
@@ -51,7 +51,8 @@ def run(container=None, database='postgres'):
         if expected:
             return p.returncode != 0 and code == expected
         if p.returncode:
-            raise CallError(code)
+            constraint = re.search(r'CONSTRAINT NAME:\s+([a-zA-Z_][a-zA-Z0-9_]*)', p.stderr)
+            raise CallError(code, constraint[1] if constraint else None)
         return p.stdout.strip()
     def check(name, passed, **details):
         checks.append({'name': name, 'passed': bool(passed), **details})
@@ -179,6 +180,10 @@ def run(container=None, database='postgres'):
             outcomes=list(pool.map(race,['race_a','race_b']))
         check('parallel_prepare_one_winner',sorted(outcomes)==['PREPARED','REJECTED_23505'])
         api('abandon','race_a' if outcomes[0]=='PREPARED' else 'race_b')
+        if extra_suite is not None:
+            extra_suite({'schema':schema,'execute':execute,'check':check,'api':api,
+                         'intent':intent,'stage':stage,'digest':digest,'roles':roles,
+                         'passwords':passwords,'created_roles':created_roles})
         execute(f"INSERT INTO {schema}.id_reservations(nnn,state) VALUES(999,'retired');")
         intent('exhausted',create=True)
         check('nnn_exhaustion_no_durable_operation',execute(f"SELECT {schema}.prepare('exhausted');",0,'P0001') and api('request_status','exhausted')['state']=='NOT_PREPARED')

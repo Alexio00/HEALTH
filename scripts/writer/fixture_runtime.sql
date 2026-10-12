@@ -45,8 +45,22 @@ BEGIN
    WHEN 'monitoring' THEN ARRAY['monitoring_id'] WHEN 'plan_items' THEN ARRAY['plan_item_id']
    WHEN 'questions' THEN ARRAY['question_id'] WHEN 'record_domains' THEN ARRAY['record_id','domain_code']
    WHEN 'record_sources' THEN ARRAY['record_id','source_id','role']
+   WHEN 'sources' THEN ARRAY['source_id']
+   WHEN 'source_locations' THEN ARRAY['source_id','provider','account_alias','provider_object_id','location_role']
    ELSE NULL END;
   IF keys IS NULL OR action IS NULL OR action NOT IN ('INSERT','UPDATE','DELETE') THEN RAISE EXCEPTION 'unsupported table/action'; END IF;
+  IF t IN ('sources','source_locations') THEN
+   IF action IS DISTINCT FROM 'INSERT' THEN RAISE EXCEPTION 'unsupported table/action'; END IF;
+   IF p_operation IS NULL
+    OR to_regclass('__SCHEMA__.source_uploads') IS NULL THEN
+    RAISE EXCEPTION 'Source creation requires durable upload protocol'; END IF;
+   IF NOT EXISTS(SELECT 1 FROM __SCHEMA__.source_uploads u WHERE u.operation_id=p_operation
+     AND u.source_id=data->>'source_id' AND u.state IN ('PLANNED','UNCERTAIN','VERIFIED')
+     AND CASE WHEN t='sources' THEN u.source_row=data ELSE
+       u.provider=data->>'provider' AND u.account_alias=data->>'account_alias'
+       AND data->>'location_role'='PRIMARY' AND data->>'verified_at' IS NOT NULL END)
+    THEN RAISE EXCEPTION 'Source upload binding missing'; END IF;
+  END IF;
   IF t='records' AND action='DELETE' THEN RAISE EXCEPTION 'REC allocation/purge requires separate protocol'; END IF;
   IF t='records' AND action='INSERT' AND (p_operation IS NULL OR NOT EXISTS(
    SELECT 1 FROM __SCHEMA__.id_reservations r WHERE r.operation_id=p_operation

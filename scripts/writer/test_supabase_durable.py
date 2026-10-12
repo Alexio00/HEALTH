@@ -12,8 +12,44 @@ import re
 import subprocess
 import sys
 from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import urlencode
+from urllib.request import Request, build_opener, HTTPRedirectHandler
+from urllib.error import HTTPError, URLError
 
 TEST_PROJECT='yjmcesdayfmfissghzgm'
+
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self,*args,**kwargs): return None
+
+def signed_authorization(schema, metadata):
+    """TEST only: use a fresh GitHub-signed token, never print it or credentials."""
+    target=os.environ.get('ACTIONS_ID_TOKEN_REQUEST_URL','')
+    token=os.environ.get('ACTIONS_ID_TOKEN_REQUEST_TOKEN','')
+    parsed=urlparse(target)
+    if parsed.scheme!='https' or not (parsed.hostname or '').endswith('.actions.githubusercontent.com') or parsed.username or parsed.password or not token:
+        raise RuntimeError('trusted_github_oidc_endpoint_required')
+    opener=build_opener(NoRedirect())
+    audience='health-writer-test-authorization-'+TEST_PROJECT
+    target+=('&' if parsed.query else '?')+urlencode({'audience':audience})
+    def call(request):
+        try:
+            with opener.open(request,timeout=30) as response:
+                raw=response.read(8193)
+                if len(raw)>8192: raise RuntimeError('authorization_response_too_large')
+                return json.loads(raw)
+        except HTTPError as error:
+            raise RuntimeError('authorization_http_'+str(error.code)) from None
+        except (URLError,ValueError):
+            raise RuntimeError('authorization_transport_failed') from None
+    value=call(Request(target,headers={'Authorization':'Bearer '+token}))
+    jwt=value.get('value','')
+    if not re.fullmatch(r'[A-Za-z0-9_.-]+',jwt): raise RuntimeError('signed_token_missing')
+    body={'schema':schema,**{k:metadata[k] for k in ('request_key','kind','digest')}}
+    result=call(Request('https://'+TEST_PROJECT+'.supabase.co/functions/v1/health-test-writer-authorization-v3',
+        data=json.dumps(body).encode(),headers={'Authorization':'Bearer '+jwt,'Content-Type':'application/json'},method='POST'))
+    if result.get('accepted') is not True or result.get('digest')!=metadata['digest'] or result.get('kind')!=metadata['kind']:
+        raise RuntimeError('exact_authorization_receipt_required')
+    return {'accepted':True,'kind':metadata['kind'],'digest':metadata['digest'],'signature_verifier':'GitHub JWKS RS256; pinned TEST broker'}
 
 def connection_fields(raw):
     try:
@@ -78,6 +114,12 @@ def suite(schema,phase,expected_sha):
         'foreign_request_denied':f"SELECT {schema}.prepare('{key}-FOREIGN');"
     }.items(): check(name,execute(sql,'42501'),sqlstate='42501')
     check('expired_intent_denied',execute(f"SELECT {schema}.prepare('{key}-EXPIRED');",'P0001'),sqlstate='P0001')
+    kind='intent' if phase=='prepare' else 'candidate'
+    metadata=json.loads(execute(f"SELECT {schema}.authorization_request('{key}','{kind}');"))
+    denied='prepare' if phase=='prepare' else 'finalize'
+    check('unapproved_exact_request_denied',execute(f"SELECT {schema}.{denied}('{key}');",'P0001'),sqlstate='P0001')
+    authorization=signed_authorization(schema,metadata)
+    check('actual_signed_exact_authorization',authorization['accepted'],kind=kind,digest=authorization['digest'])
     if phase=='prepare':
         prepared=api('prepare')
         check('actual_durable_prepare',prepared['state']=='PREPARED' and prepared['nnn']==3)
@@ -95,7 +137,8 @@ def suite(schema,phase,expected_sha):
             'fixture_schema':schema,'phase':phase,'workflow_sha':expected_sha,
             'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],
             'checks':checks,'assertions':len(checks),'operation_metadata':state,
-            'approval_and_semantic_inputs':'ADMINISTRATOR_SYNTHETIC_SIMULATION',
+            'authorization':authorization,'approval_inputs':'ACTUAL_GITHUB_SIGNED_EXACT_OWNER_TEST_DISPATCH',
+            'semantic_inputs':'ADMINISTRATOR_SYNTHETIC_SIMULATION',
             'actual_supabase_restricted_role_tcp':True,'production_enablement':False,
             'production_executor_tls':'NOT_PROVEN','source_saga_integration':'NOT_RUN'}
 

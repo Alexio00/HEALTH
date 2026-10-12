@@ -30,7 +30,7 @@ END $fn$;
 CREATE FUNCTION __SCHEMA__.sha(value jsonb) RETURNS text LANGUAGE sql IMMUTABLE
 SET search_path=pg_catalog,pg_temp AS $fn$ SELECT encode(sha256(convert_to(value::text,'UTF8')),'hex') $fn$;
 
-CREATE FUNCTION __SCHEMA__.apply_delta(changes jsonb) RETURNS void
+CREATE FUNCTION __SCHEMA__.apply_delta_internal(changes jsonb, p_operation uuid) RETURNS void
 LANGUAGE plpgsql SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $fn$
 DECLARE delta jsonb; t text; action text; keys text[]; k text; col text; cols text=''; sets text=''; predicate text; current_row jsonb; data jsonb; n bigint;
 BEGIN
@@ -47,7 +47,13 @@ BEGIN
    WHEN 'record_sources' THEN ARRAY['record_id','source_id','role']
    ELSE NULL END;
   IF keys IS NULL OR action IS NULL OR action NOT IN ('INSERT','UPDATE','DELETE') THEN RAISE EXCEPTION 'unsupported table/action'; END IF;
-  IF t='records' AND action IN ('INSERT','DELETE') THEN RAISE EXCEPTION 'REC allocation/purge requires separate protocol'; END IF;
+  IF t='records' AND action='DELETE' THEN RAISE EXCEPTION 'REC allocation/purge requires separate protocol'; END IF;
+  IF t='records' AND action='INSERT' AND (p_operation IS NULL OR NOT EXISTS(
+   SELECT 1 FROM __SCHEMA__.id_reservations r WHERE r.operation_id=p_operation
+    AND r.state='reserved' AND r.nnn=(data->>'nnn')::integer
+    AND r.metadata->>'proposed_record_id'=data->>'record_id'
+    AND r.metadata->>'record_date'=data->>'record_date'
+  )) THEN RAISE EXCEPTION 'REC allocation/purge requires separate protocol'; END IF;
   IF jsonb_typeof(delta->'key') IS DISTINCT FROM 'object' OR (SELECT count(*) FROM jsonb_object_keys(delta->'key'))<>cardinality(keys) THEN RAISE EXCEPTION 'exact key required'; END IF;
   predicate:='';
   FOREACH k IN ARRAY keys LOOP
@@ -69,7 +75,7 @@ BEGIN
     IF action='INSERT' AND data->k IS DISTINCT FROM delta->'key'->k THEN RAISE EXCEPTION 'insert key mismatch'; END IF;
     IF action='UPDATE' AND data ? k THEN RAISE EXCEPTION 'immutable key'; END IF;
    END LOOP;
-   IF t='records' AND (data ? 'nnn' OR data ? 'record_date' OR data ? 'created_at') THEN RAISE EXCEPTION 'immutable REC identity'; END IF;
+   IF t='records' AND action='UPDATE' AND (data ? 'nnn' OR data ? 'record_date' OR data ? 'created_at') THEN RAISE EXCEPTION 'immutable REC identity'; END IF;
    cols:=''; sets:='';
    FOR col IN SELECT jsonb_object_keys(data) ORDER BY 1 LOOP
     cols:=cols||CASE WHEN cols='' THEN '' ELSE ',' END||quote_ident(col);
@@ -86,7 +92,12 @@ BEGIN
  END LOOP;
 END $fn$;
 
-CREATE FUNCTION __SCHEMA__.publish(p_key text) RETURNS jsonb
+CREATE FUNCTION __SCHEMA__.apply_delta(changes jsonb) RETURNS void
+LANGUAGE sql SECURITY INVOKER SET search_path=pg_catalog,pg_temp AS $fn$
+ SELECT __SCHEMA__.apply_delta_internal(changes,NULL);
+$fn$;
+
+CREATE FUNCTION __SCHEMA__.publish_internal(p_key text, p_operation uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $fn$
 DECLARE c __SCHEMA__.candidates%rowtype; before_state jsonb; after_state jsonb; op uuid; v_sha text;
 BEGIN
@@ -102,8 +113,28 @@ BEGIN
  LOCK TABLE __SCHEMA__.records,__SCHEMA__.domains,__SCHEMA__.record_domains,__SCHEMA__.sources,__SCHEMA__.source_locations,__SCHEMA__.record_sources,__SCHEMA__.cases,__SCHEMA__.case_links,__SCHEMA__.analytes,__SCHEMA__.labs,__SCHEMA__.medications,__SCHEMA__.monitoring,__SCHEMA__.plan_items,__SCHEMA__.questions,__SCHEMA__.id_reservations IN SHARE ROW EXCLUSIVE MODE;
  before_state:=__SCHEMA__.checkpoint();
  IF __SCHEMA__.sha(before_state) IS DISTINCT FROM c.expected_before_sha THEN RAISE EXCEPTION 'stale domain snapshot'; END IF;
- INSERT INTO __SCHEMA__.operations(operation,mode,scope,state,notes) VALUES('SYNTHETIC_DELTA','maintenance',ARRAY[p_key],'PREPARED','synthetic approval/verifier only') RETURNING operation_id INTO op;
- PERFORM __SCHEMA__.apply_delta(c.payload->'changes');
+ IF p_operation IS NULL THEN
+  INSERT INTO __SCHEMA__.operations(operation,mode,scope,state,notes) VALUES('SYNTHETIC_DELTA','maintenance',ARRAY[p_key],'PREPARED','synthetic approval/verifier only') RETURNING operation_id INTO op;
+ ELSE
+  SELECT operation_id INTO op FROM __SCHEMA__.operations
+   WHERE operation_id=p_operation AND operation='SYNTHETIC_DURABLE_DELTA'
+    AND state='PREPARED' AND scope=ARRAY[p_key] FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'foreign operation or operation class'; END IF;
+ END IF;
+ UPDATE __SCHEMA__.operations SET state='COMMITTED_REGISTRY',updated_at=clock_timestamp() WHERE operation_id=op;
+ PERFORM __SCHEMA__.apply_delta_internal(c.payload->'changes',p_operation);
+ IF p_operation IS NOT NULL THEN
+  IF EXISTS(SELECT 1 FROM __SCHEMA__.id_reservations r WHERE r.operation_id=op AND r.state='reserved'
+   AND NOT EXISTS(SELECT 1 FROM __SCHEMA__.records x WHERE x.nnn=r.nnn AND x.record_id=r.metadata->>'proposed_record_id'))
+   THEN RAISE EXCEPTION 'reserved REC not materialized'; END IF;
+  IF EXISTS(SELECT 1 FROM __SCHEMA__.id_reservations WHERE operation_id=op AND state='reserved')
+   AND ((c.payload->>'ledger_updated_at')::timestamptz IS NULL
+    OR (c.payload->>'ledger_updated_at')::timestamptz>clock_timestamp()
+    OR (c.payload->>'ledger_updated_at')::timestamptz<clock_timestamp()-interval '10 minutes')
+   THEN RAISE EXCEPTION 'ledger transition timestamp missing/stale'; END IF;
+  UPDATE __SCHEMA__.id_reservations SET state='used',record_id=metadata->>'proposed_record_id',updated_at=(c.payload->>'ledger_updated_at')::timestamptz
+   WHERE operation_id=op AND state='reserved';
+ END IF;
  after_state:=__SCHEMA__.checkpoint();v_sha:=__SCHEMA__.sha(after_state);
  IF v_sha IS DISTINCT FROM c.expected_after_sha THEN RAISE EXCEPTION 'unexpected after snapshot'; END IF;
  IF (SELECT count(*) FROM __SCHEMA__.structural_checks())<>20 OR EXISTS(SELECT 1 FROM __SCHEMA__.structural_checks() WHERE passed IS DISTINCT FROM true) THEN RAISE EXCEPTION 'structural validation failed'; END IF;
@@ -112,10 +143,17 @@ BEGIN
  IF EXISTS(SELECT 1 FROM (SELECT basis_record_id FROM __SCHEMA__.medications UNION ALL SELECT basis_record_id FROM __SCHEMA__.monitoring UNION ALL SELECT basis_record_id FROM __SCHEMA__.plan_items UNION ALL SELECT basis_record_id FROM __SCHEMA__.questions) d WHERE d.basis_record_id IS NULL OR NOT EXISTS(SELECT 1 FROM __SCHEMA__.records r WHERE r.record_id=d.basis_record_id)) THEN RAISE EXCEPTION 'derived basis missing'; END IF;
  IF EXISTS(SELECT 1 FROM __SCHEMA__.medications m WHERE m.status='active' AND (m.metadata->>'intake_event' IS NULL OR (SELECT count(*) FROM __SCHEMA__.questions q WHERE q.status='open' AND q.basis_record_id=m.basis_record_id AND q.metadata->>'medication_id'=m.medication_id::text AND q.metadata->>'intake_event'=m.metadata->>'intake_event' AND q.metadata->>'check_kind'='drug_interactions')<>1)) THEN RAISE EXCEPTION 'interaction question missing or duplicated'; END IF;
  IF (SELECT count(*) FROM __SCHEMA__.semantic_receipts s WHERE s.request_key=p_key AND s.rule_id IN (19,20,21,22,27,28,29,30,31,37) AND s.status='PASS' AND s.candidate_sha=c.candidate_sha AND s.after_sha=v_sha AND s.checked_at>clock_timestamp()-interval '10 minutes' AND s.checked_at<=clock_timestamp() AND s.evidence_sha~'^[a-f0-9]{64}$' AND nullif(s.methodology,'') IS NOT NULL)<>10 THEN RAISE EXCEPTION 'semantic/source evidence missing or stale'; END IF;
+ IF c.expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'approval expired during publication'; END IF;
  INSERT INTO __SCHEMA__.publish_audit VALUES(p_key,op,c.candidate_sha,before_state,after_state,c.expected_before_sha,v_sha);
+ UPDATE __SCHEMA__.operations SET state='VALIDATED',updated_at=clock_timestamp() WHERE operation_id=op;
  UPDATE __SCHEMA__.operations SET state='FINALIZED',result='success',finalized_at=clock_timestamp(),updated_at=clock_timestamp() WHERE operation_id=op;
  RETURN jsonb_build_object('state','FINALIZED','replayed',false,'test_only',true);
 END $fn$;
+
+CREATE FUNCTION __SCHEMA__.publish(p_key text) RETURNS jsonb
+LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $fn$
+ SELECT __SCHEMA__.publish_internal(p_key,NULL);
+$fn$;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA __SCHEMA__ FROM PUBLIC;
 
 -- TEST-only recovery lookup after an uncertain client acknowledgement.

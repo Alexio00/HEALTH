@@ -3,6 +3,13 @@
 Status: reviewed-component candidate; production/cutover readiness remains NO-GO.
 This is fresh executor observation, not an independent acceptance audit.
 
+2026-10-12 addendum: the exact referenced proposal and all 12 evidence pins were
+found and verified. Its 22 check keys/current contract and 15 fresh live table
+fingerprints matched. Original finalization execution provenance is still
+unestablished. The prior lookup failure below is historical. Durable Writer
+overlay/local Source saga development is described in scripts/writer/README.md;
+it does not enable production or accept the canonical validation/Source protocol.
+
 ## Exact target and baseline
 
 Target UUID `fa39e51f-3d95-4f82-bd3b-94438e7139a1`; package fingerprint

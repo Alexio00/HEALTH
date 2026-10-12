@@ -2,6 +2,28 @@
 
 Status: FULL MIGRATION FINALIZED/PASS OBSERVED IN TARGET; EXECUTION/APPROVAL RECEIPTS UNDER RECONCILIATION; WRITER TEST COMPONENT CANDIDATE; CUTOVER NO-GO
 
+## Development continuation — 2026-10-12
+
+The original referenced proposal receipt `e9ca9e7d44004be32ffb32392e94dc9efd372db1969ac1ec95becc0383c0482c`
+was found byte-exact. All 12 referenced evidence files matched their pins, the
+22 live stamp keys/check contract matched, and all 15 receipt fingerprints
+matched fresh target reads. The proposal's `VERIFIED_PROPOSAL_NOT_APPLIED` and
+`automatic_execute=false` do not establish the original finalization actor.
+The earlier "receipt not found" statement below is superseded.
+
+The optional durable synthetic Writer overlay covers 33 local TCP tests;
+the existing 30-component/45-synthetic suites passed regression. Local Source
+saga passed 16 actual-byte tests. These are explicit component results with
+simulated approvals/semantic inputs. An exact-pinned, owner-dispatched Supabase
+TEST network probe is prepared; its outcome must be read independently.
+The existing v2 implementation and production clinical state are unchanged.
+
+SHEDULLER's replacement-reader experiment demonstrated local exported-snapshot
+restore and actual DML denial. It does not accept production Auth/role-secret/
+Source/retention recovery or authorize credential transition. Direct production
+executor TLS, full Writer/Source integration, independent retention and cutover
+acceptance remain open. See [Writer component details](../scripts/writer/README.md).
+
 ## Current observation — 2026-10-11
 
 The live target full-migration operation is FINALIZED/PASS (finalized at 08:09:06.67552 UTC). Fresh read-only full-migration invariants returned 27/27 PASS. These are current target observations, not an acceptance of the original executor, independently retained owner finalization approval, local TLS/trust boundary or all semantic/recovery evidence. The original execution receipt and acceptance receipt must be reconciled before declaring operational acceptance. Do not rerun import/reset/finalization to reconstruct missing evidence.

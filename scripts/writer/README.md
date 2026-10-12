@@ -72,3 +72,48 @@ readback-verified; the disposable server's shared no-login fixture roles remain.
 4. Run all required clinical/semantic cases and 37-rule applicability acceptance. Historical migration stamps and prior fixed-candidate OIDC success are not acceptance for this new engine.
 5. Prove actual restricted network positive + exact permission-denied negative tests, including unconfirmed COMMIT/status reconciliation, replay conflict and concurrent writers.
 6. Accept the backup/recovery boundary and deletion protocol separately. Production enablement requires the accepted cutover mandate and approval for the concrete candidate.
+
+## Durable preparation overlay and Source saga — 2026-10-12
+
+`durable_runtime.sql` is an optional overlay on a new constrained synthetic
+fixture. It adds caller-bound intents, a protected routine operation class,
+durable PREPARED, serialized 1..999 allocation, retired-number preservation,
+atomic reservation-to-used publication, 30 operation-bound component validation
+rows, and restricted status/abandon entrypoints. It revokes the legacy direct
+publication entrypoint from the fixture writer role. This is not a canonical
+schema migration and does not alter `health_test_writer.v2_*`.
+
+`test_durable.py` covers 33 local restricted TCP assertions, including foreign
+caller denial, competing preparation, CREATE, rollback, revocation/expiry,
+intent mutation, migration-class rejection and allocator exhaustion. Exact
+candidate/intent approvals and semantic receipts remain administrator
+simulations; this is not a verified owner approval service. The validation
+journal does not replace the canonical validation catalog or 37-rule acceptance.
+
+```sh
+python scripts/writer/test_durable.py --docker-container <disposable-name> --out /private/durable.json
+python scripts/writer/test_source_saga.py --out /private/source-saga.json
+```
+
+`source_saga.py` persists a correlation marker in a SQLite FULL/WAL journal
+before creating a new local-provider object. Reconciliation binds marker,
+provider identity, stable logical Source ID, actual SHA/length, operation and
+candidate. Sixteen tests use actual synthetic bytes, including a created object
+whose adapter drops the reply, journal reopening, replay, partial bytes,
+ambiguous equal-hash objects, orphan preservation and later byte mutation.
+This local provider is disposable; production Drive ACLs, an independent
+verifier identity, SQL Source integration and PRIMARY rebind are not accepted.
+
+The existing code-validation workflow can run an owner-dispatched two-phase
+Supabase TEST probe against one administrator-created private fixture. Prepare
+and publish are separate actual network runs, pinned to the exact workflow/code
+SHA. Only the existing restricted TEST DB secret is used; no DDL or approval
+changes are available to the probe. The administrator stages synthetic approvals
+between runs. A successful remote run is separate evidence, never inferred
+from the local result. The fixture schema must be readback-checked and removed
+after the probe. Production enablement remains false.
+
+Private SECURITY DEFINER entrypoints revoke PUBLIC execute and pin search_path;
+only the bounded writer role receives execute. Design references:
+[Supabase database functions](https://supabase.com/docs/guides/database/functions),
+[RLS guidance](https://supabase.com/docs/guides/database/postgres/row-level-security).

@@ -24,7 +24,7 @@ def connection_fields(raw):
     except (TypeError,ValueError):
         raise RuntimeError('invalid_test_database_locator') from None
     direct=host=='db.'+TEST_PROJECT+'.supabase.co' and user in ('health_test_ci','health_test_ci.'+TEST_PROJECT)
-    pooler=bool(re.fullmatch(r'[a-z0-9-]+\.[a-z0-9-]+\.pooler\.supabase\.com',host)) and user=='health_test_ci.'+TEST_PROJECT
+    pooler=bool(re.fullmatch(r'(?:[a-z0-9-]+\.){1,2}pooler\.supabase\.com',host)) and user=='health_test_ci.'+TEST_PROJECT
     if url.scheme not in ('postgres','postgresql') or not (direct or pooler) or url.path not in ('/postgres','') or not url.password:
         raise RuntimeError('exact_test_project_restricted_role_required')
     query=parse_qs(url.query,keep_blank_values=True)
@@ -113,7 +113,9 @@ def self_test():
     assert len(rejected)==5
     good=connection_fields('postgresql://health_test_ci:x@db.yjmcesdayfmfissghzgm.supabase.co/postgres?sslmode=require')
     assert good['PGUSER']=='health_test_ci' and good['PGSSLMODE']=='require'
-    print(json.dumps({'status':'SELF_TEST_PASS','rejected_unsafe_connection_classes':5}))
+    pooler=connection_fields('postgresql://health_test_ci.yjmcesdayfmfissghzgm:x@aws-0-us-west-1.pooler.supabase.com/postgres?sslmode=require')
+    assert pooler['PGUSER']=='health_test_ci.'+TEST_PROJECT
+    print(json.dumps({'status':'SELF_TEST_PASS','rejected_unsafe_connection_classes':5,'direct_and_pooler_forms':2}))
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--schema');p.add_argument('--phase',choices=['prepare','publish'])

@@ -1,5 +1,11 @@
 # Writer components and disabled canonical integration candidate
 
+The canonical runtime is now installed in production in the disabled state.
+Current private chat operation, authorization, historical exception and recovery
+boundaries are described in [Writer operation](../../docs/WRITER_OPERATOR.md).
+The dated component results below remain bound to their original inputs; they
+do not describe the current deployment or authorize a medical operation.
+
 The original fixture modules contain a TEST-only typed delta engine and reproducible synthetic checks. `build_standby.py` separately renders a disabled canonical integration candidate; it does not connect, deploy, enable Writer or authorize a clinical operation. Component approval and semantic receipt inputs are simulated by the administrator only. Clinical acceptance is separate from test mechanics.
 
 ## Verified component behavior

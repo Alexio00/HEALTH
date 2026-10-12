@@ -1,6 +1,47 @@
 # Project State
 
-Status: FULL MIGRATION FINALIZED/PASS OBSERVED IN TARGET; EXECUTION/APPROVAL RECEIPTS UNDER RECONCILIATION; WRITER TEST COMPONENT CANDIDATE; CUTOVER NO-GO
+Status: CANONICAL WRITER INSTALLED DISABLED; FULL BACKUP WITH WRITER RECOVERY ACCEPTED; OWNER CUTOVER PENDING
+
+## Current technical acceptance — 2026-10-12
+
+The canonical Writer and restricted writing/verification logins are installed in
+production, with all private tables protected by RLS. The runtime remains disabled.
+Installation and disabled probes left all medical-domain and operation rowsets
+unchanged. The owner approved one exact historical date/ID exception, bound to
+the whole unchanged row and explicit owner-decision evidence. Rule 11 discloses
+that exception in each future current operation audit; new rows remain strict.
+
+The private chat operator and fixed server-only GitHub OIDC authorization broker
+are implemented. Local canonical suites passed 50 checks; actual Google resumable
+upload recovery, independent byte verification and local SQL publication passed
+64 checks. Isolated Supabase TEST prepare/publish passed 14/11 checks with actual
+signed GitHub owner dispatch. Synthetic semantic inputs remain simulations, not
+medical acceptance. Actual production role guards passed 18 checks, and a signed
+main request was correctly rejected by the disabled production RPC. See
+[Writer operation](WRITER_OPERATOR.md) for the current implementation boundary.
+
+Full remote backup acceptance run `38306026857` at SHEDULLER
+`06ecc1624c366e66ffeeba6afaf6290f6c5a5cd0` verified 67 database tables, exact roles
+and 33 memberships, all 275 Source corpus files with independent byte readback,
+and 26 recreated PRIMARY locators. Recovery verifies the exact snapshot before
+deliberately disabling Writer, clearing its code pin and disabling upload folders.
+All 17 other private control tables remain unchanged. The verified new Source
+root is rebound while Writer stays disabled. No pending operation resumes
+automatically. Daily backup remains configured for 03:00 Europe/Moscow, one active
+archive, and trash-only retirement of the previous verified archive; capacity is
+assumed per owner instruction and was not queried.
+
+The deployed PWA's ten assets match the accepted main code bytes. The public
+client cannot execute the Writer authorization RPC. Owner manual UI acceptance
+was waived; no authenticated browser session is claimed by this asset check.
+
+The governing Drive Project State still identifies Drive as canonical and
+MAINT-011 as the active source freeze. Those facts are preserved until the owner
+adopts the currently verified Supabase baseline and explicitly approves cutover.
+Updating the governing documents, closing the freeze and enabling Writer are
+prepared owner-decision steps. The disposition of original/legacy project files
+remains a later decision. Earlier dated observations below are historical and
+do not override this technical status or supply missing execution provenance.
 
 ## Development continuation — 2026-10-12
 

@@ -33,7 +33,7 @@ on:
         description: Durable prepare or approved synthetic publish phase
         required: false
         type: choice
-        options: [prepare, publish]
+        options: [prepare, publish, tls]
         default: prepare
 
 permissions:
@@ -123,6 +123,8 @@ jobs:
         run: python3 scripts/writer/test_supabase_durable.py --self-test
       - name: Exact owner actor workflow and payload policy
         run: node scripts/writer/test_owner_claims.mjs
+      - name: Pinned Session CA role and passfile boundaries
+        run: python3 scripts/writer/test_session_pooler_tls.py
       - name: Public repository secret-pattern guard
         run: python3 scripts/validation/public_secret_guard.py
   supabase-durable:
@@ -134,6 +136,7 @@ jobs:
       github.actor_id == '308028794' &&
       github.ref == 'refs/heads/test/writer-delta-and-production-acceptance-20261011' &&
       github.event.inputs.supabase_fixture_schema != '' &&
+      github.event.inputs.supabase_probe_phase != 'tls' &&
       github.event.inputs.expected_writer_sha == github.sha
     runs-on: ubuntu-24.04
     timeout-minutes: 7
@@ -149,17 +152,44 @@ jobs:
       - name: Owner-dispatched exact TEST restricted network probe
         env:
           HEALTH_TEST_WRITER_DB_URL: ${{ secrets.HEALTH_TEST_WRITER_DB_URL }}
+          HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
           FIXTURE_SCHEMA: ${{ github.event.inputs.supabase_fixture_schema }}
           EXPECTED_SHA: ${{ github.event.inputs.expected_writer_sha }}
           PROBE_PHASE: ${{ github.event.inputs.supabase_probe_phase }}
-        run: >-
-          python3 scripts/writer/test_supabase_durable.py
-          --schema "$FIXTURE_SCHEMA" --expected-sha "$EXPECTED_SHA"
-          --phase "$PROBE_PHASE" --out "$RUNNER_TEMP/health-durable-supabase.json"
+        run: |
+          python3 -c 'from scripts.writer.session_pooler_tls import install_ca; import os; install_ca(os.environ["RUNNER_TEMP"]+"/health-ca.pem")'
+          python3 scripts/writer/test_supabase_durable.py --schema "$FIXTURE_SCHEMA" --expected-sha "$EXPECTED_SHA" --ca "$RUNNER_TEMP/health-ca.pem" --phase "$PROBE_PHASE" --out "$RUNNER_TEMP/health-durable-supabase.json"
       - name: Upload sanitized TEST network proof
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: health-durable-supabase-${{ github.event.inputs.supabase_probe_phase }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/health-durable-supabase.json
+          if-no-files-found: error
+          retention-days: 7
+  supabase-session-tls:
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.actor_id == '308028794' &&
+      github.ref == 'refs/heads/test/writer-delta-and-production-acceptance-20261011' &&
+      github.event.inputs.supabase_probe_phase == 'tls' &&
+      github.event.inputs.expected_writer_sha == github.sha
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq >/dev/null
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+      - name: Restricted TEST Session CA hostname and read-only probe
+        env:
+          HEALTH_TEST_WRITER_DB_URL: ${{ secrets.HEALTH_TEST_WRITER_DB_URL }}
+          HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
+        run: python3 scripts/writer/session_pooler_tls.py --project yjmcesdayfmfissghzgm --role health_test_ci --ca "$RUNNER_TEMP/health-ca.pem" --out "$RUNNER_TEMP/session-tls.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: writer-session-tls-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/session-tls.json
           if-no-files-found: error
           retention-days: 7

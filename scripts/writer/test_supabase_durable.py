@@ -15,6 +15,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from urllib.parse import urlencode
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
+from session_pooler_tls import runtime,SafeStop
 
 TEST_PROJECT='yjmcesdayfmfissghzgm'
 
@@ -74,14 +75,14 @@ def connection_fields(raw):
     if 'sslrootcert' in query: fields['PGSSLROOTCERT']=query['sslrootcert'][0]
     return fields
 
-def suite(schema,phase,expected_sha):
+def suite(schema,phase,expected_sha,connection_env):
     if not re.fullmatch(r'health_writer_fixture_[a-f0-9]{12}',schema): raise RuntimeError('exact_private_fixture_schema_required')
     if not re.fullmatch(r'[a-f0-9]{40}',expected_sha) or os.environ.get('GITHUB_SHA')!=expected_sha:
         raise RuntimeError('workflow_commit_pin_mismatch')
     if os.environ.get('GITHUB_ACTOR_ID')!='308028794' or os.environ.get('GITHUB_REPOSITORY')!='Alexio00/HEALTH':
         raise RuntimeError('owner_dispatch_required')
     env={k:v for k,v in os.environ.items() if k.upper() in {'PATH','HOME','SYSTEMROOT','WINDIR','TEMP','TMP','COMSPEC','PATHEXT'}}
-    fields=connection_fields(os.environ.get('HEALTH_TEST_WRITER_DB_URL',''))
+    fields=connection_env
     env.update(fields)
     checks=[]
     def check(name,ok,**details):
@@ -161,11 +162,13 @@ def self_test():
     print(json.dumps({'status':'SELF_TEST_PASS','rejected_unsafe_connection_classes':5,'direct_and_pooler_forms':2}))
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--schema');p.add_argument('--phase',choices=['prepare','publish'])
+    p=argparse.ArgumentParser();p.add_argument('--schema');p.add_argument('--phase',choices=['prepare','publish']);p.add_argument('--ca',type=Path)
     p.add_argument('--expected-sha');p.add_argument('--out',type=Path);p.add_argument('--self-test',action='store_true');a=p.parse_args()
     if a.self_test: self_test();sys.exit(0)
-    if not all((a.schema,a.phase,a.expected_sha,a.out)): p.error('schema/phase/expected-sha/out required')
-    try: result=suite(a.schema,a.phase,a.expected_sha)
+    if not all((a.schema,a.phase,a.expected_sha,a.out,a.ca)): p.error('schema/phase/expected-sha/out/ca required')
+    try:
+        with runtime(os.environ.get('HEALTH_TEST_WRITER_DB_URL',''),TEST_PROJECT,'health_test_ci',a.ca.resolve()) as connection_env:
+            result=suite(a.schema,a.phase,a.expected_sha,connection_env)
     except Exception as error:
         result={'status':'STOPPED','safe_reason':str(error) if isinstance(error,RuntimeError) else type(error).__name__,'production_enablement':False}
     a.out.write_text(json.dumps(result,indent=2),encoding='utf-8')

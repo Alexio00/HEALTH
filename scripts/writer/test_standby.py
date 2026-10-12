@@ -102,6 +102,7 @@ def run(container=None,port=5432,extra_suite=None):
         check('unapproved_intent_stops_prepare',call(0,'SELECT health_writer.prepare(%s);',(key,),denied='P0001'))
         authorize(key,'intent',i['intent_sha']);p=api(0,'prepare',key)
         check('canonical_operation_prepared',p['state']=='PREPARED' and admin(f"SELECT operation FROM public.operations WHERE operation_id='{p['operation_id']}';")=='HEALTH_WRITER_DELTA_V1')
+        check('test_account_alias_rejected',call(0,'SELECT health_writer.plan_source(%s,%s,%s,%s);',(key,'{}','google-drive','primary'),denied='P0001'))
         snap=digest();changes=delta();c=propose(key,changes)
         check('proposal_does_not_publish',digest()==snap)
         check('foreign_candidate_denied',call(1,'SELECT health_writer.propose(%s,%s,NULL);',(key,json.dumps(changes)),denied='P0001'))

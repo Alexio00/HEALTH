@@ -60,7 +60,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA health_writer REVOKE EXECUTE ON FUNCTIONS FRO
     # SQL-language structural_checks resolves this symbol at CREATE time. Until
     # the complete private implementation is installed the stub denies PASS.
     lab_stub="CREATE FUNCTION health_writer.lab_check_context_valid() RETURNS boolean LANGUAGE sql STABLE SET search_path=pg_catalog,pg_temp AS 'SELECT false';"
-    parts = [setup, core, lab_stub, checks, durable, common('source_runtime.sql'),
+    source = once(common('source_runtime.sql'), "p_account !~ '^[a-z0-9_-]{1,64}$'", "p_account IS DISTINCT FROM 'HEALTH_PRIMARY'")
+    parts = [setup, core, lab_stub, checks, durable, source,
              resumable, common('approval_runtime.sql'),
              (HERE/'standby_runtime.sql').read_text(encoding='utf-8'),
              (HERE/'canonical_validation.sql').read_text(encoding='utf-8'), 'COMMIT;']

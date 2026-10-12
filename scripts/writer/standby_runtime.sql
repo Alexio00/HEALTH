@@ -216,7 +216,7 @@ BEGIN PERFORM health_writer.require_enabled(); RETURN health_writer.abandon_inne
 CREATE FUNCTION health_writer.plan_source(p_key text,p_source jsonb,p_provider text,p_account text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $fn$
 BEGIN
  PERFORM health_writer.require_enabled();
- IF p_provider IS DISTINCT FROM 'google-drive' OR p_account IS DISTINCT FROM 'primary' THEN RAISE EXCEPTION 'canonical provider required'; END IF;
+ IF p_provider IS DISTINCT FROM 'google-drive' OR p_account IS DISTINCT FROM 'HEALTH_PRIMARY' THEN RAISE EXCEPTION 'canonical provider required'; END IF;
  RETURN health_writer.plan_source_inner(p_key,p_source,p_provider,p_account);
 END $fn$;
 CREATE FUNCTION health_writer.source_uncertain(p_key text,p_source text) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $fn$

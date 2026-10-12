@@ -42,7 +42,7 @@ BEGIN
  THEN RAISE EXCEPTION 'exact owner authorization receipts missing'; END IF;
  IF EXISTS(SELECT 1 FROM health_writer.source_uploads u WHERE request_key=p_key
   AND (u.state IS DISTINCT FROM 'PUBLISHED' OR u.provider IS DISTINCT FROM 'google-drive'
-    OR u.account_alias IS DISTINCT FROM 'primary' OR u.candidate_sha IS DISTINCT FROM a.candidate_sha
+    OR u.account_alias IS DISTINCT FROM 'HEALTH_PRIMARY' OR u.candidate_sha IS DISTINCT FROM a.candidate_sha
     OR NOT EXISTS(SELECT 1 FROM health_writer.source_upload_sessions s JOIN health_writer.upload_folders f USING(folder)
        WHERE s.marker=u.marker AND s.state='COMPLETE' AND s.object_id=u.object_id AND f.enabled)))
  THEN RAISE EXCEPTION 'canonical durable Source publication incomplete'; END IF;

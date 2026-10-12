@@ -155,3 +155,12 @@ physical original/archive purge is exposed.
 Local restricted TCP tests and actual disposable Google/SQL transport recovery
 are separate evidence. The standby suite's approval/semantic inputs are
 synthetic; a green suite alone never declares clinical or production readiness.
+Canonical Source locations use the existing `google-drive` / `HEALTH_PRIMARY`
+provider/account identifiers. The renderer replaces the prototype account-name
+validator with that exact account; new publication cannot introduce the TEST
+alias `primary`. The actual disposable Google/SQL recovery test was repeated
+against this aligned renderer and passed 46 assertions; approvals and clinical
+semantic inputs in that test remain explicitly synthetic. An independent
+read-only check of the existing canonical Source graph also read and verified
+all 26 registered original objects (60,806,209 bytes) with the newly authorized
+Reader account; it made no Source or clinical mutations.

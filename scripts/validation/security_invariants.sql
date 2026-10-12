@@ -163,13 +163,33 @@ begin
     raise exception 'SECURITY: public views require explicit security review: %', bad;
   end if;
 
-  -- 10. No SECURITY DEFINER functions may live in public.
-  select string_agg(p.proname, ', ')
-    into bad
+  -- 10. Only the reviewed fixed-destination server authorization bridge may
+  -- live in public as SECURITY DEFINER. Optional before Writer installation.
+  -- Exact body, identity, owner, search_path and ACL all remain fail-closed.
+  select string_agg(p.proname, ', ') into bad
   from pg_proc p
-  join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public'
-    and p.prosecdef;
+  join pg_namespace n on n.oid=p.pronamespace
+  join pg_language l on l.oid=p.prolang
+  where n.nspname='public' and p.prosecdef and not coalesce((
+    p.oid=to_regprocedure('public.health_writer_authorize_v1(text,text,text,text,text,text,text,text,text)')
+    and pg_get_userbyid(p.proowner)='postgres'
+    and l.lanname='plpgsql' and p.prorettype='jsonb'::regtype
+    and p.proconfig=ARRAY['search_path=pg_catalog, pg_temp']::text[]
+    and encode(extensions.digest(p.prosrc,'sha256'),'hex')=
+      '436c604f3b716afb6127828f9f19e8983972de95be7994b36adaa0d392091c0d'
+    and has_function_privilege('service_role',p.oid,'EXECUTE')
+    and not exists (
+      select 1 from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x
+      where x.grantee not in (p.proowner,(select oid from pg_roles where rolname='service_role'))
+         or x.privilege_type<>'EXECUTE' or x.is_grantable
+    )
+    and not exists (
+      select 1 from pg_roles r
+      where r.rolname in ('anon','authenticated','health_writer_executor',
+        'health_writer_verifier','health_writer','health_writer_verifier_login')
+        and has_function_privilege(r.oid,p.oid,'EXECUTE')
+    )
+  ),false);
 
   if bad is not null then
     raise exception 'SECURITY: SECURITY DEFINER function in public: %', bad;

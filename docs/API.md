@@ -1,4 +1,6 @@
-# Health API (deferred design candidate)
+# Health API (historical deferred design candidate)
+
+Historical design record: its earlier unimplemented SQL alternative and Drive-primary state do not override the accepted bounded Writer. Current writing uses [Writer operation](WRITER_OPERATOR.md); the dedicated Health API remains a future option.
 
 **Status: FUTURE OPTION / NOT IN DEVELOPMENT.** No deployed Health API or PostgreSQL RPC writer is implied by this document. The accepted MVP is read-only. See [Write-path decision](WRITE_PATH_DECISION.md).
 
@@ -8,7 +10,7 @@ Until owner-authorized cutover, the active Drive-native HealthDB remains canonic
 
 The owner wishes to retain a conversational AI + connector workflow after cutover; its safe SQL/Sources implementation and actual connector support remain to be designed, verified and separately accepted. There is **no current development mandate** for either design candidate below.
 
-## Candidate 1 — dedicated Health API (future)
+## Candidate 1 вЂ” dedicated Health API (future)
 
 AI clients would call narrowly scoped domain-level server functions, never unrestricted SQL or database-admin credentials.
 
@@ -18,7 +20,7 @@ Potential write operations: `begin_operation`, `create_record`, `update_record`,
 
 The trusted server enforces writer authorization, single-writer semantics, transaction boundaries, NNN ownership, validation freshness, original-source verification and recovery. This design is **deferred**, not scheduled.
 
-## Candidate 2 — restricted PostgreSQL RPC/stored procedures (future alternative)
+## Candidate 2 вЂ” restricted PostgreSQL RPC/stored procedures (future alternative)
 
 AI connector could invoke a minimal private-schema RPC surface, e.g. `health_begin_operation`, `health_create_record`, `health_import_labs`, `health_validate_operation`, `health_finalize_operation`, instead of a separate Health API server.
 

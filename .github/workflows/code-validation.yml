@@ -130,6 +130,10 @@ jobs:
           PGPASSWORD: health-synthetic
         run: |
           "$RUNNER_TEMP/health-upload-journal-venv/bin/python" scripts/writer/test_standby.py --out /tmp/health-writer-standby.json
+      - name: Exact public authorization bridge security guard regressions
+        env:
+          PGPASSWORD: health-synthetic
+        run: '"$RUNNER_TEMP/health-upload-journal-venv/bin/python" scripts/validation/test_security_bridge.py'
       - name: SQL Source journal and separate verifier TCP integration
         env:
           PGPASSWORD: health-synthetic

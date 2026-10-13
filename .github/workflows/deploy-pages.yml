@@ -37,12 +37,18 @@ jobs:
           node frontend/tests/contract.mjs
           node frontend/tests/sw.mjs
           node frontend/tests/scope.mjs
+          node frontend/tests/release.mjs
       - name: Public repository secret-pattern guard
         run: python3 scripts/validation/public_secret_guard.py
+      - name: Build exact release artifact
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
+        run: node frontend/release/build.mjs "$RUNNER_TEMP/health-pages"
       - name: Upload verified frontend artifact
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
-          path: frontend
+          path: ${{ runner.temp }}/health-pages
 
   deploy:
     name: Publish verified PWA
@@ -60,3 +66,22 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+  postcheck:
+    name: Verify published release bytes
+    needs: deploy
+    if: github.ref == 'refs/heads/pwa'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Bounded HTTP, MIME, SHA and full-byte verification
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
+        run: node frontend/release/smoke.mjs

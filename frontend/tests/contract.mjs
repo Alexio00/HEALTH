@@ -244,7 +244,7 @@ const doses = actualVaccinations(vaccinationRecords);
 assert.equal(doses.length,12,"one row per separately administered vaccine, plus one combined MMR");
 assert.equal(doses.filter(x => x.date === "2004-03-05").length,2,"slash-separated injections stay separate");
 assert.equal(doses.filter(x => x.infection === "Грипп").length,1,"cancelled and legacy consultation cannot invent flu doses");
-assert.equal(doses.find(x => x.infection === "Грипп")?.stage,"RV","flu is RV even if source says V1");
+assert.equal(doses.find(x => x.infection === "Грипп")?.stage,"Rv","flu is Rv even if source says V1");
 assert.equal(doses.find(x => x.infection === "Пневмококковая инфекция")?.vaccine,"Превенар 13");
 assert.equal(doses.find(x => x.infection === "Герпес 1–2 типа")?.stage,"V5");
 assert(doses.find(x => x.infection === "Клещевой энцефалит"));
@@ -267,6 +267,24 @@ assert(!future.find(x => x.id === "plan:3").overdue,"undated items are not overd
 const akds = plannedVaccinations([{plan_item_id:99,title:"Ревакцинация АКДС",status:"planned",metadata:{kind:"вакцинация"}}],"2026-10-13")[0];
 assert.equal(akds.infection,"Дифтерия, столбняк, коклюш");
 assert.equal(akds.stage,"RV");
+
+// Synthetic numbered boosters: Latin uppercase R, lowercase v, stage preserved.
+const numberedRecords = [
+  {record_id:"REC-20090115-101",record_date:"2009-01-15",status:"active",tags:["VACCINATION"],
+    summary:"Вакцинация: корь (ЖКВ, Rv1)"},
+  {record_id:"REC-20100115-102",record_date:"2010-01-15",status:"active",tags:["VACCINATION"],
+    summary:"Вакцинация: пневмококковая инфекция (Превенар 13, RV2)"}
+];
+const numbered = actualVaccinations(numberedRecords);
+assert.equal(numbered.find(x => x.infection === "Корь")?.stage,"Rv1");
+assert.equal(numbered.find(x => x.infection === "Пневмококковая инфекция")?.stage,"Rv2");
+const stagedPlan = plannedVaccinations([
+  {plan_item_id:101,title:"Ревакцинация от кори",status:"planned",metadata:{kind:"вакцинация",stage:"RV1"}},
+  {plan_item_id:102,title:"Ревакцинация от кори",status:"planned",metadata:{kind:"вакцинация",stage:"Rv2"}}
+],"2026-10-13");
+assert.equal(stagedPlan[0].stage,"Rv1");
+assert.equal(stagedPlan[1].stage,"Rv2");
+
 const vaccineView=buildVaccinationView(vaccinationRecords,vaccinationPlans,"2026-10-13");
 assert.equal(vaccineView.planned.length,3,"cancelled plan does not appear among upcoming doses");
 assert.equal(vaccineView.history.length,doses.length+future.length);

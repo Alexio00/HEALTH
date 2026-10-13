@@ -1,11 +1,8 @@
 name: Deploy HEALTH PWA
 
+# Kept only as a selector on default branch. Real PWA workflow lives on pwa.
+# NO automatic deployments from main: accepted Writer SHA must stay independent.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -19,6 +16,8 @@ concurrency:
 
 jobs:
   deploy:
+    # Never publish frontend assets from the accepted Writer ref.
+    if: github.ref == 'refs/heads/pwa'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

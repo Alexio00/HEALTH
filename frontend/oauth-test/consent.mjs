@@ -135,7 +135,7 @@ $('login').addEventListener('submit',async event=>{
   await loadReview();
  }catch(error){token=null;reviewed=null;form.elements.password.value='';
   status(error?.message==='OAUTH_SCOPE_NOT_ACCEPTED'
-   ? 'Приложение запросило scope шире openid. Подключение остановлено до согласования прав.'
+   ? 'Приложение запросило scope за пределами согласованного TEST-набора. Подключение остановлено.'
    : 'Вход или подключение отклонены. Проверь учётную запись и настройки OAuth.');}
 });
 for(const action of ['approve','deny'])$(action).addEventListener('click',async()=>{

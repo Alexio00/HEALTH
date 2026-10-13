@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto,createHash } from 'node:crypto';
-import { connectionConfigAllowed,consentAllowed,callbackAllowed,authorizationIdFromURL,recoveryFromURL,recoveryRecordAllowed,recoverySessionAllowed,RECOVERY_URL,RECOVERY_KEY,RECOVERY_TTL_MS } from '../oauth-test/consent-policy.mjs';
+import { connectionConfigAllowed,consentAllowed,callbackAllowed,authorizationIdFromURL,scopeAllowed,recoveryFromURL,recoveryRecordAllowed,recoverySessionAllowed,RECOVERY_URL,RECOVERY_KEY,RECOVERY_TTL_MS } from '../oauth-test/consent-policy.mjs';
 const recoveryAPI={recoveryFromURL,recoveryRecordAllowed,recoverySessionAllowed,RECOVERY_URL,RECOVERY_KEY};
 
 // All identities and values in this test are synthetic, not deployed configuration.
@@ -16,7 +16,7 @@ for(const bad of [null,{}, {...config,owner_subject:'synthetic-owner'},
  {...config,callback:config.callback+'?state=x'}, {...config,callback:config.callback+'#token'}]) {
  assert.equal(connectionConfigAllowed(bad),false);
 }
-const details={client:{id:config.clientId},redirect_uri:config.callback,scope:'openid'};
+const details={client:{id:config.clientId},redirect_uri:config.callback,scope:'openid email offline_access'};
 assert(consentAllowed(details,config));
 assert(!consentAllowed({...details,scope:'openid profile'},config));
 assert(!consentAllowed({...details,client:{id:'other'}},config));
@@ -70,8 +70,9 @@ assert.equal(authorizationIdFromURL('not a URL'),null);
 assert.equal(authorizationIdFromURL(base+'a'.repeat(32)+'%2F'),null);
 assert.equal(authorizationIdFromURL(base+'a'.repeat(31)+'_'),null);
 assert.equal(authorizationIdFromURL(base+'a'.repeat(31)+'-'),null);
-assert(!consentAllowed({...details,scope:'openid email offline_access'},config),
- 'real ChatGPT scope shape must remain blocked until separately accepted');
+assert(consentAllowed({...details,scope:'openid email offline_access'},config));
+for(const scope of ['openid','openid email','openid email offline_access profile','openid email offline_access openid','openid  email offline_access'])assert(!scopeAllowed(scope));
+for(const scope of ['offline_access email openid','email openid offline_access'])assert(scopeAllowed(scope));
 // A valid request can reach login, but wider scopes never reach owner consent.
 {
  const elements=new Map(),requests=[],handlers=new Map(),button={disabled:true};
@@ -86,13 +87,13 @@ assert(!consentAllowed({...details,scope:'openid email offline_access'},config),
    requests.push({url,init});
    if(url.endsWith('/connection-info'))return {ok:true,text:async()=>JSON.stringify(config)};
    if(url.includes('/token?'))return {ok:true,json:async()=>({access_token:'SYNTHETIC_TOKEN'})};
-   return {ok:true,json:async()=>({...details,scope:'openid email offline_access'})};
+   return {ok:true,json:async()=>({...details,scope:'openid email offline_access profile'})};
   }});
  vm.runInContext(source,context);await new Promise(setImmediate);
  const form={elements:{email:{value:'synthetic@example.invalid'},password:{value:'SYNTHETIC_PASSWORD'}}};
  await handlers.get('login:submit')({preventDefault(){},currentTarget:form});
  assert.equal(form.elements.password.value,'');
- assert(el('status').textContent.includes('scope шире openid'));
+ assert(el('status').textContent.includes('scope за пределами согласованного TEST-набора'));
  assert.equal(el('approve').disabled,true);assert.equal(el('deny').disabled,true);
  assert.equal(requests.length,3);
  assert(!requests.some(r=>r.url.endsWith('/consent')));

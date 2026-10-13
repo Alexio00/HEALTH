@@ -1,13 +1,29 @@
-# Current documentation and evidence scope
+# Актуальная документация и границы доказательств
 
-The owner authorized canonical Supabase cutover and bounded Writer activation on 2026-10-13. Repository documentation describes implementation; the live private governing Project State/Manual and operation-bound readback determine actual activation and medical authority.
+**Состояние 13.10.2026:** владелец разрешил переход на каноническую базу Supabase и активировал ограниченный Writer. GitHub-документация описывает реализацию; фактическое состояние и полномочия подтверждаются **живыми приватными** HealthDB Project State / Project Manual и относящимися к конкретной операции проверками.
 
-Current implementation: `WRITER_OPERATOR.md`, `WRITER_SESSION_POOLER_RUNTIME_POLICY.md`, `WRITER_MIGRATION_LEDGER.md`, `DATA_MODEL.md`, `SECURITY.md`, `AUTH_RECOVERY.md`, `BACKUP_AND_RECOVERY.md` and the canonical timestamped migrations. `PROJECT_MANUAL.md` describes current operating boundaries; `ARCHITECTURE.md` describes the accepted storage/write path.
+## Действующая реализация
 
-Earlier design/acceptance records: `API.md`, `AI_WRITE_OPERATION_DESIGN.md`, `AI_WRITE_ACCEPTANCE_PLAN.md`, `AI_WRITE_AUDIT_CLARIFICATIONS.md`, `AI_WRITE_RULE_TRACEABILITY.md`, `WRITE_PATH_DECISION.md`, `POST_CUTOVER_AI_WRITE_PROTOCOL.md`, `WRITER_DELETION_PROTOCOL_CANDIDATE.md`, `WRITER_SOURCE_AUTHORIZATION_TEST_BOUNDARY.md`, `writer-resumable-test-acceptance-20261012.md`. Their historical deferred/disabled states or simulated semantic PASS do not override the current implementation or authorize a new clinical operation. Current correction/removal behavior is exact candidate CAS, retained REC identity/NNN and prior-state audit, typed derivative deletion under actual independent review, and no physical REC/Source purge. Ambiguous clinical impacts require the owner's decision.
+- [Работа Writer](WRITER_OPERATOR.md), [политика Session pooler](WRITER_SESSION_POOLER_RUNTIME_POLICY.md), [журнал миграций](WRITER_MIGRATION_LEDGER.md).
+- [Модель данных](DATA_MODEL.md), [безопасность](SECURITY.md), [восстановление Auth](AUTH_RECOVERY.md), [резервирование и восстановление](BACKUP_AND_RECOVERY.md).
+- [Публичный снимок управляющих границ](PROJECT_MANUAL.md) и [архитектура](ARCHITECTURE.md). Снимки в репозитории не переопределяют приватные живые управляющие документы.
+- Канонические SQL-миграции расположены в `supabase/migrations/`; агрегированные `db/migrations/` — старые снимки.
 
-Migration/MVP/audit records (`MIGRATION*`, `FULL_MIGRATION_PLAN.md`, `MVP_*`, `WORK_ACCEPTANCE_20261011.md`, `PRODUCTION_ACCEPTANCE_RECONCILIATION.md`, `MISSING_CHECK_APPLICABILITY_20261011.md`) preserve historical scopes and pins. Do not rerun or re-finalize the completed full migration because of a historical startup description.
+## Исторические документы: не инструкция к повторному запуску
 
-Checks are scoped: exact test inputs, actual source byte reads, full archive recovery, current migration/row fingerprints and new medical operations have separate evidence. Rule 18 requires its operation's lab context; owner-waived manual PWA testing is not a PASS. One unchanged whole-row historical date/ID exception does not relax new-record validation. Recovery never automatically resumes Writer or pending uploads.
+`API.md`, `AI_WRITE_OPERATION_DESIGN.md`, `AI_WRITE_ACCEPTANCE_PLAN.md`, `AI_WRITE_AUDIT_CLARIFICATIONS.md`, `AI_WRITE_RULE_TRACEABILITY.md`, `WRITE_PATH_DECISION.md`, `POST_CUTOVER_AI_WRITE_PROTOCOL.md`, `WRITER_DELETION_PROTOCOL_CANDIDATE.md`, `WRITER_SOURCE_AUTHORIZATION_TEST_BOUNDARY.md`, `writer-resumable-test-acceptance-20261012.md` фиксируют прежние решения, кандидатов и тесты. Их старые значения `deferred`, `disabled`, `PASS` в синтетической среде не меняют текущее production-состояние и не разрешают клиническую запись.
 
-The old project, old Registry/REC Docs and originals remain preserved. Public repositories contain no medical rows, original filenames, private provider locators or credentials. External ChatGPT project instructions require owner installation of the current private prompt distribution; unavailable bounded-operator capability must keep that chat read-only.
+Исправления/отмены в действующем Writer требуют точного кандидата с CAS, сохранения исходной идентичности REC/NNN и аудита прежнего состояния. Удаление производных данных типизировано и требует независимой проверки; физическое уничтожение REC или Source запрещено. Неоднозначные клинические последствия согласует владелец.
+
+`MIGRATION*`, `FULL_MIGRATION_PLAN.md`, `MVP_*`, `WORK_ACCEPTANCE_20261011.md`, `PRODUCTION_ACCEPTANCE_RECONCILIATION.md`, `MISSING_CHECK_APPLICABILITY_20261011.md` — исторические отчёты/планы. Они **не** являются основанием повторно проводить или финализировать уже завершённую миграцию.
+
+## Как трактовать результаты проверки
+
+- PASS относится к конкретной операции, версии кода, входным данным и типу доказательств. Результат на синтетике не заменяет фактического чтения Source bytes, восстановления полного архива или проверки медицинского изменения.
+- Правило 18 требует лабораторного контекста своей операции. Отказ владельца от ручного тестирования PWA — **не** выполненный тест.
+- Одно принятое историческое исключение целой неизменённой строки по дате/ID **не** ослабляет проверку новых REC.
+- Восстановление не возобновляет автоматически Writer и незавершённые загрузки.
+- Старый проект, Registry/REC Docs и оригиналы сохраняются. Публичный GitHub не содержит медицинские строки, личные имена файлов, приватные локаторы провайдеров или секреты.
+- Если в конкретном чате недоступен проверенный ограниченный оператор Writer, он остаётся **только для чтения**. Подключение внешнего ChatGPT-проекта требует установки владельцем актуальных приватных инструкций.
+
+**Текущая разработка PWA:** выпуск идёт из ветки `pwa`, а не `main`. [Управление выпуском](https://github.com/Alexio00/HEALTH/blob/pwa/docs/PWA_RELEASE.md). Известное HIGH-ограничение независимости scope-check сохранено в [Issue #50](https://github.com/Alexio00/HEALTH/issues/50). Действующий `main` не менять без полного нового принятия Writer SHA.

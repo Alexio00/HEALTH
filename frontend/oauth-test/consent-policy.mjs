@@ -35,3 +35,40 @@ export function callbackAllowed(value, exact) {
  } catch { return false; }
 }
 
+// Recovery is a separate fixed-origin route. No implicit tokens, OAuth request
+// IDs, redirect destinations or unknown/duplicate parameters are accepted.
+export const RECOVERY_URL='https://alexio00.github.io/HEALTH/oauth-test/consent.html?mode=recovery';
+export const RECOVERY_KEY='health-test-password-recovery:v1';
+export const RECOVERY_TTL_MS=15*60*1000;
+export function recoveryFromURL(value) {
+ try {
+  const u=new URL(value),expected=new URL(RECOVERY_URL);
+  if(u.origin!==expected.origin || u.pathname!==expected.pathname
+   || u.username || u.password || u.hash
+   || u.searchParams.getAll('mode').length!==1 || u.searchParams.get('mode')!=='recovery'
+   || [...u.searchParams.keys()].some(k=>k!=='mode' && k!=='code')
+   || u.searchParams.getAll('code').length>1) return null;
+  const code=u.searchParams.get('code');
+  if(code===null)return {kind:'start'};
+  return /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(code)
+   ? {kind:'callback',code} : null;
+ } catch {return null;}
+}
+export function recoveryRecordAllowed(value,now) {
+ return value!==null && typeof value==='object' && !Array.isArray(value)
+  && Object.keys(value).sort().join(',')==='startedAt,verifier'
+  && typeof value.verifier==='string' && /^[a-f0-9]{64}$/.test(value.verifier)
+  && Number.isSafeInteger(value.startedAt) && Number.isSafeInteger(now)
+  && value.startedAt<=now && now-value.startedAt<RECOVERY_TTL_MS;
+}
+export function recoverySessionAllowed(value) {
+ return value!==null && typeof value==='object' && value.token_type==='bearer'
+  && typeof value.access_token==='string' && value.access_token.length<=8192
+  && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value.access_token)
+  && Number.isSafeInteger(value.expires_in) && value.expires_in>0 && value.expires_in<=86400
+  && typeof value.user?.id==='string'
+  && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value.user.id)
+  && value.user.is_anonymous===false;
+}
+
+

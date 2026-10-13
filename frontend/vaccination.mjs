@@ -90,14 +90,6 @@ function administeredSummary(summary) {
   return has(s, /(^|\s)Вакцинация\s*:|выполнена вакцинация|привит[аы]?\s+от|вакцинация против|вторая вакцинация|вторая доза/iu);
 }
 
-// "Осмотр перед вакцинацией" alone never proves administration.
-// This explicit legacy note describes one TBE dose, not COVID/flu doses.
-function recordedTbeFromLegacyConsult(summary) {
-  const s = String(summary || "");
-  return has(s, /^Осмотр перед вакцинацией/iu)
-    && has(s, /клещев[а-я -]*энцефалит\s+V\s*[—-]\s*добавлено из ЕМИАС/iu);
-}
-
 function splitAdministrationSummary(summary) {
   const s = String(summary || "")
     .replace(/\)\s+и\s+В\s*\(/giu, ") + гепатит В (")
@@ -157,19 +149,15 @@ export function actualVaccinations(records) {
       || has(record.title, /vakcinaciya|вакцинац|прививк/iu);
     if (!tagged || !dateKey(record.record_date)) continue;
     const summary = String(record.summary || "");
-    const legacyTbe = recordedTbeFromLegacyConsult(summary);
     const fromBodyEvidence = bodyAdministrationFragments(record.body_text);
-    if (!administeredSummary(summary) && !legacyTbe && !fromBodyEvidence.length) continue;
+    if (!administeredSummary(summary) && !fromBodyEvidence.length) continue;
     const fromBody = fromBodyEvidence;
-    const fragments = fromBody.length ? fromBody
-      : legacyTbe && !administeredSummary(summary)
-        ? ["клещевой энцефалит"]
-        : splitAdministrationSummary(summary);
+    const fragments = fromBody.length ? fromBody : splitAdministrationSummary(summary);
     for (const fragment of fragments) {
       const target = targets(fragment);
       if (!target) continue;
-      const keys = legacyTbe && fragments.length === 1 ? ["tbe"] : target.keys;
-      const label = legacyTbe && fragments.length === 1 ? "Клещевой энцефалит" : target.label;
+      const keys = target.keys;
+      const label = target.label;
       events.push({
         kind:"actual", id:String(record.record_id) + ":" + keys.join("-"),
         keys, infection:label, stage:stageForActual(fragment, keys),

@@ -26,10 +26,78 @@ write authorization from owner approval of this *structure*.
 - `vaccination_plan_links`: a proven explicit relation between a plan item
   and an administration; no linking by date alone.
 
-Stage **display** is `V1, V2, ...` and `Rv` (capital R, lowercase v).
-Canonical model uses `stage_kind` and optional `dose_number`; the literal
-source stage, including any R1 or V1, remains in `stage_source_text`.
+Stage **display** is `V1, V2, ...`, `Rv`, `Rv1`, `Rv2`, ...
+(capital Latin R, lowercase Latin v). In the current provisional SQL shape,
+`stage_kind='dose'` with `dose_number=1` produces `V1`;
+`stage_kind='revaccination'` with `dose_number=NULL` produces `Rv`;
+`stage_kind='revaccination'` with `dose_number=1` or `2` produces
+`Rv1` or `Rv2`. `stage_kind='unknown'` may not have a numbered stage.
+The literal source stage, including R1, V1 or RV, remains in
+`stage_source_text`; the owner-approved clinical stage is independent.
+The previous check constraint incorrectly rejected numbered revaccinations;
+it was corrected in this non-deployed proposal.
 Do not add batch numbers, manufacturer or injection site; owner excluded these.
+
+## Multivalent product and antigen-specific stage — PROPOSAL FOR OWNER DECISION
+
+**Do not implement this second design choice as clinical or runtime schema
+without explicit owner approval.** The owner raised a concern that one
+combined administration may have different vaccine-course stages for its
+several target infections. The provisional six-table SQL proposal currently
+stores one stage at the administration level. That cannot safely convey an
+antigen-specific booster stage without inventing the same stage for every
+target of a combination product.
+
+Recommended target contract (pending approval):
+
+1. Keep `vaccination_administrations` as one real physical administration
+   with one product, date and its event-level original source evidence.
+2. Use `vaccination_administration_antigens` for each distinct infection
+   protected against by that event. Store **per-antigen** clinical stage
+   (`Vn`, `Rv`, `Rvn`, or unknown), separately verified provenance, and
+   if justified a per-antigen course identity. Moving stage kind/number and
+   course association from event to relation avoids competing sources of
+   truth; keep an original event-level source stage literal for history.
+3. Treat `vaccination_plan_links` and its independent proof so a plan for
+   one infection is fulfilled only by the matching antigen relationship,
+   not by the mere presence of the combined injection.
+4. Preserve explicit null for antigen-specific unknown stage. Never copy a
+   documented stage for target A to targets B/C of the same product.
+
+Recommended PWA projection (pending owner approval):
+
+- **History:** one parent row for each real administration, with infection
+  chips/tags and an expandable detail area listing each antigen and its
+  **own** stage. Count as one administration, never three doses.
+- **Latest by infection:** one row for each infection, with a link to its
+  shared administration, stage for that infection and optionally a visual
+  combined-product indicator. The same administration may be referenced
+  from multiple infection rows without incrementing administered-dose count.
+- **Planned:** one obligation per proven planned infection/dose; aggregate
+  several linked targets visually only when the plan actually supports it.
+
+This is a structural/UI discussion, not approved SQL. Do not prematurely
+conflate a dose number with a single product's global stage. Run synthetic
+cross-antigen cases through Writer/verifier/reader contract before rollout.
+
+### Stage-shape acceptance matrix for the current interim proposal
+
+| stage_kind | dose_number | display | allowed |
+| --- | ---: | --- | --- |
+| dose | 1 | V1 | yes |
+| dose | 2 | V2 | yes |
+| revaccination | NULL | Rv | yes |
+| revaccination | 1 | Rv1 | yes |
+| revaccination | 2 | Rv2 | yes |
+| revaccination | 999 | Rv999 | yes, bound |
+| unknown | NULL | unknown | yes |
+| unknown | 1 | invalid | no |
+| dose | 0 | invalid | no |
+| revaccination | -1 | invalid | no |
+
+This acceptance matrix still needs actual disposable PostgreSQL 17 testing
+when a reviewed migration is prepared. It is not a CI PASS or a production
+migration. Unknown stages must not be silently inferred from chronology.
 
 ## Required coordination with parallel Writer development
 

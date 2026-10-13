@@ -1,0 +1,45 @@
+name: HEALTH scheduler candidate nonsecret checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/health-supabase-keepalive.yml"
+      - ".github/workflows/health-complete-backup.yml"
+      - ".github/workflows/health-scheduler-validation.yml"
+      - "scripts/scheduler/**"
+      - "scripts/automation/supabase_keepalive.py"
+      - "scripts/automation/test_scheduler_transfer.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scheduler-synthetic:
+    name: Synthetic backup and keepalive contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      HEALTH_BACKUP_PARENT_FOLDER_ID: synthetic_backup_parent_id
+      HEALTH_BACKUP_DRIVE_OWNER_EMAIL: backup@example.invalid
+      HEALTH_PRIMARY_DRIVE_OWNER_EMAIL: primary@example.invalid
+      HEALTH_PRIMARY_SOURCE_FOLDER_ID: synthetic_primary_folder_id
+      HEALTH_FROZEN_LINEAGE_SHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      HEALTH_FROZEN_ORIGINAL_COUNT: "1"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Python syntax and safe public guard
+        run: |
+          python3 -m compileall -q scripts/scheduler scripts/automation
+          python3 scripts/validation/public_secret_guard.py
+      - name: Synthetic transfer, archive, source and recovery tests
+        run: |
+          python3 -m unittest discover -v -s scripts/automation -p test_scheduler_transfer.py
+          python3 scripts/scheduler/test_complete_archive.py -v
+          python3 scripts/scheduler/test_complete_payload.py -v
+          python3 scripts/scheduler/test_complete_sources.py -v
+          python3 scripts/scheduler/test_complete_restore.py -v
+          python3 scripts/scheduler/test_drive_rotation.py -v

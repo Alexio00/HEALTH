@@ -144,21 +144,23 @@ Writer operator with administrative Supabase SQL.
 
 Ordinary PRs may change regular files in frontend/ and only AGENTS.md or
 docs/PWA_RELEASE.md outside it. Backend, SQL, private paths and symlinks fail.
-Release controls (frontend/release/ and the three named PWA workflows)
+Release controls (frontend/release/ and the named PWA workflow files)
 require a PR authored by owner ID 308028794 and the exact standalone body line
 `PWA-RELEASE-CONTROL: <40-character head SHA>`. A new head invalidates it.
 This is explicit review of an authorized technical release; never add the line
 to an unknown PR merely to obtain PASS.
 
 The static job loads scope logic from protected base objects, not PR code.
-PWA trusted scope also uses pull_request_target and executes only base code
-with read-only permissions. It reads candidate Git objects without running them.
+The attempted standalone pull_request_target workflow did not run: GitHub now
+loads it from the default branch, which is main and remains pinned. It is
+removed from pwa rather than represented as active protection.
+The static step executes base scope code and reads candidate Git objects.
 Changes to code-validation.yml outside its frontend-check block are forbidden,
 even in a release-control PR. Writer/OIDC checks must remain byte-for-byte.
 
 **Limit:** the current required Ruleset binds the name static to GitHub Actions,
 not an immutable workflow identity. A malicious PR could invent another Actions
-job with that name. pwa-scope is not yet a required check. This is defense in
+job with that name. There is no independently enforced pwa-scope check. This is defense in
 depth and a release-review gate, not an unbypassable hostile-contributor boundary.
 Strict protection needs an independently enforced required workflow/status
 issuer or an additional suitable repository rule, reviewed by the owner.
@@ -216,7 +218,7 @@ HTTP PASS does not verify authenticated clinical UI or an installed device.
    tooling; do not copy the old release.json or generated worker.
 4. Review the complete diff; create PR to pwa. Any release-control edits need
    owner PR with the exact-head PWA-RELEASE-CONTROL line. Mandatory static
-   and trusted scope must pass with current base. No rules bypass.
+   with its base-sourced scope step must pass with current base. No rules bypass.
 5. Merge normally. New merge SHA is a new release identity, including cache.
 6. Wait for Verify/Publish/postcheck, compare actual marker SHA and all bytes.
    Inspect unauthenticated interface first; authorized clinical checks only
@@ -233,3 +235,9 @@ The release regression suite builds two synthetic SHA releases, verifies that
 the worker/index identities change, simulates stale files and failed installation
 (no partial cache activation), retries with a finite bound and confirms recovery
 to a complete shell. No production rollback is performed by this task.
+
+Standalone trusted workflow activation would require an independently authorized
+default-branch change/Writer acceptance, or a separately controlled external
+check issuer. The current task performs neither. Do not add a non-existent check
+to the Ruleset: that would deadlock PRs. GitHub reference:
+https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target

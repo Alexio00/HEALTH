@@ -39,6 +39,8 @@ const products = [
 ];
 
 const knownKey = Object.fromEntries(dictionaries.map(item => [item.key, item]));
+const combinationTargetLabels = {diphtheria:"Дифтерия",tetanus:"Столбняк",
+  pertussis:"Коклюш",hib:"Гемофильная инфекция"};
 const has = (text, re) => re.test(String(text || ""));
 const uniq = list => [...new Set(list)];
 const dateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? String(value) : "";
@@ -165,7 +167,7 @@ export function actualVaccinations(records) {
       // Without per-antigen evidence, a combined injection does not
       // establish the same dose stage for each target infection.
       const antigenStages = keys.map(key => ({
-        key, label:knownKey[key]?.label || key,
+        key, label:knownKey[key]?.label || combinationTargetLabels[key] || key,
         stage:keys.length === 1 ? parsedStage : "—"
       }));
       events.push({

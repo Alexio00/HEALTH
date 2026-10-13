@@ -1,0 +1,4 @@
+# Approved vaccination v2 contract
+Owner approved the design on 2026-10-13. One injection = one administration; multiple target infections = separate antigen relations. Each relation owns its own dose/revaccination stage and, when proven, course identity. Rv, Rv1 and Rv2 are supported. Unknown targets remain unknown. Do not copy stages between antigens.
+The existing v1 proposal must not be deployed without the reviewed v2 follow-up. Plan fulfillment must identify a specific antigen, not merely the shared administration. Evidence may be event-wide or explicitly antigen-specific. Original source labels remain immutable.
+Frontend: history groups one injection with infection chips and expandable stage details; latest has one row per infection, both linking to the same injection; plans show separately supported obligations. Pending migration/Writer review and synthetic regressions. No medical facts, source bytes, runtime SQL or patient information in this repository.

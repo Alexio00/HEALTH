@@ -32,7 +32,14 @@ def validate_context(environ):
         raise KeepaliveStop("scheduled_or_owner_dispatch_required")
     if not re.fullmatch(r"[0-9a-f]{40}", environ.get("GITHUB_SHA", "")):
         raise KeepaliveStop("exact_sha_required")
-    if environ.get("HEALTH_KEEPALIVE_ACCEPTED_SHA") != environ["GITHUB_SHA"]:
+    accepted = environ.get("HEALTH_KEEPALIVE_ACCEPTED_SHA", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", accepted):
+        raise KeepaliveStop("accepted_immutable_executor_required")
+    try:
+        checkout = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    except Exception:
+        raise KeepaliveStop("unverifiable_executor_checkout") from None
+    if checkout != accepted:
         raise KeepaliveStop("unaccepted_executor_sha")
 
 

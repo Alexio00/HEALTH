@@ -21,11 +21,16 @@ export function connectionConfigAllowed(config) {
    && !u.username && !u.password && !u.search && !u.hash;
  } catch { return false; }
 }
+export const ACCEPTED_SCOPES=Object.freeze(['openid','email','offline_access']);
+export function scopeAllowed(scope) {
+ return typeof scope==='string' && scope.length<=64
+  && scope.split(' ').sort().join(' ')==='email offline_access openid';
+}
 export function consentAllowed(details, config) {
  return typeof config.clientId==='string' && config.clientId.length>0
   && typeof config.callback==='string' && config.callback.startsWith('https://chatgpt.com/')
   && details?.client?.id===config.clientId && details.redirect_uri===config.callback
-  && typeof details.scope==='string' && details.scope.trim()==='openid';
+  && scopeAllowed(details.scope);
 }
 export function callbackAllowed(value, exact) {
  try {

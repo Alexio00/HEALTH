@@ -62,16 +62,20 @@ class TransferSafety(unittest.TestCase):
             GITHUB_REF="refs/heads/main", GITHUB_EVENT_NAME="schedule",
             GITHUB_SHA=sha, HEALTH_KEEPALIVE_ACCEPTED_SHA=sha,
         )
-        module.validate_context(good)
-        for key, value in (
-            ("GITHUB_ACTIONS", "false"),
-            ("GITHUB_REPOSITORY", "other/repo"),
-            ("GITHUB_REF", "refs/heads/pwa"),
-            ("GITHUB_EVENT_NAME", "pull_request"),
-            ("HEALTH_KEEPALIVE_ACCEPTED_SHA", "b" * 40),
-        ):
-            with self.subTest(key=key), self.assertRaises(module.KeepaliveStop):
-                module.validate_context({**good, key: value})
+        from unittest.mock import patch
+        with patch.object(module.subprocess, "check_output", return_value=sha + "\\n"):
+            module.validate_context(good)
+            # Later Writer main commits do not revoke an unchanged, accepted keepalive executor.
+            module.validate_context({**good, "GITHUB_SHA": "c" * 40})
+            for key, value in (
+                ("GITHUB_ACTIONS", "false"),
+                ("GITHUB_REPOSITORY", "other/repo"),
+                ("GITHUB_REF", "refs/heads/pwa"),
+                ("GITHUB_EVENT_NAME", "pull_request"),
+                ("HEALTH_KEEPALIVE_ACCEPTED_SHA", "b" * 40),
+            ):
+                with self.subTest(key=key), self.assertRaises(module.KeepaliveStop):
+                    module.validate_context({**good, key: value})
 
 
 if __name__ == "__main__":

@@ -25,9 +25,14 @@ const harness = js.replace(/^import .*;\s*$/gm, "").replace(/\nboot\(\);\s*$/, "
 vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, plannedVisitSpecialties, isMedicalCardQuestion, questionSpecialties, medicationRecordIds, latestMedicationRecordId, medicationHistoriesForRecord, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable, shouldPinTableHeader };", context);
 const x = context.expose;
 const nav = [...html.matchAll(/<a href="#\/[\w-]*">[^<]+<\/a>/g)].map(m => m[0]);
-assert.equal(nav.length, 10, "ten distinct navigation entries");
-assert.equal(new Set(nav).size, 10);
-for (const route of ["chronic","open-cases","medications","monitoring","visit-preparation","future-plan","vaccination"]) {
+assert.equal(nav.length, 9, "nine distinct navigation entries");
+assert.equal(new Set(nav).size, 9);
+assert(!html.includes('href="#/monitoring"'), "remove monitoring from navigation");
+assert(!js.includes('from("monitoring")'), "removed route must not query monitoring");
+assert(!js.includes('"monitoring":'), "no hidden section or page remains");
+assert(!js.includes('"monitoring",'), "removed page is not routable");
+
+for (const route of ["chronic","open-cases","medications","visit-preparation","future-plan","vaccination"]) {
   assert(js.includes(`parts[0] === "${route}"`) || js.includes(`"${route}"`), `route ${route}`);
 }
 assert(html.includes('aria-expanded="false"'));
@@ -93,7 +98,7 @@ assert(!x.shouldPinTableHeader({height:38,bottom:120}, {width:440,bottom:900}, 7
 // All standalone views suppress their repeated section H2, while Current
 // State continues to display headings for its multiple sections.
 for (const title of ["Хронические состояния","Открытые случаи","Принимаемые препараты",
-  "Мониторинг","Подготовка к визиту","Будущий план"]) {
+  "Подготовка к визиту","Будущий план"]) {
   assert(js.includes('mode === "all" ? "<h2>' + title + '</h2>" : ""'), title + " must not duplicate page title");
 }
 assert(!js.includes('class="intro"'), "remove page introduction text");

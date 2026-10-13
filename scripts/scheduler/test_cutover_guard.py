@@ -25,6 +25,7 @@ class CutoverGuardTests(unittest.TestCase):
             HEALTH_BACKUP_EXECUTOR_SHA=self.PIN,
             HEALTH_BACKUP_PRODUCER_SHA=self.PIN,
             HEALTH_RELEASE_EXPECTED_SHA=self.PIN,
+            HEALTH_RELEASE_CANDIDATE_SHA256="c" * 64,
         )
 
     def test_candidate_and_activation_explicitly_permitted(self):
@@ -54,6 +55,7 @@ class CutoverGuardTests(unittest.TestCase):
             ("HEALTH_BACKUP_EXECUTOR_SHA", self.MAIN),
             ("HEALTH_BACKUP_PRODUCER_SHA", self.MAIN),
             ("HEALTH_RELEASE_EXPECTED_SHA", self.MAIN),
+            ("HEALTH_RELEASE_CANDIDATE_SHA256", "bad"),
         ]:
             with self.subTest(field=key, value=invalid):
                 bad = self.valid()
@@ -67,6 +69,8 @@ class CutoverGuardTests(unittest.TestCase):
     def test_checkout_and_mode_are_bound(self):
         with self.assertRaises(CutoverStop):
             require_release_context(self.valid(), "activate", self.PIN)
+        with self.assertRaises(CutoverStop):
+            require_release_context({**self.valid("activate"), "HEALTH_RELEASE_CANDIDATE_SHA256": "wrong"}, "activate", self.PIN)
         with self.assertRaises(CutoverStop):
             require_release_context(self.valid(), "daily", self.PIN)
         with self.assertRaises(CutoverStop):

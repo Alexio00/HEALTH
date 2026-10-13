@@ -59,6 +59,8 @@ def run(mode,root,producer_sha,*,serialized):
             package=preview(capture_root,config)
             if package.get('restricted_capture_role_enforced') is not True:raise SourceStop('restricted_capture_required_for_pipeline')
             target=cloud.upload(capture_root/'package/complete-recovery.zip',package,producer_sha);sha=package['archive_sha256']
+        if mode=='activate' and sha!=os.environ.get('HEALTH_RELEASE_CANDIDATE_SHA256'):
+            raise SourceStop('release_candidate_digest_does_not_match_approved_archive')
         # Never adopt a candidate uploaded by the old SHEDULLER or another SHA.
         selected=cloud.meta(target).get('appProperties',{})
         require_candidate_binding(selected,producer_sha,sha)
@@ -105,6 +107,6 @@ if __name__=='__main__':
         if not re.fullmatch('[a-f0-9]{40}',producer):
             raise SourceStop('accepted_immutable_backup_producer_required')
         result=run(args.mode,Path(os.environ['HEALTH_COMPLETE_PRIVATE_ROOT']),producer,serialized=True)
-        print(json.dumps({'status': result.get('status'), 'daily_backup_activated': result.get('daily_backup_activated', False), 'production_cutover': False, 'permanent_deletes': 0}))
+        print(json.dumps({'status': result.get('status'), 'candidate_archive_sha256': result.get('archive_sha256') if args.mode=='candidate' else None, 'daily_backup_activated': result.get('daily_backup_activated', False), 'production_cutover': False, 'permanent_deletes': 0}))
     except (SourceStop,RotationStop,CutoverStop) as e:print(json.dumps({'status':'STOPPED','safe_reason':str(e),'permanent_deletes':0}));raise SystemExit(2)
     except Exception:print(json.dumps({'status':'STOPPED','safe_reason':'private_complete_pipeline_failed','permanent_deletes':0}));raise SystemExit(2)

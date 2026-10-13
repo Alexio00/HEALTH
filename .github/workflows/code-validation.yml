@@ -10,15 +10,10 @@ on:
       - "db/**"
       - "supabase/**"
       - ".github/workflows/code-validation.yml"
+  # Every PR receives a check, including workflow-only and AGENTS.md changes.
+  # This allows a required `static` check on a protected pwa branch.
   pull_request:
     branches: [main, pwa]
-    paths:
-      - "scripts/**"
-      - "frontend/**"
-      - "docs/**"
-      - "db/**"
-      - "supabase/**"
-      - ".github/workflows/code-validation.yml"
   workflow_dispatch:
     inputs:
       supabase_fixture_schema:

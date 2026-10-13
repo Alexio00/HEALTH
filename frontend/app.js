@@ -824,13 +824,14 @@ function medicationHistoriesForRecord(recordId, medications) {
 async function medicationHistorySection(recordId) {
   const { data: medications, error } = await supabase.from("medications")
     .select("name,basis_record_id,metadata").eq("status", "active");
-  if (error) throw error;
+  // History links are optional: do not hide the actual REC when they cannot load.
+  if (error) return "";
   const histories = medicationHistoriesForRecord(recordId, medications);
   if (!histories.length) return "";
   const otherIds = [...new Set(histories.flatMap(item => item.recordIds))];
   const { data: relatedRecords, error: recordsError } = await supabase.from("records")
     .select("record_id,record_date").in("record_id", otherIds);
-  if (recordsError) throw recordsError;
+  if (recordsError) return "";
   const dates = new Map((relatedRecords || []).map(item => [item.record_id, item.record_date]));
   const blocks = histories.map(item => {
     const ids = item.recordIds.filter(id => dates.has(id))

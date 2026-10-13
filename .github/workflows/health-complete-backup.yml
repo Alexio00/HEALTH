@@ -34,7 +34,7 @@ jobs:
       - name: Checkout accepted HEALTH main only
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
       - name: Verify exact accepted executor and reject missing configuration
         env:
@@ -49,10 +49,12 @@ jobs:
           HEALTH_BACKUP_DRIVE_OWNER_EMAIL: ${{ secrets.HEALTH_BACKUP_DRIVE_OWNER_EMAIL }}
         run: |
           python3 - <<'PY'
-          import os,re
+          import os,re,subprocess
           expected=os.environ.get('HEALTH_ACCEPTED_BACKUP_SHA','')
+          checkout=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
           if (not re.fullmatch(r'[0-9a-f]{40}',expected)
               or expected!=os.environ.get('GITHUB_SHA')
+              or checkout!=expected
               or os.environ.get('GITHUB_REF')!='refs/heads/main'):
               raise RuntimeError('exact_reviewed_backup_commit_required')
           keys=('SUPABASE_DB_URL','HEALTH_SUPABASE_CA_PEM','RCLONE_CONFIG_CONTENT',

@@ -44,7 +44,7 @@ def choose_existing(mode,cloud,journal,producer_sha,approved_sha):
     elif mode=='activate' and pending and pending['state']=='DONE' and pending['sha']==approved_sha and not uploads:
         target,sha=pending['target'],pending['sha'];replay=True
     elif uploads:
-        if mode!='candidate':raise SourceStop('unfinished_upload_requires_candidate_reconciliation_first')
+        if mode not in ('candidate','daily'):raise SourceStop('unfinished_upload_requires_candidate_reconciliation_first')
         target,sha=cloud.finish_upload(uploads[0],producer_sha);replay=False
     else:
         if mode=='activate':
@@ -96,8 +96,8 @@ def retire_bootstrap(*unused):
     return 0
 
 def run(mode,root,producer_sha,*,serialized):
-    if serialized is not True or mode not in ('candidate','activate','daily') or not re.fullmatch('[a-f0-9]{40}',producer_sha):raise SourceStop('reviewed_serialized_pipeline_required')
-    if mode in ('candidate','activate'):
+    if serialized is not True or mode not in ('candidate','activate','daily','quarantine-orphan') or not re.fullmatch('[a-f0-9]{40}',producer_sha):raise SourceStop('reviewed_serialized_pipeline_required')
+    if mode in ('candidate','activate','quarantine-orphan'):
         require_release_context(os.environ,mode)
     root=private(root,fresh=True);executor_sha,pins=executor_binding()
     (root/'executor-binding.private.json').write_text(json.dumps({'producer_sha':producer_sha,'executor_sha':executor_sha,'files':pins},indent=2))
@@ -108,6 +108,10 @@ def run(mode,root,producer_sha,*,serialized):
         parent=cloud.meta(cloud.parent);activation=parent.get('appProperties',{})
         if mode=='daily' and (activation.get('health_backup_pipeline')!='v1' or activation.get('health_recovery_executor')!=executor_sha):raise SourceStop('current_executor_full_activation_required')
         journal=DriveCloudJournal(cloud.t,cloud.parent,root/'worker-lock.sqlite',serialized=True)
+        if mode=='quarantine-orphan':
+            return cloud.quarantine_incomplete_upload(
+                os.environ.get('HEALTH_ORPHAN_FOLDER_ID',''),
+                os.environ.get('HEALTH_RELEASE_CANDIDATE_SHA256',''),producer_sha,journal)
         existing=choose_existing(mode,cloud,journal,producer_sha,
                                  os.environ.get('HEALTH_RELEASE_CANDIDATE_SHA256',''))
         replay=False
@@ -157,7 +161,7 @@ def run(mode,root,producer_sha,*,serialized):
         cloud.close()
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--mode',choices=['candidate','activate','daily'],required=True);args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--mode',choices=['candidate','activate','daily','quarantine-orphan'],required=True);args=parser.parse_args()
     try:
         if os.environ.get('GITHUB_REPOSITORY')!='Alexio00/HEALTH' or os.environ.get('GITHUB_REF')!='refs/heads/main' or os.environ.get('HEALTH_COMPLETE_SERIALIZED')!='1':raise SourceStop('exact_scheduler_workflow_identity_required')
         event=os.environ.get('GITHUB_EVENT_NAME','')

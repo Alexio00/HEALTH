@@ -22,7 +22,7 @@ def sha(value):
 
 
 def require_release_context(env, mode, checked_out_sha=None):
-    if mode not in ("candidate", "activate"):
+    if mode not in ("candidate", "activate", "quarantine-orphan"):
         raise CutoverStop("manual_release_mode_required")
     if (env.get("GITHUB_ACTIONS") != "true"
             or env.get("GITHUB_REPOSITORY") != REPO
@@ -36,7 +36,8 @@ def require_release_context(env, mode, checked_out_sha=None):
     # separately inspect disabled legacy schedules and absence of live runs.
     if (env.get("HEALTH_INREPO_RELEASE_ENABLED") != "true"
             or env.get("HEALTH_LEGACY_BACKUP_PAUSED") != "true"
-            or env.get("HEALTH_INREPO_BACKUP_ENABLED") != "false"
+            or (mode != "quarantine-orphan" and env.get("HEALTH_INREPO_BACKUP_ENABLED") != "false")
+            or (mode == "quarantine-orphan" and env.get("HEALTH_INREPO_BACKUP_ENABLED") not in ("true","false"))
             or env.get("HEALTH_RELEASE_ACK") != ACK
             or env.get("HEALTH_RELEASE_MODE") != mode):
         raise CutoverStop("explicit_legacy_pause_and_release_required")
@@ -48,8 +49,12 @@ def require_release_context(env, mode, checked_out_sha=None):
             or pin != env.get("HEALTH_BACKUP_PRODUCER_SHA")
             or pin != env.get("HEALTH_RELEASE_EXPECTED_SHA")):
         raise CutoverStop("exact_scheduler_release_pin_required")
-    if mode == "activate" and not re.fullmatch(r"[0-9a-f]{64}", env.get("HEALTH_RELEASE_CANDIDATE_SHA256", "")):
+    if mode in ("activate","quarantine-orphan") and not re.fullmatch(r"[0-9a-f]{64}", env.get("HEALTH_RELEASE_CANDIDATE_SHA256", "")):
         raise CutoverStop("exact_reviewed_candidate_digest_required")
+    if (mode=="quarantine-orphan" and
+            (env.get("HEALTH_ORPHAN_ACK")!="ABANDON_INCOMPLETE_UPLOADING_ONLY"
+             or not re.fullmatch(r"[A-Za-z0-9_-]{8,128}", env.get("HEALTH_ORPHAN_FOLDER_ID","")))):
+        raise CutoverStop("explicit_quarantine_ack_and_secret_folder_required")
     if checked_out_sha is None:
         try:
             checked_out_sha = subprocess.check_output(

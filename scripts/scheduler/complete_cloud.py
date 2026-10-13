@@ -92,6 +92,65 @@ class CompleteCloud:
         if done.get('health_recovery_state')!='CANDIDATE' or done.get('health_pipeline_commit')!=producer_sha or done.get('health_archive_sha256')!=sha:
             raise SourceStop('upload_final_state_readback_rejected')
         return folder,sha
+    def quarantine_incomplete_upload(self,folder,expected_sha,producer_sha,journal):
+        """One owner-reviewed orphan only. Never trash or modify the ACTIVE."""
+        folder=identity(folder)
+        if not re.fullmatch('[a-f0-9]{64}',expected_sha) or not re.fullmatch('[a-f0-9]{40}',producer_sha):
+            raise SourceStop('orphan_explicit_digest_and_producer_required')
+        before_journal=journal.read()
+        if before_journal is not None and before_journal['state']!='DONE':
+            raise SourceStop('orphan_pending_rotation_requires_owner_reconciliation')
+        objects=self.children(self.parent)
+        uploads=[x for x in objects if x.get('appProperties',{}).get('health_complete_set')=='v1'
+                 and x.get('appProperties',{}).get('health_recovery_state')=='UPLOADING']
+        candidates=[x for x in objects if x.get('appProperties',{}).get('health_complete_set')=='v1'
+                    and x.get('appProperties',{}).get('health_recovery_state')=='CANDIDATE']
+        active=[(x['id'],x.get('appProperties',{}).get('health_archive_sha256')) for x in objects
+                if x.get('appProperties',{}).get('health_complete_set')=='v1'
+                and x.get('appProperties',{}).get('health_recovery_state')=='ACTIVE']
+        if len(active)!=1 or candidates or len(uploads)!=1 or uploads[0]['id']!=folder:
+            raise SourceStop('orphan_requires_one_upload_one_active_no_candidate')
+        m=self.meta(folder);props=m.get('appProperties',{})
+        if (m.get('parents')!=[self.parent] or m.get('trashed') is not False
+                or m.get('mimeType')!='application/vnd.google-apps.folder'
+                or not re.fullmatch('complete-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}',m.get('name',''))
+                or props.get('health_complete_set')!='v1'
+                or props.get('health_recovery_state')!='UPLOADING'
+                or props.get('health_pipeline_commit')!=producer_sha
+                or props.get('health_archive_sha256')!=expected_sha
+                or not props.get('health_archive_bytes','').isdigit()
+                or int(props['health_archive_bytes'])<=0):
+            raise SourceStop('orphan_identity_changed')
+        remote=self.children(folder)
+        # Complete remote ZIP is recoverable by normal daily; do not quarantine it.
+        if (len(remote)==1 and remote[0].get('name')=='complete-recovery.zip'
+                and remote[0].get('sha256Checksum')==expected_sha
+                and remote[0].get('size')==props['health_archive_bytes']):
+            raise SourceStop('orphan_complete_metadata_requires_resume')
+        # Check the inconsistent/missing provider object twice before mutation.
+        if self.children(folder)!=remote or self.meta(folder).get('appProperties')!=props or journal.read()!=before_journal:
+            raise SourceStop('orphan_state_changed_before_quarantine')
+        try:
+            self.t.request('/drive/v3/files/'+folder+'?fields=id,appProperties',
+                           method='PATCH',body=json.dumps({'appProperties':{'health_recovery_state':'ABANDONED'}}).encode(),
+                           content_type='application/json')
+        except Exception:
+            if self.meta(folder).get('appProperties',{}).get('health_recovery_state')!='ABANDONED':
+                raise
+        new=self.meta(folder)
+        if (new.get('appProperties',{}).get('health_recovery_state')!='ABANDONED'
+                or new.get('appProperties',{}).get('health_archive_sha256')!=expected_sha
+                or new.get('appProperties',{}).get('health_pipeline_commit')!=producer_sha
+                or new.get('parents')!=[self.parent] or journal.read()!=before_journal):
+            raise SourceStop('orphan_quarantine_readback_rejected')
+        now=[(x['id'],x.get('appProperties',{}).get('health_archive_sha256')) for x in self.children(self.parent)
+             if x.get('appProperties',{}).get('health_complete_set')=='v1'
+             and x.get('appProperties',{}).get('health_recovery_state')=='ACTIVE']
+        if now!=active:raise SourceStop('active_backup_changed_during_quarantine')
+        return {'status':'INCOMPLETE_UPLOADING_QUARANTINED',
+                'active_backup_unchanged':True,'rotation_attempted':False,
+                'permanent_deletes':0}
+
     def download(self,folder,expected_sha,label,*,allow_uploading=False):
         meta=self.meta(folder);p=meta.get('appProperties',{})
         if meta.get('parents')!=[self.parent] or p.get('health_complete_set')!='v1' or p.get('health_archive_sha256')!=expected_sha or p.get('health_recovery_state') not in (('UPLOADING','CANDIDATE','ACTIVE') if allow_uploading else ('CANDIDATE','ACTIVE')):raise SourceStop('candidate_remote_binding_rejected')

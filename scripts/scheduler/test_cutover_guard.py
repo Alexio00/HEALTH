@@ -65,6 +65,24 @@ class CutoverGuardTests(unittest.TestCase):
                 with self.assertRaises(CutoverStop):
                     require_release_context(bad, "candidate", self.PIN)
 
+    def test_quarantine_is_owner_only_and_exact(self):
+        good=self.valid("quarantine-orphan")
+        good.update(HEALTH_ORPHAN_ACK="ABANDON_INCOMPLETE_UPLOADING_ONLY",
+                    HEALTH_ORPHAN_FOLDER_ID="syntheticfolder123",
+                    HEALTH_INREPO_BACKUP_ENABLED="true")
+        self.assertTrue(require_release_context(good,"quarantine-orphan",self.PIN))
+        for key,value in [("HEALTH_ORPHAN_FOLDER_ID",""),
+                          ("HEALTH_ORPHAN_ACK","missing"),
+                          ("HEALTH_RELEASE_CANDIDATE_SHA256","invalid"),
+                          ("GITHUB_ACTOR_ID","1234")]:
+            bad=dict(good);bad[key]=value
+            with self.subTest(key=key), self.assertRaises(CutoverStop):
+                require_release_context(bad,"quarantine-orphan",self.PIN)
+        for mode in ("candidate","activate"):
+            bad=self.valid(mode);bad["HEALTH_INREPO_BACKUP_ENABLED"]="true"
+            with self.assertRaises(CutoverStop):
+                require_release_context(bad,mode,self.PIN)
+
     def test_checkout_and_mode_are_bound(self):
         with self.assertRaises(CutoverStop):
             require_release_context(self.valid(), "activate", self.PIN)

@@ -15,7 +15,7 @@ on:
         default: check
         options: [check, heartbeat]
   pull_request:
-    branches: [main]
+    branches: [scheduler, main]
     paths:
       - ".github/workflows/health-activity.yml"
       - "scripts/automation/health_activity.mjs"

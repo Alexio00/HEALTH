@@ -40,15 +40,14 @@ Do not add batch numbers, manufacturer or injection site; owner excluded these.
 
 ## Multivalent product and antigen-specific stage — PROPOSAL FOR OWNER DECISION
 
-**Do not implement this second design choice as clinical or runtime schema
-without explicit owner approval.** The owner raised a concern that one
+**Approved by the owner on 2026-10-13; deployment awaits Writer integration.** The owner raised a concern that one
 combined administration may have different vaccine-course stages for its
 several target infections. The provisional six-table SQL proposal currently
 stores one stage at the administration level. That cannot safely convey an
 antigen-specific booster stage without inventing the same stage for every
 target of a combination product.
 
-Recommended target contract (pending approval):
+Approved target contract:
 
 1. Keep `vaccination_administrations` as one real physical administration
    with one product, date and its event-level original source evidence.
@@ -64,7 +63,7 @@ Recommended target contract (pending approval):
 4. Preserve explicit null for antigen-specific unknown stage. Never copy a
    documented stage for target A to targets B/C of the same product.
 
-Recommended PWA projection (pending owner approval):
+Approved PWA projection:
 
 - **History:** one parent row for each real administration, with infection
   chips/tags and an expandable detail area listing each antigen and its
@@ -76,7 +75,7 @@ Recommended PWA projection (pending owner approval):
 - **Planned:** one obligation per proven planned infection/dose; aggregate
   several linked targets visually only when the plan actually supports it.
 
-This is a structural/UI discussion, not approved SQL. Do not prematurely
+This direction is owner-approved; draft SQL patches are not an executable production migration. Do not prematurely
 conflate a dose number with a single product's global stage. Run synthetic
 cross-antigen cases through Writer/verifier/reader contract before rollout.
 

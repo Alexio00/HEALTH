@@ -32,6 +32,7 @@ jobs:
       HEALTH_COMPLETE_SERIALIZED: "1"
       HEALTH_REQUIRE_RESTRICTED_CAPTURE: "1"
       HEALTH_ACCEPTED_BACKUP_SHA: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}
+      HEALTH_BACKUP_PRODUCER_SHA: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}
       SUPABASE_DB_URL: ${{ secrets.HEALTH_BACKUP_DB_URL }}
       HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
       RCLONE_CONFIG_CONTENT: ${{ secrets.HEALTH_BACKUP_RCLONE_CONFIG }}
@@ -43,9 +44,17 @@ jobs:
       HEALTH_PRIMARY_DRIVE_OWNER_EMAIL: ${{ secrets.HEALTH_PRIMARY_DRIVE_OWNER_EMAIL }}
       HEALTH_BACKUP_DRIVE_OWNER_EMAIL: ${{ secrets.HEALTH_BACKUP_DRIVE_OWNER_EMAIL }}
     steps:
+      - name: Reject absent or invalid accepted backup code pin
+        run: |
+          python3 - <<'PY'
+          import os,re
+          value=os.environ.get('HEALTH_BACKUP_PRODUCER_SHA','')
+          if not re.fullmatch('[a-f0-9]{40}',value):
+              raise RuntimeError('missing_accepted_backup_code_pin')
+          PY
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}
           persist-credentials: false
       - name: Fail closed before any Drive read or mutation
         env:
@@ -54,7 +63,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import os,re,subprocess
-          sha=os.environ.get('GITHUB_SHA','')
+          sha=os.environ.get('HEALTH_BACKUP_PRODUCER_SHA','')
           if (not re.fullmatch('[a-f0-9]{40}',sha)
               or sha!=os.environ.get('HEALTH_ACCEPTED_BACKUP_SHA')
               or sha!=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()

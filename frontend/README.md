@@ -134,3 +134,13 @@ REC pages show owner-facing medical content, not migration wrappers:
 - the first H1 is used to derive the page title and is not repeated inside the Text Record section;
 - internal record headings have spacing before the heading and no extra spacing after it;
 - raw medical body_text remains unchanged in the database.
+
+## Release and offline shell
+
+A small footer shows the build SHA. Actions creates release.json from the exact
+pwa commit and checks all published file hashes after deployment. The worker
+cache is automatically SHA-bound; it validates a complete static shell before
+activation and serves coherent bytes for hash routes. A controlled page reloads
+once when the new worker takes over. Only public shell assets are cached;
+medical responses, arbitrary queries and OAuth test consent remain network-only.
+See docs/PWA_RELEASE.md for scope policy, limitations and protected-PR rollback.

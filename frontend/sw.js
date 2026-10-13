@@ -1,4 +1,6 @@
-const CACHE = "health-shell-safe-v1";
+const RELEASE = "__HEALTH_RELEASE__";
+const FILE_HASHES = /* __HEALTH_HASHES__ */ {};
+const CACHE = "health-shell-" + RELEASE;
 const SHELL = ["./index.html", "./styles.css", "./app.js", "./vaccination.mjs",
   "./supabase-client.js", "./config.js", "./manifest.webmanifest", "./icon.svg"];
 const BASE = new URL("./", self.location.href);
@@ -28,15 +30,28 @@ function safeResponse(response, key) {
   return false;
 }
 
+async function verifiedResponse(response, key) {
+  if (!safeResponse(response, key)) return false;
+  const relative = "./" + new URL(key).pathname.slice(BASE.pathname.length);
+  const expected = FILE_HASHES[relative];
+  if (!expected) return !/^[0-9a-f]{40}$/.test(RELEASE) && Object.keys(FILE_HASHES).length === 0; // local synthetic/dev source only
+  const bytes = await response.clone().arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const actual = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+  return actual === expected;
+}
+
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
+    const fetched = [];
     for (const path of SHELL) {
       const key = new URL(path, BASE).href;
       const response = await fetch(key, { cache: "reload", credentials: "omit", redirect: "error" });
-      if (!safeResponse(response, key)) throw new Error("Unsafe shell response");
-      await cache.put(key, response);
+      if (!await verifiedResponse(response, key)) throw new Error("Unsafe or mismatched shell response");
+      fetched.push([key, response]);
     }
+    for (const [key, response] of fetched) await cache.put(key, response);
     await self.skipWaiting();
   })());
 });
@@ -54,9 +69,13 @@ self.addEventListener("fetch", event => {
   if (!key) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
+    // A built worker serves one complete release; a new install changes CACHE.
+    const existing = await cache.match(key);
+    if (existing && FILE_HASHES["./" + new URL(key).pathname.slice(BASE.pathname.length)]) return existing;
     try {
       const response = await fetch(key, { credentials: "omit", redirect: "error" });
-      if (safeResponse(response, key)) await cache.put(key, response.clone());
+      if (!await verifiedResponse(response, key)) throw new Error("Release response rejected");
+      await cache.put(key, response.clone());
       return response;
     } catch (error) {
       const cached = await cache.match(key);

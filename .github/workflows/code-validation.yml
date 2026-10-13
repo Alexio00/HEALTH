@@ -86,6 +86,7 @@ jobs:
           node frontend/tests/contract.mjs
           node frontend/tests/sw.mjs
           node frontend/tests/scope.mjs
+          node frontend/tests/release.mjs
       - name: Python syntax
         run: python3 -m py_compile scripts/migration/full_migration.py
       - name: Migration runner self-test

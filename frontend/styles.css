@@ -405,3 +405,5 @@ dd { margin: 0; overflow-wrap: anywhere; }
   .chip { color: #ccc; background: #202020; border-color: #444; }
   .relation { border-color: #555; }
 }
+
+.release-footer { padding: .5rem 1rem; text-align: right; color: var(--muted, #888); font-size: .75rem; }

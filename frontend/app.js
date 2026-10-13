@@ -1445,7 +1445,16 @@ async function renderRecord(recordId) {
 }
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
+  let hadController = Boolean(navigator.serviceWorker.controller);
+  let reloadingForRelease = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController && !reloadingForRelease) {
+      reloadingForRelease = true;
+      window.location.reload();
+    }
+    hadController = true;
+  });
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }));
 }
 
 boot();

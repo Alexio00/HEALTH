@@ -38,7 +38,8 @@ class TransferSafety(unittest.TestCase):
                     self.assertNotIn("print(json.dumps(result))", source)
 
     def test_no_pr_secrets_in_production_workflows(self):
-        for name in ("health-supabase-keepalive.yml", "health-complete-backup.yml"):
+        for name in ("health-supabase-keepalive.yml", "health-complete-backup.yml",
+                     "health-backup-preflight.yml", "health-backup-activate.yml"):
             text = (WORKFLOWS / name).read_text(encoding="utf-8")
             with self.subTest(name=name):
                 self.assertIn("refs/heads/main", text)

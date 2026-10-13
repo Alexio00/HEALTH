@@ -52,7 +52,7 @@ class CompleteCloud:
         # Owner accepted future capacity on 2026-10-12; do not query quota.
         # Provider upload failure leaves the existing ACTIVE archive intact.
         if any(x.get('name')==name for x in self.children(self.parent)):raise SourceStop('candidate_name_already_exists_reconcile_required')
-        properties={'health_complete_set':'v1','health_recovery_state':'CANDIDATE','health_archive_sha256':sha,'health_archive_bytes':str(archive.stat().st_size),'health_pipeline_commit':producer_sha}
+        properties={'health_complete_set':'v1','health_recovery_state':'UPLOADING','health_archive_sha256':sha,'health_archive_bytes':str(archive.stat().st_size),'health_pipeline_commit':producer_sha}
         request={'name':name,'mimeType':'application/vnd.google-apps.folder','parents':[self.parent],'appProperties':properties}
         (self.root/'upload-plan.private.json').write_text(json.dumps(request,indent=2))
         result=self.t.request('/drive/v3/files?fields=id',method='POST',body=json.dumps(request).encode(),content_type='application/json')
@@ -62,10 +62,39 @@ class CompleteCloud:
         config=self.scoped(folder,'upload')
         try:self.clone('copyto',archive,'complete_candidate_owner:complete-recovery.zip','--immutable',config=config)
         finally:config.unlink()
+        self.finish_upload(meta,producer_sha)
         return folder
-    def download(self,folder,expected_sha,label):
+    def finish_upload(self,folder_meta,producer_sha):
+        """Promote only a fully downloaded ZIP; retry one exact orphan safely."""
+        folder=identity(folder_meta.get('id'))
+        m=self.meta(folder);p=m.get('appProperties',{});sha=p.get('health_archive_sha256','')
+        if (m.get('parents')!=[self.parent] or m.get('trashed') is not False
+                or m.get('mimeType')!='application/vnd.google-apps.folder'
+                or not re.fullmatch('complete-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}',m.get('name',''))
+                or p.get('health_complete_set')!='v1'
+                or p.get('health_pipeline_commit')!=producer_sha
+                or not re.fullmatch('[a-f0-9]{64}',sha)
+                or not p.get('health_archive_bytes','').isdigit()
+                or int(p['health_archive_bytes'])<=0
+                or p.get('health_recovery_state') not in ('UPLOADING','CANDIDATE')):
+            raise SourceStop('orphan_upload_identity_requires_owner_reconciliation')
+        # download verifies provider hash and size and local bytes; fail on partial ZIP.
+        self.download(folder,sha,'upload-reconcile',allow_uploading=True)
+        if p['health_recovery_state']=='UPLOADING':
+            try:
+                self.t.request('/drive/v3/files/'+folder+'?fields=id,appProperties',
+                               method='PATCH',body=json.dumps({'appProperties':{'health_recovery_state':'CANDIDATE'}}).encode(),
+                               content_type='application/json')
+            except Exception:
+                if self.meta(folder).get('appProperties',{}).get('health_recovery_state')!='CANDIDATE':
+                    raise
+        done=self.meta(folder).get('appProperties',{})
+        if done.get('health_recovery_state')!='CANDIDATE' or done.get('health_pipeline_commit')!=producer_sha or done.get('health_archive_sha256')!=sha:
+            raise SourceStop('upload_final_state_readback_rejected')
+        return folder,sha
+    def download(self,folder,expected_sha,label,*,allow_uploading=False):
         meta=self.meta(folder);p=meta.get('appProperties',{})
-        if meta.get('parents')!=[self.parent] or p.get('health_complete_set')!='v1' or p.get('health_archive_sha256')!=expected_sha or p.get('health_recovery_state') not in ('CANDIDATE','ACTIVE'):raise SourceStop('candidate_remote_binding_rejected')
+        if meta.get('parents')!=[self.parent] or p.get('health_complete_set')!='v1' or p.get('health_archive_sha256')!=expected_sha or p.get('health_recovery_state') not in (('UPLOADING','CANDIDATE','ACTIVE') if allow_uploading else ('CANDIDATE','ACTIVE')):raise SourceStop('candidate_remote_binding_rejected')
         files=self.children(folder)
         if len(files)!=1 or files[0].get('name')!='complete-recovery.zip' or files[0].get('sha256Checksum')!=expected_sha or int(files[0].get('size',0))!=int(p.get('health_archive_bytes',0)):raise SourceStop('candidate_remote_archive_rejected')
         target=self.root/(label+'.private.zip');config=self.scoped(folder,label)

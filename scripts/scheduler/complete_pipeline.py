@@ -28,6 +28,67 @@ def require_candidate_binding(props, producer_sha, archive_sha):
             or props.get('health_recovery_state') not in ('CANDIDATE','ACTIVE')):
         raise SourceStop('candidate_producer_sha_or_archive_binding_mismatch')
 
+def choose_existing(mode,cloud,journal,producer_sha,approved_sha):
+    """One exact candidate, orphan upload, or completed activation retry."""
+    pending=journal.read()
+    objects=cloud.children(cloud.parent)
+    candidates=[x for x in objects if x.get('appProperties',{}).get('health_complete_set')=='v1' and x.get('appProperties',{}).get('health_recovery_state')=='CANDIDATE']
+    uploads=[x for x in objects if x.get('appProperties',{}).get('health_complete_set')=='v1' and x.get('appProperties',{}).get('health_recovery_state')=='UPLOADING']
+    if len(candidates)>1 or len(uploads)>1 or (candidates and uploads):
+        raise SourceStop('multiple_or_conflicting_candidates_require_owner_reconciliation')
+    if pending and pending['state']!='DONE':
+        if mode=='candidate' or uploads:raise SourceStop('pending_rotation_requires_owner_reconciliation')
+        target,sha=pending['target'],pending['sha'];replay=False
+    elif candidates:
+        target=candidates[0]['id'];sha=candidates[0]['appProperties'].get('health_archive_sha256');replay=False
+    elif mode=='activate' and pending and pending['state']=='DONE' and pending['sha']==approved_sha and not uploads:
+        target,sha=pending['target'],pending['sha'];replay=True
+    elif uploads:
+        if mode!='candidate':raise SourceStop('unfinished_upload_requires_candidate_reconciliation_first')
+        target,sha=cloud.finish_upload(uploads[0],producer_sha);replay=False
+    else:
+        return None
+    if mode=='activate' and sha!=approved_sha:
+        raise SourceStop('release_candidate_digest_does_not_match_approved_archive')
+    props=cloud.meta(target).get('appProperties',{})
+    require_candidate_binding(props,producer_sha,sha)
+    if replay and props.get('health_recovery_state')!='ACTIVE':
+        raise SourceStop('activation_retry_requires_same_active')
+    return target,sha,replay
+
+
+def complete_activation_marker(cloud,journal,target,sha,producer_sha,executor_sha,proof):
+    """Finish lost marker PATCH only after fresh full proof and DONE journal."""
+    p=cloud.meta(target).get('appProperties',{})
+    require_candidate_binding(p,producer_sha,sha)
+    row=journal.read()
+    if (p['health_recovery_state']!='ACTIVE' or not row or row['state']!='DONE'
+            or row['target']!=target or row['sha']!=sha
+            or proof.get('status')!='ACTUAL_COMPLETE_SET_RESTORE_PASS'
+            or proof.get('archive_sha256')!=sha
+            or not all(proof.get(k) is True for k in
+                       ('all_members_verified','database_restore_pass','auth_http_pass','source_rebind_pass'))):
+        raise SourceStop('activation_not_fully_verified_or_rotation_incomplete')
+    active=[x['id'] for x in cloud.children(cloud.parent)
+            if x.get('appProperties',{}).get('health_complete_set')=='v1'
+            and x.get('appProperties',{}).get('health_recovery_state')=='ACTIVE']
+    if active!=[target]:raise SourceStop('activation_requires_unique_verified_active')
+    props={'health_backup_pipeline':'v1','health_recovery_executor':executor_sha,'health_full_restore_archive':sha}
+    parent=cloud.meta(cloud.parent).get('appProperties',{})
+    if not all(parent.get(k)==v for k,v in props.items()):
+        try:
+            cloud.t.request('/drive/v3/files/'+cloud.parent+'?fields=id,appProperties',
+                method='PATCH',body=json.dumps({'appProperties':props}).encode(),
+                content_type='application/json')
+        except Exception:
+            parent=cloud.meta(cloud.parent).get('appProperties',{})
+            if not all(parent.get(k)==v for k,v in props.items()):raise
+    parent=cloud.meta(cloud.parent).get('appProperties',{})
+    if any(parent.get(k)!=v for k,v in props.items()):raise SourceStop('full_activation_marker_readback_failed')
+    if journal.read()!=row:raise SourceStop('activation_journal_changed_during_marker')
+    return True
+
+
 def retire_bootstrap(*unused):
     # Historical bootstrap was already retired; never touch old Drive IDs.
     return 0
@@ -45,14 +106,11 @@ def run(mode,root,producer_sha,*,serialized):
         parent=cloud.meta(cloud.parent);activation=parent.get('appProperties',{})
         if mode=='daily' and (activation.get('health_backup_pipeline')!='v1' or activation.get('health_recovery_executor')!=executor_sha):raise SourceStop('current_executor_full_activation_required')
         journal=DriveCloudJournal(cloud.t,cloud.parent,root/'worker-lock.sqlite',serialized=True)
-        pending=journal.read()
-        candidates=[x for x in cloud.children(cloud.parent) if x.get('appProperties',{}).get('health_complete_set')=='v1' and x.get('appProperties',{}).get('health_recovery_state')=='CANDIDATE']
-        if pending and pending['state']!='DONE':
-            target=pending['target'];sha=pending['sha']
-            if mode=='candidate':raise SourceStop('pending_rotation_requires_activation_or_daily_reconciliation')
-        elif candidates:
-            if len(candidates)!=1:raise SourceStop('multiple_pending_candidates_require_exact_reconciliation')
-            target=candidates[0]['id'];sha=candidates[0]['appProperties']['health_archive_sha256']
+        existing=choose_existing(mode,cloud,journal,producer_sha,
+                                 os.environ.get('HEALTH_RELEASE_CANDIDATE_SHA256',''))
+        replay=False
+        if existing is not None:
+            target,sha,replay=existing
         else:
             if mode=='activate':raise SourceStop('activation_requires_prior_candidate_and_full_recovery')
             capture_root=root/'capture';capture_root.mkdir(mode=0o700)
@@ -76,13 +134,14 @@ def run(mode,root,producer_sha,*,serialized):
             # The callback proof was freshly generated locally from this exact
             # remote ZIP. It is never taken from an uploaded acceptance receipt.
             if executor_binding()!=(executor_sha,pins):raise SourceStop('rotation_executor_changed')
-            rotation=DriveRotation(cloud.t,cloud.parent,journal,verification='daily' if mode=='daily' else 'full',executor_sha=executor_sha)
-            aggregate['rotation']=rotation.promote(target,sha,lambda id:proof if id==target else {})
+            if not replay:
+                rotation=DriveRotation(cloud.t,cloud.parent,journal,verification='daily' if mode=='daily' else 'full',executor_sha=executor_sha)
+                aggregate['rotation']=rotation.promote(target,sha,lambda id:proof if id==target else {})
+            elif mode!='activate':
+                raise SourceStop('only_explicit_activation_can_reconcile_completed_rotation')
             if mode=='activate':
-                props={'health_backup_pipeline':'v1','health_recovery_executor':executor_sha,'health_full_restore_archive':sha}
-                cloud.t.request('/drive/v3/files/'+cloud.parent+'?fields=id,appProperties',method='PATCH',body=json.dumps({'appProperties':props}).encode(),content_type='application/json')
-                readback=cloud.meta(cloud.parent).get('appProperties',{})
-                if any(readback.get(k)!=v for k,v in props.items()):raise SourceStop('full_activation_marker_readback_failed')
+                complete_activation_marker(cloud,journal,target,sha,producer_sha,executor_sha,proof)
+                aggregate['activation_marker_reconciled']=replay
                 # One-time bootstrap retirement was completed and read back in
                 # authenticated activation 38263084066 (2026-10-12). Repeating
                 # that lookup would make every future activation depend on a

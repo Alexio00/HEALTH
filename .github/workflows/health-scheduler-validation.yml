@@ -6,6 +6,8 @@ on:
     paths:
       - ".github/workflows/health-supabase-keepalive.yml"
       - ".github/workflows/health-complete-backup.yml"
+      - ".github/workflows/health-backup-preflight.yml"
+      - ".github/workflows/health-backup-activate.yml"
       - ".github/workflows/health-scheduler-validation.yml"
       - "scripts/scheduler/**"
       - "scripts/automation/supabase_keepalive.py"
@@ -42,4 +44,5 @@ jobs:
           python3 scripts/scheduler/test_complete_payload.py -v
           python3 scripts/scheduler/test_complete_sources.py -v
           python3 scripts/scheduler/test_complete_restore.py -v
+          python3 scripts/scheduler/test_candidate_provenance.py -v
           python3 scripts/scheduler/test_drive_rotation.py -v

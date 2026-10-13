@@ -813,6 +813,36 @@ function latestMedicationRecordId(medication, recordDates) {
         ? id : latest;
     }, "");
 }
+function medicationHistoriesForRecord(recordId, medications) {
+  return (medications || []).flatMap(medication => {
+    const ids = medicationRecordIds(medication);
+    return ids.includes(recordId) && ids.length > 1
+      ? [{ name: medication.name, recordIds: ids.filter(id => id !== recordId) }]
+      : [];
+  });
+}
+async function medicationHistorySection(recordId) {
+  const { data: medications, error } = await supabase.from("medications")
+    .select("name,basis_record_id,metadata").eq("status", "active");
+  if (error) throw error;
+  const histories = medicationHistoriesForRecord(recordId, medications);
+  if (!histories.length) return "";
+  const otherIds = [...new Set(histories.flatMap(item => item.recordIds))];
+  const { data: relatedRecords, error: recordsError } = await supabase.from("records")
+    .select("record_id,record_date").in("record_id", otherIds);
+  if (recordsError) throw recordsError;
+  const dates = new Map((relatedRecords || []).map(item => [item.record_id, item.record_date]));
+  const blocks = histories.map(item => {
+    const ids = item.recordIds.filter(id => dates.has(id))
+      .sort((a, b) => String(dates.get(b) || "").localeCompare(String(dates.get(a) || "")));
+    if (!ids.length) return "";
+    return `<h3>${esc(item.name)}</h3><ul class="record-list">${ids.map(id =>
+      `<li>${recLink(id)} · ${esc(fmtDate(dates.get(id)))}</li>`
+    ).join("")}</ul>`;
+  }).filter(Boolean);
+  if (!blocks.length) return "";
+  return `<section><h2>Другие связанные REC по препаратам</h2>${blocks.join("")}</section>`;
+}
 async function renderCurrentState(mode = "all") {
   const [cases, meds, monitoring, plan, questions] = await Promise.all([
     supabase.from("cases").select("case_key,title,summary,status,category,opening_record_id,closing_record_id,metadata").eq("status","open").order("title"),
@@ -1276,6 +1306,7 @@ async function renderRecord(recordId) {
     });
   }
 
+  const medicationHistory = await medicationHistorySection(recordId);
   inlineTableSequence = 0;
   const title = recordDisplayTitle(record);
   const body = renderRecordBody(record.body_text);
@@ -1305,6 +1336,8 @@ async function renderRecord(recordId) {
         </li>
       `) : empty()}
     </section>
+
+    ${medicationHistory}
 
     <section>
       <h2>Текст записи</h2>

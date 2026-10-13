@@ -440,6 +440,8 @@ def validate_data(data: dict[str, list[dict[str, Any]]]) -> None:
         "questions": ["basis_record_id","resolved_by_record_id"],
     }.items():
         for row in data[table]:
+            if table == "medications" and row.get("status") not in ("active", "inactive", "planned"):
+                fail("medications: invalid status")
             for field in basis_fields:
                 value = row.get(field)
                 if value is not None and value not in record_ids:

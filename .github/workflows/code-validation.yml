@@ -2,7 +2,7 @@ name: HEALTH code validation
 
 on:
   push:
-    branches: [main, "maintenance/audit-remediation-*"]
+    branches: [main, pwa, "maintenance/audit-remediation-*"]
     paths:
       - "scripts/**"
       - "frontend/**"

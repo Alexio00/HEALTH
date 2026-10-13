@@ -98,6 +98,18 @@ This acceptance matrix still needs actual disposable PostgreSQL 17 testing
 when a reviewed migration is prepared. It is not a CI PASS or a production
 migration. Unknown stages must not be silently inferred from chronology.
 
+
+## V2 implementation queue (approved, not released)
+
+Draft SQL sequence for disposable tests: v1, then
+`vaccination_v2_antigen_stage_patch.sql`,
+`vaccination_v2_antigen_relations_draft.sql`, and
+`vaccination_v2_antigen_keys_draft.sql`.
+Do not ship sequentially: replace with ONE reviewed schema migration.
+Frontend PR #59 (stacked on PR #51) adds multivalent infection tags,
+per-antigen latest rows and synthetic projection/tests. The canonical
+reader query, final Writer delta and full verification are still pending.
+
 ## Required coordination with parallel Writer development
 
 1. Reader schema shape and RLS/GRANT proposal must undergo a separate review.

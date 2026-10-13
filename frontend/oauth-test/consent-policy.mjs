@@ -1,4 +1,11 @@
 // Pure validation; neither user credentials nor server identity are trusted here.
+export function authorizationIdFromURL(value) {
+ try {
+  const ids=new URL(value).searchParams.getAll('authorization_id');
+  // Supabase issues an opaque 32-character ID, not the authorization row UUID.
+  return ids.length===1 && /^[A-Za-z0-9]{32}$/.test(ids[0]) ? ids[0] : null;
+ } catch { return null; }
+}
 export function connectionConfigAllowed(config) {
  if (!config || typeof config !== 'object' || Array.isArray(config)
   || Object.keys(config).sort().join(',') !== 'callback,clientId,publishableKey'
@@ -27,3 +34,4 @@ export function callbackAllowed(value, exact) {
    && !u.username && !u.password && !u.hash && !e.search && !e.hash;
  } catch { return false; }
 }
+

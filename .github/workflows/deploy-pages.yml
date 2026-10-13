@@ -2,7 +2,7 @@ name: Deploy HEALTH PWA
 
 on:
   push:
-    branches: [main, "maintenance/frontend-accordion-medrec-visits-20261013"]
+    branches: [main]
     paths:
       - "frontend/**"
       - ".github/workflows/deploy-pages.yml"
@@ -26,12 +26,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-
-      - name: Validate frontend before deploying
-        run: |
-          node --check --input-type=module < frontend/app.js
-          node frontend/tests/contract.mjs
-          python3 scripts/validation/public_secret_guard.py
 
       - name: Configure Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5

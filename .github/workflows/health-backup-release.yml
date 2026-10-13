@@ -1,0 +1,129 @@
+name: HEALTH one-time complete backup release (owner-gated draft)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "candidate (no rotation) or activate (reviewed candidate only)"
+        type: choice
+        required: true
+        default: candidate
+        options: [candidate, activate]
+      expected_executor_sha:
+        description: "Full reviewed scheduler-code commit SHA"
+        type: string
+        required: true
+      candidate_sha256:
+        description: "For activate: exact reviewed archive SHA256; NO private Drive IDs"
+        type: string
+        required: false
+      acknowledge_legacy_paused:
+        description: "Confirm old SHEDULLER schedules OFF and zero running jobs"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: health-inrepo-complete-backup
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Owner-confirmed candidate or activation
+    if: >-
+      github.repository == 'Alexio00/HEALTH' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.actor_id == '308028794' &&
+      vars.HEALTH_INREPO_RELEASE_ENABLED == 'true' &&
+      vars.HEALTH_LEGACY_BACKUP_PAUSED == 'true' &&
+      vars.HEALTH_INREPO_BACKUP_ENABLED == 'false' &&
+      inputs.acknowledge_legacy_paused == 'LEGACY_SHEDULLER_PAUSED_AND_IDLE' &&
+      inputs.expected_executor_sha == vars.HEALTH_BACKUP_EXECUTOR_SHA &&
+      github.sha == vars.HEALTH_RELEASE_MAIN_ACCEPTED_SHA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    environment: health-private-recovery
+    env:
+      HEALTH_RCLONE_VERSION: "1.75.1"
+      HEALTH_COMPLETE_SERIALIZED: "1"
+      HEALTH_REQUIRE_RESTRICTED_CAPTURE: "1"
+      HEALTH_INREPO_RELEASE_ENABLED: ${{ vars.HEALTH_INREPO_RELEASE_ENABLED }}
+      HEALTH_LEGACY_BACKUP_PAUSED: ${{ vars.HEALTH_LEGACY_BACKUP_PAUSED }}
+      HEALTH_INREPO_BACKUP_ENABLED: ${{ vars.HEALTH_INREPO_BACKUP_ENABLED }}
+      HEALTH_RELEASE_MAIN_ACCEPTED_SHA: ${{ vars.HEALTH_RELEASE_MAIN_ACCEPTED_SHA }}
+      HEALTH_BACKUP_EXECUTOR_SHA: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}
+      HEALTH_BACKUP_PRODUCER_SHA: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}
+      HEALTH_RELEASE_EXPECTED_SHA: ${{ inputs.expected_executor_sha }}
+      HEALTH_RELEASE_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+      HEALTH_RELEASE_ACK: ${{ inputs.acknowledge_legacy_paused }}
+      HEALTH_RELEASE_MODE: ${{ inputs.mode }}
+      SUPABASE_DB_URL: ${{ secrets.HEALTH_BACKUP_DB_URL }}
+      HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
+      RCLONE_CONFIG_CONTENT: ${{ secrets.HEALTH_BACKUP_RCLONE_CONFIG }}
+      HEALTH_COMPLETE_RECOVERY_RCLONE: ${{ secrets.HEALTH_COMPLETE_RECOVERY_RCLONE }}
+      HEALTH_PRIMARY_SOURCE_FOLDER_ID: ${{ secrets.HEALTH_PRIMARY_SOURCE_FOLDER_ID }}
+      HEALTH_FROZEN_LINEAGE_SHA256: ${{ secrets.HEALTH_FROZEN_LINEAGE_SHA256 }}
+      HEALTH_FROZEN_ORIGINAL_COUNT: ${{ secrets.HEALTH_FROZEN_ORIGINAL_COUNT }}
+      HEALTH_BACKUP_PARENT_FOLDER_ID: ${{ secrets.HEALTH_BACKUP_PARENT_FOLDER_ID }}
+      HEALTH_PRIMARY_DRIVE_OWNER_EMAIL: ${{ secrets.HEALTH_PRIMARY_DRIVE_OWNER_EMAIL }}
+      HEALTH_BACKUP_DRIVE_OWNER_EMAIL: ${{ secrets.HEALTH_BACKUP_DRIVE_OWNER_EMAIL }}
+      HEALTH_HISTORICAL_SEED_FOLDER_ID: ${{ secrets.HEALTH_HISTORICAL_SEED_FOLDER_ID }}
+      HEALTH_HISTORICAL_SEED_FILE_ID: ${{ secrets.HEALTH_HISTORICAL_SEED_FILE_ID }}
+      HEALTH_HISTORICAL_SEED_SHA256: ${{ secrets.HEALTH_HISTORICAL_SEED_SHA256 }}
+    steps:
+      - name: Require exact accepted Writer main and Scheduler pins
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$HEALTH_BACKUP_EXECUTOR_SHA" =~ ^[a-f0-9]{40}$ ]]
+          test "$GITHUB_SHA" = "$HEALTH_RELEASE_MAIN_ACCEPTED_SHA"
+          test "$HEALTH_BACKUP_EXECUTOR_SHA" = "$HEALTH_RELEASE_EXPECTED_SHA"
+          if [[ "$HEALTH_RELEASE_MODE" = "activate" ]]; then
+            [[ "$HEALTH_RELEASE_CANDIDATE_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          fi
+      - name: Checkout pinned accepted Scheduler executor
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm protected scheduler-code ancestry and release gate
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEALTH_BACKUP_EXECUTOR_SHA"
+          git fetch -q --no-tags origin 'refs/heads/scheduler-code:refs/remotes/origin/scheduler-code'
+          git merge-base --is-ancestor "$HEALTH_BACKUP_EXECUTOR_SHA" refs/remotes/origin/scheduler-code
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, "scripts/scheduler")
+          from cutover_guard import require_release_context
+          require_release_context(os.environ, os.environ["HEALTH_RELEASE_MODE"])
+          print("PASS: reviewed executor and owner-asserted legacy pause")
+          PY
+      - name: Install checksum-verified tooling
+        run: |
+          set -euo pipefail
+          bash scripts/scheduler/install_rclone.sh
+          python3 scripts/scheduler/pull_fixed_recovery_images.py
+      - name: Full private remote readback and isolated recovery
+        run: |
+          set -euo pipefail
+          umask 077
+          export HEALTH_COMPLETE_PRIVATE_ROOT="$RUNNER_TEMP/health-one-time-release-private"
+          mkdir -m 700 "$HEALTH_COMPLETE_PRIVATE_ROOT"
+          python3 scripts/scheduler/complete_pipeline.py --mode "$HEALTH_RELEASE_MODE"
+      - name: Remove temporary private payload
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, shutil
+          base = pathlib.Path(os.environ["RUNNER_TEMP"]).resolve()
+          folder = base / "health-one-time-release-private"
+          if folder.exists():
+              if folder.is_symlink() or folder.resolve().parent != base:
+                  raise RuntimeError("release_private_cleanup_boundary_rejected")
+              shutil.rmtree(folder)
+          PY

@@ -275,3 +275,6 @@ assert(vaccineView.latest.find(x => x.infection === "Клещевой энцеф
 assert(vaccineView.latest.find(x => x.infection === "Грипп")?.next?.date === "2028-04-10");
 assert(vaccineView.history.some(x => x.status === "cancelled"));
 console.log("PASS vaccination REC selection, stages, history, overdue and evidence links");
+
+// TEST OAuth config and network gates; synthetic values only.
+await import('./oauth-consent.mjs');

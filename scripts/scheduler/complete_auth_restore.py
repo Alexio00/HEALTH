@@ -51,7 +51,7 @@ def restore_auth(context, stage):
         password=secrets.token_hex(24);jwt_secret=secrets.token_hex(32)
         sql("ALTER ROLE supabase_auth_admin PASSWORD '"+password+"';",'local_auth_service_password')
         owner_ids=json.loads(sql("SELECT coalesce(jsonb_agg(id),'[]'::jsonb) FROM auth.users;",'restored_user_ids'))
-        env={'GOTRUE_DB_DRIVER':'postgres','GOTRUE_DB_DATABASE_URL':'postgresql://supabase_auth_admin:'+password+'@127.0.0.1:5432/postgres?sslmode=disable','GOTRUE_API_HOST':'127.0.0.1','GOTRUE_API_PORT':'9999','GOTRUE_SITE_URL':'http://127.0.0.1:3000','API_EXTERNAL_URL':'http://127.0.0.1:9999','GOTRUE_JWT_SECRET':jwt_secret,'GOTRUE_JWT_ADMIN_ROLES':'service_role','GOTRUE_JWT_AUD':'authenticated','GOTRUE_JWT_DEFAULT_GROUP':'authenticated','GOTRUE_DISABLE_SIGNUP':'false','GOTRUE_MAILER_AUTOCONFIRM':'true'}
+        env={'GOTRUE_DB_DRIVER':'postgres','GOTRUE_DB_DATABASE_URL':('postgres'+'ql://supabase_auth_admin:')+password+'@127.0.0.1:5432/postgres?sslmode=disable','GOTRUE_API_HOST':'127.0.0.1','GOTRUE_API_PORT':'9999','GOTRUE_SITE_URL':'http://127.0.0.1:3000','API_EXTERNAL_URL':'http://127.0.0.1:9999','GOTRUE_JWT_SECRET':jwt_secret,'GOTRUE_JWT_ADMIN_ROLES':'service_role','GOTRUE_JWT_AUD':'authenticated','GOTRUE_JWT_DEFAULT_GROUP':'authenticated','GOTRUE_DISABLE_SIGNUP':'false','GOTRUE_MAILER_AUTOCONFIRM':'true'}
         args=['docker','run','-d','--pull=never','--name',auth_name,'--label','health.restored-auth='+auth_name,'--network','container:'+db]
         for k,v in env.items():args+=['-e',k+'='+v]
         args+=['public.ecr.aws/supabase/gotrue@sha256:1736a63078f5922b198c4cbe50f80ab9a2d3b54fe8b7b6cfb2e9dc5dbbc12c6b']

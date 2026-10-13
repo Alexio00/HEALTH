@@ -108,6 +108,17 @@ h3 { margin: 1.4rem 0 .6rem; }
 /* Expanded cards use their entire content width on every route. */
 .case-card .lead,
 .case-card .lead-small { max-width: none; }
+
+/* Paragraphs in expanded cards and RECs use justified text; compact lines,
+   headings, links, lists and table cells keep their left alignment.
+   A single-line paragraph remains left-aligned via text-align-last. */
+.case-body p:not(.rec-inline),
+.content > p.lead,
+.rich-record-body p {
+  text-align: justify;
+  text-align-last: left;
+  hyphens: auto;
+}
 .summary-date { color: #666; font-weight: 400; }
 .case-action { margin-bottom: 0; }
 .rec-links { padding-left: 1.25rem; }

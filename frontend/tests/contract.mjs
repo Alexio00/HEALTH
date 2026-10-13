@@ -23,8 +23,37 @@ const context = vm.createContext({
   CSS: { escape(x) { return x; } }
 });
 const harness = js.replace(/^import .*;\s*$/gm, "").replace(/\nboot\(\);\s*$/, "");
-vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, plannedVisitSpecialties, isMedicalCardQuestion, questionSpecialties, medicationRecordIds, latestMedicationRecordId, medicationHistoriesForRecord, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable, shouldPinTableHeader };", context);
+vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, plannedVisitSpecialties, isMedicalCardQuestion, questionSpecialties, medicationRecordIds, latestMedicationRecordId, medicationHistoriesForRecord, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable, shouldPinTableHeader, vaccinationRecCell, vaccinationRows };", context);
 const x = context.expose;
+
+// Shared REC cell renderer is used in all three vaccination tables. Only
+// human-visible prefixes disappear; links and their source roles remain.
+const appointment = "REC-20260101-001";
+const basis = "REC-20260102-002";
+const administration = "REC-20260103-003";
+for (const section of ["latest", "planned", "history"]) {
+  const rows = x.vaccinationRows([{
+    infection: "Синтетическая инфекция", stage: "V1", date: "2026-01-04",
+    vaccine: "Синтетическая вакцина", sourceStatus: "Запланировано",
+    basisRecordId: basis, administrationRecordId: administration
+  }], section);
+  const cell = rows[0].cells[5].html;
+  assert(cell.includes('href="#/records/' + basis + '"'), section + " keeps basis REC");
+  assert(cell.includes('href="#/records/' + administration + '"'), section + " keeps administration REC");
+  assert(!cell.includes("Осн.:"), section + " drops basis prefix");
+  assert(!cell.includes("Пров.:"), section + " drops administration prefix");
+  assert(cell.includes('title="Основание REC"'), section + " retains basis link context");
+  assert(cell.includes('title="Запись о проведении"'), section + " retains administration link context");
+}
+assert(x.vaccinationRecCell({appointmentRecordId: appointment})
+  .includes("Назн.:"), "separately requested labels are not silently changed");
+assert.equal((x.vaccinationRecCell({basisRecordId: basis, administrationRecordId: basis})
+  .match(/href=/g) || []).length, 1, "duplicate evidence link is still suppressed");
+assert.match(css, /\.case-body p:not\(\.rec-inline\),\s*\.content > p\.lead,\s*\.rich-record-body p\s*\{[^}]*text-align:\s*justify;[^}]*text-align-last:\s*left;[^}]*hyphens:\s*auto;/);
+assert.match(css, /\.data-table td\s*\{[^}]*text-align:\s*left;/,
+  "tabular lines stay left aligned");
+console.log("PASS vaccination link-only cells and justified prose boundaries");
+
 const nav = [...html.matchAll(/<a href="#\/[\w-]*">[^<]+<\/a>/g)].map(m => m[0]);
 assert.equal(nav.length, 9, "nine distinct navigation entries");
 assert.equal(new Set(nav).size, 9);

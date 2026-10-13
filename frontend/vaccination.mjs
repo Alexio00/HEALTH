@@ -71,8 +71,12 @@ function vaccineName(fragment) {
 }
 
 function stageForActual(fragment, keys) {
-  if (keys.includes("flu")) return "RV";
-  if (has(fragment, /\bR\d+\b|\bRV\b|ревакцинац/iu)) return "RV";
+  if (keys.includes("flu")) return "Rv";
+  // Preserve an explicitly documented booster sequence; never infer a
+  // numbered booster from a generic R/RV or from a planned course.
+  const booster = fragment.match(/\bRv([1-9]\d*)\b/iu);
+  if (booster) return "Rv" + booster[1];
+  if (has(fragment, /\bR\d+\b|\bRV\b|ревакцинац/iu)) return "Rv";
   if (has(fragment, /первая вакцинация основного курса/iu)) return "V1";
   if (has(fragment, /\b1[-‑]й этап/iu)) return "V1";
   const dose = fragment.match(/\bV([1-9]\d*)\b/iu)
@@ -174,9 +178,10 @@ export function actualVaccinations(records) {
 function stageForPlan(item) {
   const meta = item.metadata || {};
   if (/^V[1-9]\d*$/iu.test(String(meta.stage || ""))) return String(meta.stage).toUpperCase();
-  if (/^RV$/iu.test(String(meta.stage || ""))) return "RV";
+  const booster = String(meta.stage || "").match(/^RV([1-9]\d*)?$/iu);
+  if (booster) return "Rv" + (booster[1] || "");
   if (has(item.title, /повторный курс.*5\s+доз/iu)) return "V1–V5";
-  if (has(item.title, /ревакцинац|ежегодн/iu)) return "RV";
+  if (has(item.title, /ревакцинац|ежегодн/iu)) return "Rv";
   return "—";
 }
 

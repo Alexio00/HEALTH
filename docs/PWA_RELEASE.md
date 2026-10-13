@@ -23,12 +23,19 @@ the clinical authorization workflow from `pwa`.
 2. Obtain a green `HEALTH code validation` on the PR and exact merged `pwa`
    commit. The workflow covers both `pull_request` and `push` on `pwa`.
 3. The `pwa` copy of `.github/workflows/deploy-pages.yml` automatically
-   runs a **fresh** Pages deployment on a `pwa` push affecting `frontend/**`
-   or the workflow. Alternatively select `pwa` under **Run workflow** to
-   create a new run. Check that deployment concluded `success` and the run
-   head branch is `pwa`. Do not use **Re-run job** after an artifact was
-   already uploaded: the same run can then contain two `github-pages`
-   artifacts and `deploy-pages` rejects the ambiguous upload.
+   runs on a `pwa` push affecting `frontend/**` or the workflow. It uses
+   concurrency group `pages-pwa` (independent from the legacy `main` group).
+   A **Verify PWA before release** job checks frontend syntax, synthetic
+   contracts, and the public secret-pattern guard, and uploads the exact
+   checked Pages artifact. **Publish verified PWA** runs only after that job
+   succeeds and can deploy only from `refs/heads/pwa`. This is a
+   mandatory pre-deploy frontend gate, NOT a replacement for the full
+   `HEALTH code validation` workflow run on a pull request.
+   On a failed deployment, either re-run only the deploy job while its single
+   valid artifact remains, or start a new workflow run from `pwa`.
+   Do not re-run the artifact-uploading job or the entire workflow under the
+   same run ID after an upload, because duplicate `github-pages` artifacts
+   can make the deploy action fail.
 4. Check browser-visible behavior under an authorized session. GitHub Pages
    deployment success is not itself a UI or clinical Writer smoke-test.
 5. Recheck that `main` SHA and Supabase Writer accepted SHA have not moved.
@@ -42,15 +49,48 @@ restore the exact approved `pwa` revision.
 Never merge a Writer branch's frontend files into `main` on the assumption
 that the Pages site will stay unchanged.
 
+## Branch protection for `pwa` (repository setting)
+
+The branch was **not protected** on 2026-10-13: the GitHub branches API returned
+`protected: false`. A passing deployment gate only blocks *publication* of
+failing code; it cannot itself stop an unreviewed direct push or force-push to
+`pwa`.
+
+The repository is publicly visible, so GitHub Free supports Rulesets/branch
+protection without upgrading. The connected GitHub integration cannot modify
+administration settings (the protection read API returned 403). The owner must
+configure this once in GitHub **Settings → Rules → Rulesets** (or **Branches →
+Add branch protection rule**):
+
+- Target only branch `pwa`, set ruleset to **Active**, do not include
+  `main` or Writer's other refs.
+- **Require a pull request before merging**, **Require status checks to pass**,
+  selecting exactly the `static` job from `HEALTH code validation`, and
+  **Require branches to be up to date before merging**.
+- Block force pushes and deletions; disallow bypasses where available.
+- With a sole maintainer, do not require another human approval until a
+  second reviewer exists. A required self-review could deadlock all UI PRs.
+- Do **not** require the `github-pages` deployment as a *pre-merge* check:
+  publishing must happen after merge, or PRs deadlock.
+
+The `pwa` code-validation workflow now runs for **every** PR targeting
+`pwa`, including workflow-only and root-level instruction changes, so
+the mandatory `static` status is available. Verify `pwa` reports
+`protected: true` after saving the rules. A clean PR CI and an actual
+merged `pwa` release are separate checks.
+
+The owner has limited the `github-pages` deployment environment to
+`pwa`, so `main` cannot publish even though its old workflow still exists.
+The `pwa` workflow additionally refuses non-`pwa` refs.
+
 ## Working with other open branches (inventory dated 2026-10-13)
 
 **Re-check live PR state before acting; this is a coordination snapshot,
 not standing permission to merge, rewrite or delete any branch.**
 
-- PR #38, `frontend/vaccination-overview-20261013`: old `main` base;
-  move to `pwa` only after preserving existing `app.js`, `styles.css`,
-  `tests/contract.mjs`, `index.html`, OAuth test assets, and PWA cache
-  behavior. Reconcile `frontend/README.md` too; retargeting alone is unsafe.
+- PR #38 (Vaccination) was merged into `pwa` on 2026-10-13. Future
+  frontend changes must preserve vaccination module, `health-shell-v14`
+  or its next approved cache version, plus previously merged UI changes.
 - PR #36, `feature/supabase-test-consent-ui-20261013`: its four
   `frontend/oauth-test/*` files are **already present** in `pwa`, preserved
   from an earlier static Pages deployment. Do not merge the same assets
@@ -80,9 +120,10 @@ old branches without the owner's decision.
 
 ### Two kinds of acceptance
 
-A frontend PR succeeds after clean comparison with `pwa`, green tests,
-a new successful `pwa` Pages workflow run, and a browser smoke-test
-(or explicitly recorded NOT_VERIFIED).
+A frontend PR succeeds after clean comparison with `pwa`, green required
+`static` CI before merge, a new successful `pwa` Pages workflow run
+with verified pre-deploy gate, and a browser smoke-test (or explicitly
+recorded NOT_VERIFIED).
 
 A Writer PR requires current, independently reviewed code, exact `main`
 SHA reacceptance in the GitHub owner policy, Edge broker and runtime,

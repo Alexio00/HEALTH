@@ -13,7 +13,7 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 class TransferSafety(unittest.TestCase):
     def test_all_backup_modules_parse_and_import_locally(self):
         main = (SCHEDULER / "complete_pipeline.py").read_text(encoding="utf-8")
-        matches = re.search(r"EXECUTORS=\\[([^]]+)\\]", main)
+        matches = re.search(r"EXECUTORS=\[([^]]+)\]", main)
         self.assertIsNotNone(matches)
         names = re.findall(r"'([^']+)'", matches.group(1))
         self.assertGreaterEqual(len(names), 15)
@@ -30,7 +30,7 @@ class TransferSafety(unittest.TestCase):
             source = path.read_text(encoding="utf-8")
             with self.subTest(path=path.name):
                 self.assertNotIn("Alexio000/SHEDULLER", source)
-                self.assertNotRegex(source, r"(?i)[a-z0-9_.+-]+@(?:gmail|mail)\\.(?:com|ru)")
+                self.assertNotRegex(source, r"(?i)[a-z0-9_.+-]+@(?:gmail|mail)\.(?:com|ru)")
                 self.assertNotRegex(source, r"""['"]1(?=[A-Za-z0-9_-]{29,}['"])(?=[A-Za-z0-9_-]*[A-Z])[A-Za-z0-9_-]{29,}['"]""")
                 if path.name == "complete_pipeline.py":
                     self.assertNotIn("print(json.dumps(result))", source)
@@ -69,7 +69,7 @@ class TransferSafety(unittest.TestCase):
             GITHUB_REF="refs/heads/main", GITHUB_EVENT_NAME="schedule",
             GITHUB_SHA=sha, HEALTH_KEEPALIVE_ACCEPTED_SHA=sha,
         )
-        with patch.object(module.subprocess, "check_output", return_value=sha + "\\n"):
+        with patch.object(module.subprocess, "check_output", return_value=sha + "\n"):
             module.validate_context(good)
             # Writer main can advance while accepted scheduler executor stays pinned.
             module.validate_context({**good, "GITHUB_SHA": "c" * 40})

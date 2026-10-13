@@ -1,42 +1,48 @@
 # HEALTH
 
-Private-data-safe public codebase for a personal health record system.
+**Публичный репозиторий кода приватной медицинской системы для одного пациента.** Сам репозиторий публичен ради бесплатной публикации GitHub Pages; медицинская информация в него не загружается.
 
-## Scope
+## Где находится действующая система
 
-This repository contains only application code, database schema/migrations, API contracts, tests, deployment logic, and synthetic fixtures. It must never contain real medical records, laboratory results, source documents, private storage identifiers, credentials, secrets, or production configuration values.
+- **Supabase / PostgreSQL** — каноническая структурированная медицинская база и полный текст REC.
+- **Google Drive HEALTH/Sources** — оригинальные файлы медицинских источников; исторические документы и старые реестры сохраняются как свидетельства миграции.
+- **HEALTH/main** — принятая серверная реализация Writer. Любой merge меняет точный SHA авторизованного кода и требует согласованного принятия новой версии. Не сливать даже документационные PR в `main` без этого процесса.
+- **HEALTH/pwa** — независимая линия веб-интерфейса и GitHub Pages. Обычные изменения фронтенда направлять сюда через защищённый PR, обязательный `static` и проверку публикации.
+- **Alexio000/SHEDULLER** — отдельный приватный репозиторий ежедневного резервирования, технических задач и восстановления. Он используется с другим GitHub-аккаунтом, но *техническая необходимость* именно разных аккаунтов для новой установки пока не доказана.
 
-## Target architecture
+Истина об активных медицинских данных и разрешениях — в **живых приватных Google Docs «HealthDB — Project Manual» и «HealthDB — Project State»** аккаунта владельца. Файлы `docs/PROJECT_MANUAL.md` и `docs/PROJECT_STATE.md` здесь — публичные исторические снимки и не заменяют приватные действующие документы.
 
-- PostgreSQL (Supabase-compatible) as the canonical structured database.
-- Provider-neutral source model: logical source identity is separated from physical storage location.
-- Read-only PWA hosted on GitHub Pages.
-- The owner authorized Supabase canonical cutover on 2026-10-13. Actual activation is confirmed by the live private governing Project State and runtime readback.
-- Post-cutover AI writes use the bounded Writer RPC path and private chat operator described in [Writer operation](docs/WRITER_OPERATOR.md).
-- Independent backups of database and source files.
-- Scheduled jobs live outside this public repository.
-- Old Drive Registry/REC Docs and originals remain preserved; they are not routine write targets after confirmed cutover. Their disposal requires a separate owner decision.
+**Статус на 13.10.2026:** переход на Supabase выполнен, Writer активирован; последующие клинические операции требуют собственных полномочий и независимых проверок. Ранние тексты «до миграции», «кандидат» и «готовность к cutover» являются документами соответствующего исторического этапа, **не текущим состоянием**.
 
-## Repository layout
+## Состав репозитория
 
-- `docs/` — architecture, data model, security, migration, recovery and project state.
-- `supabase/migrations/` — canonical timestamped Supabase migration history.
-- `db/migrations/` — earlier aggregated migration snapshots retained for reference.
-- `db/tests/` — schema/invariant tests.
-- `api/` — API contracts and design notes.
-- `scripts/writer/` — bounded canonical Writer, private chat operator and synthetic integration tests.
-- `frontend/` — read-only PWA.
-- `scripts/migration/` — fail-closed full-migration package/staging/fingerprint tooling.
-- `scripts/validation/` — validation tooling.
-- `tests/` — integration/e2e tests.
-- `.github/workflows/` — public-repository workflows that are safe without medical data.
+- `docs/` — архитектура, безопасность, отчёты, протоколы и исторические решения.
+- `supabase/migrations/` — каноническая версия миграций Supabase.
+- `db/migrations/` — ранние агрегированные снимки схем; не использовать как новую каноническую миграцию.
+- `db/tests/` — SQL-тесты и проверки инвариантов.
+- `api/` — описания интерфейсов и исторических кандидатов.
+- `scripts/writer/` — ограниченный Writer, оператор и синтетические тесты.
+- `frontend/` — статическая PWA с чтением из Supabase после авторизации.
+- `scripts/migration/` — инструменты контролируемой миграции; не выполнять повторную миграцию по старым инструкциям.
+- `scripts/validation/` и `tests/` — проверки, не требующие реальных медицинских данных.
+- `.github/workflows/` — автоматизация публичного репозитория без медицинских секретов в коде.
 
-## Security boundary
+## Безопасность
 
-The implemented runtime and production verification boundary are described in
-[Writer operation](docs/WRITER_OPERATOR.md). Earlier component tests are retained
-as historical evidence in [Source and authorization tests](docs/WRITER_SOURCE_AUTHORIZATION_TEST_BOUNDARY.md).
+В публичном GitHub **запрещены** реальные REC, лабораторные результаты, исходные медицинские документы, приватные идентификаторы хранилищ, токены, пароли и production-конфигурация. Можно хранить исключительно безопасные технические контракты, код, миграции и синтетические примеры. Использовать `.env.example`, а не рабочие `.env`.
 
-Use aliases and environment variables for operational accounts and provider identifiers. Commit only `.env.example`, never real `.env` files.
+Публичность статического сайта **не** означает публичность медицинской базы: реальная граница доступа — авторизация Supabase, RLS и права Reader/Writer. 2FA GitHub защищает аккаунт разработчика, а не вход на сайт. Дополнительная MFA для пациента обсуждается отдельно в [Issue #58](https://github.com/Alexio00/HEALTH/issues/58).
 
-Real health data must stay in the configured private database and private source storage.
+## Важные документы и открытые ограничения
+
+- [Работа ограниченного Writer](docs/WRITER_OPERATOR.md) — техническое описание действующей границы.
+- [Ранняя проверка источников и авторизации](docs/WRITER_SOURCE_AUTHORIZATION_TEST_BOUNDARY.md) — исторические тесты, не текущая авторизация.
+- [Документация PWA](https://github.com/Alexio00/HEALTH/blob/pwa/docs/PWA_RELEASE.md) — читать **из ветки `pwa`**, а не искать её в `main`.
+- [Issue #50](https://github.com/Alexio00/HEALTH/issues/50) — остаётся открытым риск подмены проверяемым PR проверки состава изменений `pwa`; до отдельного принятия нельзя объявлять защиту полностью независимой.
+- [Draft PR #39](https://github.com/Alexio00/HEALTH/pull/39) — будущее отключение старой публикации Pages из `main`, **не сливать вне принятия Writer**.
+
+## Архивная и актуальная документация
+
+Не выполнять исторические планы миграции, протоколы `PREPARED` и старые варианты архитектуры как действующие инструкции без сопоставления с приватными Manual/State и текущим кодом. В рамках проверки документации от 13.10.2026 составлен реестр расхождений; оригинальные исторические материалы нельзя тихо переписывать так, чтобы потерять доказательства прошлых решений.
+
+Этот README описывает **текущую навигацию по проекту**, а не разрешает клиническую запись, изменение Supabase или замену проверенного Writer.

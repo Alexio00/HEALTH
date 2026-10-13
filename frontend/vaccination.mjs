@@ -161,9 +161,17 @@ export function actualVaccinations(records) {
       if (!target) continue;
       const keys = target.keys;
       const label = target.label;
+      const parsedStage = stageForActual(fragment, keys);
+      // Without per-antigen evidence, a combined injection does not
+      // establish the same dose stage for each target infection.
+      const antigenStages = keys.map(key => ({
+        key, label:knownKey[key]?.label || key,
+        stage:keys.length === 1 ? parsedStage : "—"
+      }));
       events.push({
         kind:"actual", id:String(record.record_id) + ":" + keys.join("-"),
-        keys, infection:label, stage:stageForActual(fragment, keys),
+        keys, infection:label, antigenStages,
+        stage:keys.length === 1 ? parsedStage : "—",
         date:record.record_date, vaccine:vaccineName(fragment),
         appointmentRecordId:recId(record.metadata?.appointment_record_id),
         administrationRecordId:recId(record.record_id),
@@ -236,12 +244,14 @@ export function buildVaccinationView(records, planItems, today = moscowToday()) 
       if (!latestPerAntigen.has(key)) latestPerAntigen.set(key,item);
     }
   }
-  const latest = uniq([...latestPerAntigen.values()]).sort(
-    (a,b) => a.infection.localeCompare(b.infection,"ru")
-  ).map(item => {
-    const next = upcoming.find(plan => intersection(plan.keys,item.keys));
-    return {...item, next:next || null};
-  });
+  const latest = [...latestPerAntigen.entries()].map(([key,item]) => {
+    const antigen = item.antigenStages?.find(a => a.key === key);
+    const oneTargetKeys = [key];
+    const next = upcoming.find(plan => intersection(plan.keys,oneTargetKeys));
+    return {...item, id:item.id + ":" + key, keys:oneTargetKeys,
+      infection:antigen?.label || key, stage:antigen?.stage || "—",
+      combined:item.keys.length > 1, next:next || null};
+  }).sort((a,b) => a.infection.localeCompare(b.infection,"ru"));
   const history = [...actual, ...plans].sort((a,b) =>
     (b.date || "").localeCompare(a.date || "") || a.id.localeCompare(b.id)
   );

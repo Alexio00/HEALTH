@@ -258,7 +258,7 @@ assert(doses.every(x => x.administrationRecordId && !x.basisRecordId));
 
 const future = plannedVaccinations(vaccinationPlans,"2026-10-13");
 assert.equal(future.length,4,"category filter is immutable and must include cancelled plan history");
-assert.equal(future.find(x => x.id === "plan:1").stage,"RV");
+assert.equal(future.find(x => x.id === "plan:1").stage,"Rv");
 assert.equal(future.find(x => x.id === "plan:1").basisRecordId,"REC-20050115-001");
 assert.equal(future.find(x => x.id === "plan:1").appointmentRecordId,null,"supporting REC is not silently a prescription");
 assert.equal(future.find(x => x.id === "plan:2").sourceStatus,"Просрочено");
@@ -266,7 +266,7 @@ assert.equal(future.find(x => x.id === "plan:3").stage,"V1–V5");
 assert(!future.find(x => x.id === "plan:3").overdue,"undated items are not overdue");
 const akds = plannedVaccinations([{plan_item_id:99,title:"Ревакцинация АКДС",status:"planned",metadata:{kind:"вакцинация"}}],"2026-10-13")[0];
 assert.equal(akds.infection,"Дифтерия, столбняк, коклюш");
-assert.equal(akds.stage,"RV");
+assert.equal(akds.stage,"Rv");
 
 // Synthetic numbered boosters: Latin uppercase R, lowercase v, stage preserved.
 const numberedRecords = [

@@ -67,9 +67,13 @@ jobs:
           from pathlib import Path
           sys.path.insert(0, 'scripts/scheduler')
           from complete_preview import preview
-          result=preview(Path(os.environ['HEALTH_COMPLETE_PRIVATE_ROOT']), os.environ['RCLONE_CONFIG_CONTENT'])
-          if result.get('status')!='ACTUAL_PORTABLE_COMPLETE_PREVIEW_PACKAGE_PASS' or result.get('restricted_capture_role_enforced') is not True:
-              raise RuntimeError('restricted_preview_not_accepted')
+          try:
+              result=preview(Path(os.environ['HEALTH_COMPLETE_PRIVATE_ROOT']), os.environ['RCLONE_CONFIG_CONTENT'])
+              if result.get('status')!='ACTUAL_PORTABLE_COMPLETE_PREVIEW_PACKAGE_PASS' or result.get('restricted_capture_role_enforced') is not True:
+                  raise ValueError()
+          except Exception:
+              print('STOPPED: private_readonly_preflight_failed')
+              raise SystemExit(2) from None
           print('PASS: private preview archive built and checked; NOT uploaded and NOT activated')
           PY
       - name: Remove all private temporary data

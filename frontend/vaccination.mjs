@@ -45,7 +45,7 @@ const dateKey = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? Strin
 const recId = value => /^REC-\d{8}-\d{3}$/.test(String(value || "")) ? String(value) : null;
 
 function targets(fragment) {
-  if (has(fragment, /\bАКДС\b/iu)) {
+  if (has(fragment, /АКДС/iu)) {
     return { keys:["diphtheria","tetanus","pertussis"], label:"Дифтерия, столбняк, коклюш" };
   }
   if (has(fragment, /АДС[-‑ ]?М/iu)) {
@@ -71,6 +71,7 @@ function stageForActual(fragment, keys) {
     || fragment.match(/(?:доз[аыуе]|доза\s*№)\s*([1-9]\d*)/iu)
     || fragment.match(/([1-9]\d*)[-‑]?(?:я|ая)\s+доз[аыуе]/iu);
   if (dose) return "V" + dose[1];
+  if (has(fragment, /вторая вакцинация/iu)) return "V2";
   if (has(fragment, /компонент\s*II\b/iu)) return "V2";
   if (has(fragment, /компонент\s*I\b/iu)) return "V1";
   return "—";
@@ -92,7 +93,8 @@ function recordedTbeFromLegacyConsult(summary) {
 function splitAdministrationSummary(summary) {
   const s = String(summary || "")
     .replace(/\)\s+и\s+В\s*\(/giu, ") + гепатит В (")
-    .replace(/\s+и\s+(?=АДС[-‑ ]?М)/giu, " + ");
+    .replace(/\s+и\s+(?=АДС[-‑ ]?М)/giu, " + ")
+    .replace(/([а-я])\/([а-я])/giu, "$1 + $2");
   return s.split(/\s+\+\s+/u);
 }
 

@@ -19,6 +19,14 @@ def executor_binding():
     pins={x:digest(Path(__file__).with_name(x)) for x in EXECUTORS}
     return hashlib.sha256(json.dumps(pins,sort_keys=True,separators=(',',':')).encode()).hexdigest(),pins
 
+def require_candidate_binding(props, producer_sha, archive_sha):
+    if (not isinstance(props,dict)
+            or props.get('health_complete_set')!='v1'
+            or props.get('health_pipeline_commit')!=producer_sha
+            or props.get('health_archive_sha256')!=archive_sha
+            or props.get('health_recovery_state') not in ('CANDIDATE','ACTIVE')):
+        raise SourceStop('candidate_producer_sha_or_archive_binding_mismatch')
+
 def retire_bootstrap(*unused):
     # Historical bootstrap was already retired; never touch old Drive IDs.
     return 0
@@ -49,9 +57,7 @@ def run(mode,root,producer_sha,*,serialized):
             target=cloud.upload(capture_root/'package/complete-recovery.zip',package,producer_sha);sha=package['archive_sha256']
         # Never adopt a candidate uploaded by the old SHEDULLER or another SHA.
         selected=cloud.meta(target).get('appProperties',{})
-        if (selected.get('health_pipeline_commit')!=producer_sha
-                or selected.get('health_archive_sha256')!=sha):
-            raise SourceStop('candidate_producer_sha_or_archive_binding_mismatch')
+        require_candidate_binding(selected,producer_sha,sha)
         archive=cloud.download(target,sha,'remote-roundtrip')
         recovery_root=root/'remote-recovery';recovery_root.mkdir(mode=0o700)
         recovery_config=os.environ.get('HEALTH_COMPLETE_RECOVERY_RCLONE') if mode in ('candidate','activate') else None

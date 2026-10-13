@@ -127,6 +127,17 @@ export function createClient(baseUrl, publishableKey) {
       return this;
     }
 
+    contains(column, values) {
+      // Conservative text[] membership support for read-only PostgREST queries.
+      const list = Array.isArray(values) ? values : [values];
+      if (!/^[a-z_]+$/.test(column) || !list.length
+          || list.some(value => !/^[A-Za-z0-9_]+$/.test(String(value)))) {
+        throw new Error("Unsupported array filter");
+      }
+      this.params.push([column, "cs.{" + list.join(",") + "}"]);
+      return this;
+    }
+
     order(column, { ascending = true, nullsFirst = false } = {}) {
       this.params.push([
         "order",

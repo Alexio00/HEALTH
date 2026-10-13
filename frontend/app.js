@@ -877,6 +877,22 @@ function vaccinationControl(item, section) {
   return esc(item.sourceStatus || "—");
 }
 
+function vaccinationAntigenCell(item, section) {
+  if (section === "history" && item.kind === "actual" &&
+      (item.antigenStages || []).length > 1) {
+    const tags = item.antigenStages.map(target =>
+      '<span class="vaccine-antigen-tag">' + esc(target.label) + '</span>'
+    ).join(" ");
+    const stages = item.antigenStages.map(target =>
+      '<li>' + esc(target.label) + ' — ' + esc(target.stage) + '</li>'
+    ).join("");
+    return '<details class="vaccine-combined"><summary>' + tags +
+      '</summary><ul>' + stages + '</ul></details>';
+  }
+  return '<strong>' + esc(item.infection) + '</strong>' +
+    (item.combined ? ' <span class="vaccine-combined-note">Комбинированная</span>' : '');
+}
+
 function vaccinationRows(items, section) {
   return items.map(item => {
     const dateText = item.date ? fmtDate(item.date) : item.dateText || "—";
@@ -884,7 +900,7 @@ function vaccinationRows(items, section) {
     return {
       attrs: { "data-status": status },
       cells: [
-        tableCell('<strong>' + esc(item.infection) + '</strong>', item.infection),
+        tableCell(vaccinationAntigenCell(item,section), item.infection),
         tableCell(esc(item.stage), item.stage),
         tableCell(esc(dateText), item.date || dateText),
         tableCell(esc(item.vaccine || "—"), item.vaccine || ""),

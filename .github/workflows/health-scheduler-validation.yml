@@ -2,7 +2,7 @@ name: HEALTH scheduler candidate nonsecret checks
 
 on:
   pull_request:
-    branches: [main]
+    branches: [scheduler, main]
     paths:
       - ".github/workflows/health-supabase-keepalive.yml"
       - ".github/workflows/health-complete-backup.yml"

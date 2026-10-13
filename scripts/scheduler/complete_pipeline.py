@@ -47,6 +47,8 @@ def choose_existing(mode,cloud,journal,producer_sha,approved_sha):
         if mode!='candidate':raise SourceStop('unfinished_upload_requires_candidate_reconciliation_first')
         target,sha=cloud.finish_upload(uploads[0],producer_sha);replay=False
     else:
+        if mode=='activate':
+            raise SourceStop('activation_requires_prior_candidate_and_full_recovery')
         return None
     if mode=='activate' and sha!=approved_sha:
         raise SourceStop('release_candidate_digest_does_not_match_approved_archive')

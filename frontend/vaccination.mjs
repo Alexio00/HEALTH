@@ -71,11 +71,10 @@ function vaccineName(fragment) {
 }
 
 function stageForActual(fragment, keys) {
-  if (keys.includes("flu")) return "Rv";
-  // Preserve an explicitly documented booster sequence; never infer a
-  // numbered booster from a generic R/RV or from a planned course.
+  // Explicit numbered boosters take precedence over generic seasonal labels.
   const booster = fragment.match(/\bRv([1-9]\d*)\b/iu);
   if (booster) return "Rv" + booster[1];
+  if (keys.includes("flu")) return "Rv";
   if (has(fragment, /\bR\d+\b|\bRV\b|ревакцинац/iu)) return "Rv";
   if (has(fragment, /первая вакцинация основного курса/iu)) return "V1";
   if (has(fragment, /\b1[-‑]й этап/iu)) return "V1";

@@ -22,12 +22,17 @@ const context = vm.createContext({
   CSS: { escape(x) { return x; } }
 });
 const harness = js.replace(/^import .*;\s*$/gm, "").replace(/\nboot\(\);\s*$/, "");
-vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, isMedicalCardQuestion, questionSpecialties, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable, shouldPinTableHeader };", context);
+vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, plannedVisitSpecialties, isMedicalCardQuestion, questionSpecialties, medicationRecordIds, latestMedicationRecordId, medicationHistoriesForRecord, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable, shouldPinTableHeader };", context);
 const x = context.expose;
 const nav = [...html.matchAll(/<a href="#\/[\w-]*">[^<]+<\/a>/g)].map(m => m[0]);
-assert.equal(nav.length, 10, "ten distinct navigation entries");
-assert.equal(new Set(nav).size, 10);
-for (const route of ["chronic","open-cases","medications","monitoring","visit-preparation","future-plan","vaccination"]) {
+assert.equal(nav.length, 9, "nine distinct navigation entries");
+assert.equal(new Set(nav).size, 9);
+assert(!html.includes('href="#/monitoring"'), "remove monitoring from navigation");
+assert(!js.includes('from("monitoring")'), "removed route must not query monitoring");
+assert(!js.includes('"monitoring":'), "no hidden section or page remains");
+assert(!js.includes('"monitoring",'), "removed page is not routable");
+
+for (const route of ["chronic","open-cases","medications","visit-preparation","future-plan","vaccination"]) {
   assert(js.includes(`parts[0] === "${route}"`) || js.includes(`"${route}"`), `route ${route}`);
 }
 assert(html.includes('aria-expanded="false"'));
@@ -48,6 +53,8 @@ function cssDeclarations(selector) {
 assert(cssDeclarations(".filter-bar label").includes("text-align: center;"));
 assert(cssDeclarations(".filter-bar-label").includes("text-align: center;"));
 assert(cssDeclarations(".filter-bar select").includes("text-align: start;"));
+// Every expandable case/question/visit card must use full-width prose, not 80ch.
+assert(css.includes(".case-card .lead,\n.case-card .lead-small { max-width: none; }"));
 
 
 // Regression: REC markup was inheriting pre-wrap from record-body. Indentation
@@ -91,7 +98,7 @@ assert(!x.shouldPinTableHeader({height:38,bottom:120}, {width:440,bottom:900}, 7
 // All standalone views suppress their repeated section H2, while Current
 // State continues to display headings for its multiple sections.
 for (const title of ["Хронические состояния","Открытые случаи","Принимаемые препараты",
-  "Мониторинг","Подготовка к визиту","Будущий план"]) {
+  "Подготовка к визиту","Будущий план"]) {
   assert(js.includes('mode === "all" ? "<h2>' + title + '</h2>" : ""'), title + " must not duplicate page title");
 }
 assert(!js.includes('class="intro"'), "remove page introduction text");
@@ -133,6 +140,50 @@ assert.equal(x.isMedicalCardQuestion(q1), false);
 assert.equal(x.isMedicalCardQuestion({ metadata: { category: "medical_card" } }), true);
 assert.equal(x.questionSpecialties(q3).length, 3);
 assert(!groups.includes("проверка взаимодействий"), "no fabricated medication question");
+assert(!groups.includes("вопросов:"), "visit headers contain titles only");
+
+// The plan itself names the specialty; do not require a short colon-prefixed
+// heading. Unspecified questions can use an explicit visit note.
+const visits = [
+  { plan_item_id: 1, title: "Травматолог-ортопед: контрольный осмотр", metadata: { kind: "визит" } },
+  { plan_item_id: 2, title: "Колопроктолог: плановый приём", metadata: { kind: "визит" } },
+  { plan_item_id: 3, title: "Приём в СПИД-центре у врача; обсудить план", metadata: { kind: "визит" } },
+  { plan_item_id: 4, title: "Косметолог: процедура", metadata: { kind: "визит" } },
+  { plan_item_id: 5, title: "Эндокринолог при повторно повышенном показателе и иных условиях", metadata: { kind: "визит" } },
+  { plan_item_id: 6, title: "Гастроэнтеролог при сохраняющемся повышении показателя и дополнительных симптомах", metadata: { kind: "визит" } }
+];
+const visitQuestions = [
+  { question: "Как сохранить здоровье суставов?", metadata: { note: "Вопрос к будущему приёму ортопеда. Сформулирован владельцем." } },
+  { question: "Эндокринологу: обсудить контроль", metadata: {} },
+  { question: "Инфекционисту: обсудить контроль", metadata: {} }
+];
+const visitHtml = x.visitPreparation(visits, visitQuestions);
+for (const title of ["Визит к ортопеду", "Визит к колопроктологу",
+  "Визит к инфекционисту", "Визит к косметологу", "Визит к эндокринологу",
+  "Визит к гастроэнтерологу"]) assert(visitHtml.includes(title), title);
+assert(!visitHtml.includes("Визит к специалисту"), "no generic title for explicitly named visits");
+assert(!visitHtml.includes("Вопросы к специалисту — специальность не указана"));
+assert(!visitHtml.includes("Вопросы к эндокринологу — визит не запланирован"));
+assert(!visitHtml.includes("Вопросы к инфекционисту — визит не запланирован"));
+assert(!visitHtml.includes("вопросов:"));
+assert.equal(x.questionSpecialties(visitQuestions[0]).join(","), "ортопед");
+
+// Use existing metadata sources and SELECTed REC dates, not opaque NNN order,
+// to link the latest current medication evidence; never fabricate a REC.
+const activeMed = { basis_record_id: null, metadata: { source_record_ids: [
+  "REC-20250101-270", "REC-20261001-001"] } };
+assert.equal(x.medicationRecordIds(activeMed).length, 2);
+assert.equal(x.latestMedicationRecordId(activeMed,
+  new Map([["REC-20250101-270", "2025-01-01"], ["REC-20261001-001", "2026-10-01"]])),
+  "REC-20261001-001");
+assert.equal(x.latestMedicationRecordId(activeMed, new Map()), "",
+  "missing/unreadable records must not produce broken links");
+const syntheticHistory = x.medicationHistoriesForRecord("REC-20261001-001", [
+  { name: "Синтетический препарат", ...activeMed },
+  { name: "Другой препарат", metadata: { source_record_ids: ["REC-20230101-002"] } }
+]);
+assert.equal(syntheticHistory.length, 1, "only the matching medication contributes history");
+assert.equal(syntheticHistory[0].recordIds.join(","), "REC-20250101-270");
 
 const rec = x.renderRecordBody("# Тестовая запись\n\n## Обстоятельства\n\nПервый абзац.\n\nВторой абзац.");
 assert(rec.includes("<h3>Обстоятельства</h3>"));

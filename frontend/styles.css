@@ -105,6 +105,9 @@ h3 { margin: 1.4rem 0 .6rem; }
 }
 .case-card[open] > summary { border-bottom: 1px solid #e2e2e2; }
 .case-body { padding: .2rem 1.1rem 1.1rem; }
+/* Expanded cards use their entire content width on every route. */
+.case-card .lead,
+.case-card .lead-small { max-width: none; }
 .summary-date { color: #666; font-weight: 400; }
 .case-action { margin-bottom: 0; }
 .rec-links { padding-left: 1.25rem; }

@@ -48,6 +48,12 @@ function targets(fragment) {
   if (has(fragment, /АКДС/iu)) {
     return { keys:["diphtheria","tetanus","pertussis"], label:"Дифтерия, столбняк, коклюш" };
   }
+  if (has(fragment, /Пентаксим/iu)) {
+    return {
+      keys:["diphtheria","tetanus","pertussis","polio","hib"],
+      label:"Дифтерия, столбняк, коклюш, полиомиелит, гемофильная инфекция"
+    };
+  }
   if (has(fragment, /АДС[-‑ ]?М/iu)) {
     return { keys:["diphtheria","tetanus"], label:"Дифтерия, столбняк" };
   }
@@ -67,6 +73,8 @@ function vaccineName(fragment) {
 function stageForActual(fragment, keys) {
   if (keys.includes("flu")) return "RV";
   if (has(fragment, /\bR\d+\b|\bRV\b|ревакцинац/iu)) return "RV";
+  if (has(fragment, /первая вакцинация основного курса/iu)) return "V1";
+  if (has(fragment, /\b1[-‑]й этап/iu)) return "V1";
   const dose = fragment.match(/\bV([1-9]\d*)\b/iu)
     || fragment.match(/(?:доз[аыуе]|доза\s*№)\s*([1-9]\d*)/iu)
     || fragment.match(/([1-9]\d*)[-‑]?(?:я|ая)\s+доз[аыуе]/iu);
@@ -98,6 +106,49 @@ function splitAdministrationSummary(summary) {
   return s.split(/\s+\+\s+/u);
 }
 
+// Extract only explicitly performed injections inside a vaccination section.
+// Never interpret a separate "Рекомендации", "Будущий план" or anamnesis block
+// as proof of administration. A consultation-only heading is insufficient.
+function bodyAdministrationFragments(body) {
+  const lines = String(body || "").split(/\r?\n/);
+  const fragments = [];
+  let inVaccination = false;
+  let pending = "";
+  const flush = () => {
+    if (pending.trim()) fragments.push(pending.trim());
+    pending = "";
+  };
+  for (const line of lines) {
+    const clean = line.trim().replace(/\*\*/g, "");
+    const markdownHeading = /^#{1,6}\s+(.+)$/u.exec(clean);
+    const boldHeading = /^\*\*([^*]+)\*\*\s*$/u.exec(line.trim());
+    if (markdownHeading || boldHeading) {
+      flush();
+      const heading = String(markdownHeading?.[1] || boldHeading?.[1] || "")
+        .replace(/\*\*/g, "").replace(/:\s*$/, "").trim().toLowerCase();
+      inVaccination = /^(вакцинация|выполненные вакцинации|заключение и выполненные вакцинации)/u.test(heading);
+      continue;
+    }
+    if (!inVaccination) continue;
+    const isBullet = /^\s*[-*]\s+/.test(line);
+    const candidate = clean.replace(/^[-*]\s*/, "");
+    const explicit = /^(?:вакцинирован[аы]?\s+от|вакцинация\s+против|против\s+|вакцина\s*:)/iu.test(candidate);
+    if (isBullet && explicit && !/заплан|рекоменд|предстоит/iu.test(candidate)) {
+      flush();
+      pending = candidate;
+    } else if (pending && !isBullet && clean
+        && !/^(?:Противопоказаний|Добровольное|Общие|Местные)/iu.test(clean)) {
+      // Wrapped text can contain an explicit dose number. Never scan
+      // later sections; headings above terminate the active extraction.
+      pending += " " + clean;
+    } else if (isBullet) {
+      flush();
+    }
+  }
+  flush();
+  return fragments;
+}
+
 export function actualVaccinations(records) {
   const events = [];
   for (const record of records || []) {
@@ -107,10 +158,13 @@ export function actualVaccinations(records) {
     if (!tagged || !dateKey(record.record_date)) continue;
     const summary = String(record.summary || "");
     const legacyTbe = recordedTbeFromLegacyConsult(summary);
-    if (!administeredSummary(summary) && !legacyTbe) continue;
-    const fragments = legacyTbe && !administeredSummary(summary)
-      ? ["клещевой энцефалит"]
-      : splitAdministrationSummary(summary);
+    const fromBodyEvidence = bodyAdministrationFragments(record.body_text);
+    if (!administeredSummary(summary) && !legacyTbe && !fromBodyEvidence.length) continue;
+    const fromBody = fromBodyEvidence;
+    const fragments = fromBody.length ? fromBody
+      : legacyTbe && !administeredSummary(summary)
+        ? ["клещевой энцефалит"]
+        : splitAdministrationSummary(summary);
     for (const fragment of fragments) {
       const target = targets(fragment);
       if (!target) continue;

@@ -4,17 +4,21 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "candidate (no rotation) or activate (reviewed candidate only)"
+        description: "candidate, activate (reviewed candidate), or quarantine-orphan"
         type: choice
         required: true
         default: candidate
-        options: [candidate, activate]
+        options: [candidate, activate, quarantine-orphan]
       expected_executor_sha:
         description: "Full reviewed scheduler-code commit SHA"
         type: string
         required: true
       candidate_sha256:
-        description: "For activate: exact reviewed archive SHA256; NO private Drive IDs"
+        description: "For activate/quarantine-orphan: exact archive SHA256; NO private Drive IDs"
+        type: string
+        required: false
+      quarantine_ack:
+        description: "For quarantine-orphan: ABANDON_INCOMPLETE_UPLOADING_ONLY"
         type: string
         required: false
       acknowledge_legacy_paused:
@@ -31,7 +35,7 @@ concurrency:
 
 jobs:
   release:
-    name: Owner-confirmed candidate or activation
+    name: Owner-confirmed candidate, activation or orphan quarantine
     if: >-
       github.repository == 'Alexio00/HEALTH' &&
       github.ref == 'refs/heads/main' &&
@@ -39,7 +43,8 @@ jobs:
       github.actor_id == '308028794' &&
       vars.HEALTH_INREPO_RELEASE_ENABLED == 'true' &&
       vars.HEALTH_LEGACY_BACKUP_PAUSED == 'true' &&
-      vars.HEALTH_INREPO_BACKUP_ENABLED == 'false' &&
+      (vars.HEALTH_INREPO_BACKUP_ENABLED == 'false' ||
+       (inputs.mode == 'quarantine-orphan' && vars.HEALTH_INREPO_BACKUP_ENABLED == 'true')) &&
       inputs.acknowledge_legacy_paused == 'LEGACY_SHEDULLER_PAUSED_AND_IDLE' &&
       inputs.expected_executor_sha == vars.HEALTH_BACKUP_EXECUTOR_SHA &&
       github.sha == vars.HEALTH_RELEASE_MAIN_ACCEPTED_SHA
@@ -60,6 +65,8 @@ jobs:
       HEALTH_RELEASE_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
       HEALTH_RELEASE_ACK: ${{ inputs.acknowledge_legacy_paused }}
       HEALTH_RELEASE_MODE: ${{ inputs.mode }}
+      HEALTH_ORPHAN_ACK: ${{ inputs.quarantine_ack }}
+      HEALTH_ORPHAN_FOLDER_ID: ${{ secrets.HEALTH_ORPHAN_FOLDER_ID }}
       SUPABASE_DB_URL: ${{ secrets.HEALTH_BACKUP_DB_URL }}
       HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
       RCLONE_CONFIG_CONTENT: ${{ secrets.HEALTH_BACKUP_RCLONE_CONFIG }}
@@ -81,8 +88,12 @@ jobs:
           [[ "$HEALTH_BACKUP_EXECUTOR_SHA" =~ ^[a-f0-9]{40}$ ]]
           test "$GITHUB_SHA" = "$HEALTH_RELEASE_MAIN_ACCEPTED_SHA"
           test "$HEALTH_BACKUP_EXECUTOR_SHA" = "$HEALTH_RELEASE_EXPECTED_SHA"
-          if [[ "$HEALTH_RELEASE_MODE" = "activate" ]]; then
+          if [[ "$HEALTH_RELEASE_MODE" = "activate" || "$HEALTH_RELEASE_MODE" = "quarantine-orphan" ]]; then
             [[ "$HEALTH_RELEASE_CANDIDATE_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          fi
+          if [[ "$HEALTH_RELEASE_MODE" = "quarantine-orphan" ]]; then
+            test "$HEALTH_ORPHAN_ACK" = "ABANDON_INCOMPLETE_UPLOADING_ONLY"
+            [[ "$HEALTH_ORPHAN_FOLDER_ID" =~ ^[A-Za-z0-9_-]{8,128}$ ]]
           fi
       - name: Checkout pinned accepted Scheduler executor
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -107,8 +118,10 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/scheduler/install_rclone.sh
-          python3 scripts/scheduler/pull_fixed_recovery_images.py
-      - name: Full private remote readback and isolated recovery
+          if [[ "$HEALTH_RELEASE_MODE" != "quarantine-orphan" ]]; then
+            python3 scripts/scheduler/pull_fixed_recovery_images.py
+          fi
+      - name: Execute private release mode
         run: |
           set -euo pipefail
           umask 077

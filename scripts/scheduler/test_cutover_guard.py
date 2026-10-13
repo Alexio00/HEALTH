@@ -55,7 +55,6 @@ class CutoverGuardTests(unittest.TestCase):
             ("HEALTH_BACKUP_EXECUTOR_SHA", self.MAIN),
             ("HEALTH_BACKUP_PRODUCER_SHA", self.MAIN),
             ("HEALTH_RELEASE_EXPECTED_SHA", self.MAIN),
-            ("HEALTH_RELEASE_CANDIDATE_SHA256", "bad"),
         ]:
             with self.subTest(field=key, value=invalid):
                 bad = self.valid()

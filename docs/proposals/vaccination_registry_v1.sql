@@ -35,8 +35,11 @@ create table public.vaccination_administrations (
   remarks text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  -- dose + number => V1/V2; revaccination + NULL => Rv;
+  -- revaccination + number => Rv1/Rv2. Unknown stage has no number.
+  -- Preserve the literal source label separately in stage_source_text.
   constraint vaccination_administrations_stage_shape
-    check (stage_kind = 'dose' or dose_number is null),
+    check (stage_kind <> 'unknown' or dose_number is null),
   constraint vaccination_administrations_verified_date
     check (verification_status <> 'verified' or administered_on is not null)
 );

@@ -826,7 +826,8 @@ function vaccinationRows(items, section) {
 async function renderVaccination() {
   const [records, plan] = await Promise.all([
     supabase.from("records")
-      .select("record_id,record_date,title,summary,status,tags,metadata")
+      .select("record_id,record_date,title,summary,body_text,status,tags,metadata")
+      .contains("tags",["VACCINATION"])
       .order("record_date",{ascending:false}),
     supabase.from("plan_items")
       .select("plan_item_id,title,due_on,status,basis_record_id,metadata")

@@ -27,13 +27,13 @@
 
 **Keepalive** — в `health-private-automation`:
 - Secrets: `HEALTH_KEEPALIVE_DB_URL` (ограниченный `health_backup_reader` Session pooler), `HEALTH_SUPABASE_CA_PEM` (точно проверяемый CA);
-- Variable: `HEALTH_KEEPALIVE_ACCEPTED_SHA` (точный SHA принятой `HEALTH/main`);
+- Repository Variable: `HEALTH_KEEPALIVE_ACCEPTED_SHA` (точный SHA принятого **неизменяемого коммита с кодом keepalive**, доступного как предок защищённой `main`, не обязательно текущий Writer SHA);
 - Repository variable: `HEALTH_INREPO_KEEPALIVE_ENABLED` — строго `true` лишь после завершённой приёмки.
 
 **Backup** — в `health-private-backup`:
 - Secrets: `HEALTH_BACKUP_DB_URL` (ограниченный `health_backup_reader`), `HEALTH_SUPABASE_CA_PEM`, `HEALTH_BACKUP_RCLONE_CONFIG`, `HEALTH_PRIMARY_SOURCE_FOLDER_ID`, `HEALTH_FROZEN_LINEAGE_SHA256`, `HEALTH_FROZEN_ORIGINAL_COUNT`, `HEALTH_BACKUP_PARENT_FOLDER_ID`, `HEALTH_PRIMARY_DRIVE_OWNER_EMAIL`, `HEALTH_BACKUP_DRIVE_OWNER_EMAIL`.
 - При наличии уже принятого ACTIVE полного архива seed автоматически читается из ACTIVE; для начального переноса без ACTIVE нужны отдельные исторические seed-параметры и независимое принятие, **не создавать фиктивный seed**.
-- Variable: `HEALTH_BACKUP_EXECUTOR_SHA` (точный SHA принятой `HEALTH/main`);
+- Repository Variable: `HEALTH_BACKUP_EXECUTOR_SHA` (точный SHA принятого **неизменяемого коммита с backup executor**, доступного как предок защищённой `main`, независимо от следующих версий Writer);
 - Repository variable: `HEALTH_INREPO_BACKUP_ENABLED` — строго `true` лишь после независимого восстановления и перевода единственного писателя ротации.
 
 **Не публиковать значения параметров** даже в тикетах, PR, документации и скриншотах. Все секреты создавать вручную через защищённый интерфейс владельца; ChatGPT здесь не читает и не переносит их.
@@ -87,3 +87,17 @@
 6. После любого изменения `HEALTH/main`, включая документацию, `HEALTH_BACKUP_EXECUTOR_SHA` и Writer acceptance могут устареть. Планировщик должен отказывать в выполнении до повторного согласованного принятия. Для непрерывного backup нужна отдельная политика выпуска, согласованная с владельцем.
 
 **Оставшиеся стоп-факторы:** отсутствие admin-readback созданных окружений/Variables, неизвестное фактическое наличие Secrets, отсутствие свежей независимой full restore при новой реализации, не закрытый HIGH scope-check [#50](https://github.com/Alexio00/HEALTH/issues/50), отсутствие owner-approved exact Writer SHA и подтверждённого безопасного окна для отключения старого SHEDULLER. Зелёная синтетика их не отменяет.
+
+## 8. Долговременная независимость резервирования от Writer main SHA
+
+Исправленная реализация **не выключает резервирование при обычных последующих merge в `main`**:
+- В workflow `on.schedule` и `on.workflow_dispatch` сохраняется требование `github.ref == refs/heads/main`, но `actions/checkout` теперь получает `ref: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}` — **неизменяемый полный SHA** отдельно принятого кода.
+- После checkout проверяется `git rev-parse HEAD == HEALTH_BACKUP_EXECUTOR_SHA`; `complete_pipeline.py` берёт producer SHA из `HEALTH_BACKUP_PRODUCER_SHA`, равного тому же одобренному SHA, а не из меняющегося `GITHUB_SHA` текущего события.
+- Supabase keepalive аналогично получает `ref: ${{ vars.HEALTH_KEEPALIVE_ACCEPTED_SHA }}`, а сам скрипт сверяет фактический checkout и роль.
+- Синтетическая проверка подтверждает, что изменение event `GITHUB_SHA` после очередного Writer merge **не отменяет принятого** резервного исполнителя, пока код backup/keepalive и политика доступа не менялись.
+
+Владелец должен впоследствии установить обе переменные SHA **на уровне Repository → Actions Variables** после объединения и независимого принятия всего набора PR. Оптимально выбрать полный SHA принятого merge-коммита, остающегося предком `main`, чтобы GitHub никогда не потерял этот объект. Не брать SHA временной ветки, которая может быть удалена после squash-merge. Значения SHA не являются секретами, но сами переменные меняются только в рамках согласованного выпуска.
+
+Секреты в `health-private-automation` и `health-private-backup`, а при одноразовой активации в `health-private-recovery`, остаются в соответствующих защищённых Environments. `HEALTH_INREPO_*_ENABLED=false` до принятия и наличия runtime evidence.
+
+**Остаточный риск:** GitHub Actions workflow файл всё равно запускается из меняющейся `main`, поэтому каждое изменение workflow/Ruleset нуждается в независимом контроле. Доверенный pin кода не заменяет закрытие HIGH [Issue #50](https://github.com/Alexio00/HEALTH/issues/50) и ограничение прав на Secrets.

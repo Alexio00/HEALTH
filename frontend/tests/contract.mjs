@@ -49,7 +49,7 @@ assert(cssDeclarations(".filter-bar label").includes("text-align: center;"));
 assert(cssDeclarations(".filter-bar-label").includes("text-align: center;"));
 assert(cssDeclarations(".filter-bar select").includes("text-align: start;"));
 // Every expandable case/question/visit card must use full-width prose, not 80ch.
-assert.match(css, /\\.case-card \\.lead,\\s*\\.case-card \\.lead-small\\s*\\{\\s*max-width:\\s*none;/);
+assert(css.includes(".case-card .lead,\n.case-card .lead-small { max-width: none; }"));
 
 
 // Regression: REC markup was inheriting pre-wrap from record-body. Indentation

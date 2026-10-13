@@ -1,0 +1,79 @@
+name: HEALTH scheduled activity (15-day branch heartbeat)
+
+on:
+  schedule:
+    # Daily check; commit to scheduler only if 15 whole days have elapsed.
+    - cron: "17 5 * * *"
+    # Independent job within the same GitHub scheduler: fail at >=18 days.
+    - cron: "43 8 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = only verify, heartbeat = write only to scheduler if due"
+        type: choice
+        required: true
+        default: check
+        options: [check, heartbeat]
+  pull_request:
+    branches: [scheduler, main]
+    paths:
+      - ".github/workflows/health-activity.yml"
+      - "scripts/automation/health_activity.mjs"
+      - "scripts/automation/health_activity.test.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: health-activity-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: Synthetic heartbeat safety tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - run: |
+          node --check scripts/automation/health_activity.mjs
+          node --test scripts/automation/health_activity.test.mjs
+
+  heartbeat:
+    name: Commit only into scheduler
+    needs: tests
+    if: >-
+      github.repository == 'Alexio00/HEALTH' &&
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '17 5 * * *') ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'heartbeat'))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Check 15-day threshold and push only scheduler
+        run: node scripts/automation/health_activity.mjs heartbeat
+
+  watchdog:
+    name: Fail if scheduler branch heartbeat is overdue
+    needs: tests
+    if: >-
+      github.repository == 'Alexio00/HEALTH' &&
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '43 8 * * *') ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'check'))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Check last scheduler commit (>=18 days means failure)
+        run: node scripts/automation/health_activity.mjs check

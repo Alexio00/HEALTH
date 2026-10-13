@@ -46,6 +46,8 @@ jobs:
           set -euo pipefail
           test -n "$HEALTH_HEARTBEAT_ACCEPTED_SHA"
           test "$(git rev-parse HEAD)" = "$HEALTH_HEARTBEAT_ACCEPTED_SHA"
+          git fetch -q --no-tags origin 'refs/heads/scheduler-code:refs/remotes/origin/scheduler-code'
+          git merge-base --is-ancestor "$HEALTH_HEARTBEAT_ACCEPTED_SHA" refs/remotes/origin/scheduler-code
           node --test scripts/automation/health_activity.test.mjs
       - name: Emit heartbeat only into scheduler
         run: node scripts/automation/health_activity.mjs heartbeat
@@ -66,6 +68,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ vars.HEALTH_HEARTBEAT_ACCEPTED_SHA }}
+          fetch-depth: 0
           persist-credentials: false
       - name: Confirm immutable code pin and synthetic boundaries
         env:
@@ -74,6 +77,8 @@ jobs:
           set -euo pipefail
           test -n "$HEALTH_HEARTBEAT_ACCEPTED_SHA"
           test "$(git rev-parse HEAD)" = "$HEALTH_HEARTBEAT_ACCEPTED_SHA"
+          git fetch -q --no-tags origin 'refs/heads/scheduler-code:refs/remotes/origin/scheduler-code'
+          git merge-base --is-ancestor "$HEALTH_HEARTBEAT_ACCEPTED_SHA" refs/remotes/origin/scheduler-code
           node --test scripts/automation/health_activity.test.mjs
       - name: Fail to trigger GitHub email when overdue
         run: node scripts/automation/health_activity.mjs check

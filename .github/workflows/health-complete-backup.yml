@@ -43,7 +43,16 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}
+          fetch-depth: 0
           persist-credentials: false
+      - name: Require pinned commit on protected scheduler-code lineage
+        env:
+          PIN: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PIN"
+          git fetch -q --no-tags origin 'refs/heads/scheduler-code:refs/remotes/origin/scheduler-code'
+          git merge-base --is-ancestor "$PIN" refs/remotes/origin/scheduler-code
       - name: Verify exact accepted executor and reject missing configuration
         env:
           SUPABASE_DB_URL: ${{ secrets.HEALTH_BACKUP_DB_URL }}

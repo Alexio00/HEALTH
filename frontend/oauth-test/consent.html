@@ -1,0 +1,16 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://yjmcesdayfmfissghzgm.supabase.co; base-uri 'none'; form-action 'self'; object-src 'none'">
+<title>HEALTH-TEST — подключение чата</title><link rel="stylesheet" href="consent.css"></head>
+<body><main><h1>Подключение HEALTH-TEST</h1>
+<p>Только проверка OAuth и синтетической очереди. Медицинские записи недоступны.</p>
+<form id="login"><label>Email<input name="email" type="email" autocomplete="username" required></label>
+<label>Пароль<input name="password" type="password" autocomplete="current-password" required></label>
+<button type="submit" disabled>Войти в HEALTH-TEST</button></form>
+<section id="review" hidden><h2>Проверь подключение</h2><pre id="details"></pre>
+<p>Приложение получит только доступ к синтетическому тесту. Это не согласие на медицинскую запись.</p>
+<button id="approve" disabled>Разрешить тестовое подключение</button>
+<button id="deny" disabled>Отказать</button></section>
+<p id="status" role="status">Настройка подключения ещё не завершена.</p></main>
+<script type="module" src="consent.mjs"></script></body></html>

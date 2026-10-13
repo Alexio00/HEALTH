@@ -523,7 +523,7 @@ async function route() {
   try {
     if (parts.length === 0) {
       await renderCurrentState();
-    } else if (["chronic", "open-cases", "medications", "monitoring", "visit-preparation", "future-plan"].includes(parts[0])) {
+    } else if (["chronic", "open-cases", "medications", "visit-preparation", "future-plan"].includes(parts[0])) {
       await renderCurrentState(parts[0]);
     } else if (parts[0] === "vaccination") {
       view.innerHTML = '<h1>Вакцинация</h1><p class="empty">Раздел пока не заполнен</p>';
@@ -845,15 +845,14 @@ async function medicationHistorySection(recordId) {
   return `<section><h2>Другие связанные REC по препаратам</h2>${blocks.join("")}</section>`;
 }
 async function renderCurrentState(mode = "all") {
-  const [cases, meds, monitoring, plan, questions] = await Promise.all([
+  const [cases, meds, plan, questions] = await Promise.all([
     supabase.from("cases").select("case_key,title,summary,status,category,opening_record_id,closing_record_id,metadata").eq("status","open").order("title"),
     supabase.from("medications").select("medication_id,name,dose,schedule,status,basis_record_id,metadata").eq("status","active").order("name"),
-    supabase.from("monitoring").select("monitoring_id,title,cadence_text,status,basis_record_id").eq("status","active").order("title"),
     supabase.from("plan_items").select("plan_item_id,title,due_on,status,basis_record_id,metadata").eq("status","planned").order("due_on",{ascending:true,nullsFirst:false}),
     supabase.from("questions").select("question_id,question,status,basis_record_id,metadata").eq("status","open").order("question_id")
   ]);
 
-  for (const result of [cases, meds, monitoring, plan, questions]) {
+  for (const result of [cases, meds, plan, questions]) {
     if (result.error) throw result.error;
   }
 
@@ -881,12 +880,6 @@ async function renderCurrentState(mode = "all") {
       tableCell(currentRecordId ? recLink(currentRecordId) : "", currentRecordId)
     ];
   });
-
-  const monitoringRows = (monitoring.data || []).map(x => [
-    tableCell(`<strong>${esc(x.title)}</strong>`, x.title),
-    tableCell(esc(x.cadence_text || ""), x.cadence_text || ""),
-    tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
-  ]);
 
   const planRows = (plan.data || []).map(x => {
     const due = x.metadata?.due_text || fmtDate(x.due_on) || "";
@@ -920,9 +913,6 @@ async function renderCurrentState(mode = "all") {
     "medications": `<section>${mode === "all" ? "<h2>Принимаемые препараты</h2>" : ""}
       ${filterableTable(["Препарат","Дозировка","Режим","REC"], medsRows, { id: "medications-table" })}
     </section>`,
-    "monitoring": `<section>${mode === "all" ? "<h2>Мониторинг</h2>" : ""}
-      ${filterableTable(["Что контролировать","Периодичность","REC"], monitoringRows, { id: "monitoring-table" })}
-    </section>`,
     "visit-preparation": `<section>${mode === "all" ? "<h2>Подготовка к визиту</h2>" : ""}
       ${visitPreparation(plan.data || [], questions.data || [])}
     </section>`,
@@ -940,12 +930,11 @@ async function renderCurrentState(mode = "all") {
     "chronic": "Хронические состояния",
     "open-cases": "Открытые случаи",
     "medications": "Принимаемые препараты",
-    "monitoring": "Мониторинг",
     "visit-preparation": "Подготовка к визиту",
     "future-plan": "Будущий план"
   };
   const content = mode === "all"
-    ? ["medical-card", "chronic", "open-cases", "medications", "monitoring", "visit-preparation", "future-plan"]
+    ? ["medical-card", "chronic", "open-cases", "medications", "visit-preparation", "future-plan"]
       .map(name => sections[name]).join("\n")
     : sections[mode] || empty();
   view.innerHTML = `

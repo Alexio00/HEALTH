@@ -524,7 +524,7 @@ async function route() {
   try {
     if (parts.length === 0) {
       await renderCurrentState();
-    } else if (["chronic", "open-cases", "medications", "monitoring", "visit-preparation", "future-plan"].includes(parts[0])) {
+    } else if (["chronic", "open-cases", "medications", "visit-preparation", "future-plan"].includes(parts[0])) {
       await renderCurrentState(parts[0]);
     } else if (parts[0] === "vaccination") {
       await renderVaccination();
@@ -673,7 +673,9 @@ const specialtyLabels = [
   ["ревматолог", "ревматологу"],
   ["аллерголог", "аллергологу"],
   ["онколог", "онкологу"],
-  ["гинеколог", "гинекологу"]
+  ["гинеколог", "гинекологу"],
+  ["колопроктолог", "колопроктологу"],
+  ["косметолог", "косметологу"]
 ];
 const visitLabel = specialty => specialtyLabels.find(x => x[0] === specialty)?.[1] || "специалисту";
 
@@ -686,6 +688,20 @@ function namedSpecialties(text) {
   );
   return [...new Set(found)];
 }
+// Classify a visit from its explicit plan heading (not the clinical details).
+// A named specialist clinic also identifies its visit type.
+function plannedVisitSpecialties(item) {
+  const meta = item.metadata || {};
+  const explicit = Array.isArray(meta.visit_specialties)
+    ? meta.visit_specialties.map(value => String(value).toLocaleLowerCase("ru"))
+        .filter(value => specialtyLabels.some(([stem]) => stem === value))
+    : [];
+  if (explicit.length) return [...new Set(explicit)];
+  const heading = String(item.title || "").split(/[;:]/)[0].slice(0, 140).trim();
+  if (/^при[её]м\s+в\s+спид[-\s]?центр/iu.test(heading)) return ["инфекционист"];
+  if (/^стоматолог[-\s]хирург/iu.test(heading)) return ["стоматолог"];
+  return namedSpecialties(heading);
+}
 function questionSpecialties(question) {
   const meta = question.metadata || {};
   if (Array.isArray(meta.visit_specialties) && meta.visit_specialties.length) {
@@ -693,7 +709,17 @@ function questionSpecialties(question) {
       .filter(x => specialtyLabels.some(([stem]) => stem === x));
   }
   const prefix = String(question.question || "").split(":")[0];
-  return prefix.length <= 95 ? namedSpecialties(prefix) : [];
+  if (prefix.length <= 95) {
+    const named = namedSpecialties(prefix);
+    if (named.length) return named;
+  }
+  // A question without a named addressee may explicitly name the specialist
+  // in its recorded note. Do not infer specialty from symptoms or history.
+  const noteHeading = String(meta.note || "").split(/[.;]/)[0].trim();
+  if (/^вопрос к (?:будущему |плановому )?при[её]му/iu.test(noteHeading)) {
+    return namedSpecialties(noteHeading);
+  }
+  return [];
 }
 function isMedicalCardQuestion(question) {
   return ["medical_card", "chart"].includes(question.metadata?.category)
@@ -705,11 +731,12 @@ function visitPreparation(planItems, questions) {
   for (const item of planItems || []) {
     const kind = String(item.metadata?.kind || "").toLocaleLowerCase("ru");
     if (!kind.includes("визит") && !kind.includes("консультаци")) continue;
-    const prefix = String(item.title || "").split(":")[0];
-    const specialties = prefix.length <= 100 ? namedSpecialties(prefix) : [];
+    const specialties = plannedVisitSpecialties(item);
+    const dentalSurgeon = /^стоматолог[-\s]хирург/iu.test(String(item.title || ""));
     plannedGroups.push({
       specialty: specialties,
-      title: specialties.length ? `Визит к ${specialties.map(visitLabel).join(" и ")}` : "Визит к специалисту",
+      title: dentalSurgeon ? "Визит к стоматологу-хирургу"
+        : specialties.length ? `Визит к ${specialties.map(visitLabel).join(" и ")}` : "Визит к специалисту",
       visits: [item], questions: [], planItemId: item.plan_item_id
     });
   }
@@ -758,8 +785,7 @@ function visitPreparation(planItems, questions) {
     }).join("");
     return `
       <details class="case-card visit-card" ${group.planItemId ? `data-plan-id="${esc(group.planItemId)}"` : ""}>
-        <summary><strong>${esc(group.title)}</strong>
-          <span class="muted"> · вопросов: ${group.questions.length}</span></summary>
+        <summary><strong>${esc(group.title)}</strong></summary>
         <div class="case-body">
           ${planNotes ? `<h3>Плановый визит</h3><ul class="record-list">${planNotes}</ul>` :
             '<p class="muted">Связанный пункт будущего плана пока не найден</p>'}
@@ -771,6 +797,54 @@ function visitPreparation(planItems, questions) {
   }).join("");
 }
 
+// The current medication's evidence can be in metadata even when the legacy
+// basis_record_id column is NULL. Link only the newest existing dated REC.
+function medicationRecordIds(medication) {
+  const sources = Array.isArray(medication.metadata?.source_record_ids)
+    ? medication.metadata.source_record_ids : [];
+  return [...new Set([...sources, medication.basis_record_id]
+    .filter(id => typeof id === "string" && /^REC-\d{8}-\d{3}$/.test(id)))];
+}
+function latestMedicationRecordId(medication, recordDates) {
+  return medicationRecordIds(medication)
+    .filter(id => recordDates.has(id))
+    .reduce((latest, id) => {
+      if (!latest) return id;
+      return String(recordDates.get(id) || "").localeCompare(String(recordDates.get(latest) || "")) >= 0
+        ? id : latest;
+    }, "");
+}
+function medicationHistoriesForRecord(recordId, medications) {
+  return (medications || []).flatMap(medication => {
+    const ids = medicationRecordIds(medication);
+    return ids.includes(recordId) && ids.length > 1
+      ? [{ name: medication.name, recordIds: ids.filter(id => id !== recordId) }]
+      : [];
+  });
+}
+async function medicationHistorySection(recordId) {
+  const { data: medications, error } = await supabase.from("medications")
+    .select("name,basis_record_id,metadata").eq("status", "active");
+  // History links are optional: do not hide the actual REC when they cannot load.
+  if (error) return "";
+  const histories = medicationHistoriesForRecord(recordId, medications);
+  if (!histories.length) return "";
+  const otherIds = [...new Set(histories.flatMap(item => item.recordIds))];
+  const { data: relatedRecords, error: recordsError } = await supabase.from("records")
+    .select("record_id,record_date").in("record_id", otherIds);
+  if (recordsError) return "";
+  const dates = new Map((relatedRecords || []).map(item => [item.record_id, item.record_date]));
+  const blocks = histories.map(item => {
+    const ids = item.recordIds.filter(id => dates.has(id))
+      .sort((a, b) => String(dates.get(b) || "").localeCompare(String(dates.get(a) || "")));
+    if (!ids.length) return "";
+    return `<h3>${esc(item.name)}</h3><ul class="record-list">${ids.map(id =>
+      `<li>${recLink(id)} · ${esc(fmtDate(dates.get(id)))}</li>`
+    ).join("")}</ul>`;
+  }).filter(Boolean);
+  if (!blocks.length) return "";
+  return `<section><h2>Другие связанные REC по препаратам</h2>${blocks.join("")}</section>`;
+}
 // Vaccination is a read-only projection: REC administration evidence and plan
 // evidence remain distinct. Unknown stages and vaccine brands are not guessed.
 function vaccinationRecCell(item) {
@@ -860,16 +934,25 @@ async function renderVaccination() {
 }
 
 async function renderCurrentState(mode = "all") {
-  const [cases, meds, monitoring, plan, questions] = await Promise.all([
+  const [cases, meds, plan, questions] = await Promise.all([
     supabase.from("cases").select("case_key,title,summary,status,category,opening_record_id,closing_record_id,metadata").eq("status","open").order("title"),
-    supabase.from("medications").select("medication_id,name,dose,schedule,status,basis_record_id").eq("status","active").order("name"),
-    supabase.from("monitoring").select("monitoring_id,title,cadence_text,status,basis_record_id").eq("status","active").order("title"),
+    supabase.from("medications").select("medication_id,name,dose,schedule,status,basis_record_id,metadata").eq("status","active").order("name"),
     supabase.from("plan_items").select("plan_item_id,title,due_on,status,basis_record_id,metadata").eq("status","planned").order("due_on",{ascending:true,nullsFirst:false}),
     supabase.from("questions").select("question_id,question,status,basis_record_id,metadata").eq("status","open").order("question_id")
   ]);
 
-  for (const result of [cases, meds, monitoring, plan, questions]) {
+  for (const result of [cases, meds, plan, questions]) {
     if (result.error) throw result.error;
+  }
+
+  const allMedicationRecordIds = [...new Set((meds.data || []).flatMap(medicationRecordIds))];
+  let medicationRecordDates = new Map();
+  if (allMedicationRecordIds.length) {
+    const { data: medicationRecords, error: recordsError } = await supabase
+      .from("records").select("record_id,record_date").in("record_id", allMedicationRecordIds);
+    if (recordsError) throw recordsError;
+    medicationRecordDates = new Map((medicationRecords || [])
+      .map(record => [record.record_id, record.record_date]));
   }
 
   const bundled = await fetchCaseBundles(cases.data || []);
@@ -877,18 +960,15 @@ async function renderCurrentState(mode = "all") {
   const chronic = bundled.filter(x => x.category === "chronic");
   const episodes = bundled.filter(x => x.category !== "chronic");
 
-  const medsRows = (meds.data || []).map(x => [
-    tableCell(`<strong>${esc(x.name)}</strong>`, x.name),
-    tableCell(esc(x.dose || ""), x.dose || ""),
-    tableCell(esc(x.schedule || ""), x.schedule || ""),
-    tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
-  ]);
-
-  const monitoringRows = (monitoring.data || []).map(x => [
-    tableCell(`<strong>${esc(x.title)}</strong>`, x.title),
-    tableCell(esc(x.cadence_text || ""), x.cadence_text || ""),
-    tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
-  ]);
+  const medsRows = (meds.data || []).map(x => {
+    const currentRecordId = latestMedicationRecordId(x, medicationRecordDates);
+    return [
+      tableCell(`<strong>${esc(x.name)}</strong>`, x.name),
+      tableCell(esc(x.dose || ""), x.dose || ""),
+      tableCell(esc(x.schedule || ""), x.schedule || ""),
+      tableCell(currentRecordId ? recLink(currentRecordId) : "", currentRecordId)
+    ];
+  });
 
   const planRows = (plan.data || []).map(x => {
     const due = x.metadata?.due_text || fmtDate(x.due_on) || "";
@@ -922,9 +1002,6 @@ async function renderCurrentState(mode = "all") {
     "medications": `<section>${mode === "all" ? "<h2>Принимаемые препараты</h2>" : ""}
       ${filterableTable(["Препарат","Дозировка","Режим","REC"], medsRows, { id: "medications-table" })}
     </section>`,
-    "monitoring": `<section>${mode === "all" ? "<h2>Мониторинг</h2>" : ""}
-      ${filterableTable(["Что контролировать","Периодичность","REC"], monitoringRows, { id: "monitoring-table" })}
-    </section>`,
     "visit-preparation": `<section>${mode === "all" ? "<h2>Подготовка к визиту</h2>" : ""}
       ${visitPreparation(plan.data || [], questions.data || [])}
     </section>`,
@@ -942,12 +1019,11 @@ async function renderCurrentState(mode = "all") {
     "chronic": "Хронические состояния",
     "open-cases": "Открытые случаи",
     "medications": "Принимаемые препараты",
-    "monitoring": "Мониторинг",
     "visit-preparation": "Подготовка к визиту",
     "future-plan": "Будущий план"
   };
   const content = mode === "all"
-    ? ["medical-card", "chronic", "open-cases", "medications", "monitoring", "visit-preparation", "future-plan"]
+    ? ["medical-card", "chronic", "open-cases", "medications", "visit-preparation", "future-plan"]
       .map(name => sections[name]).join("\n")
     : sections[mode] || empty();
   view.innerHTML = `
@@ -1309,6 +1385,7 @@ async function renderRecord(recordId) {
     });
   }
 
+  const medicationHistory = await medicationHistorySection(recordId);
   inlineTableSequence = 0;
   const title = recordDisplayTitle(record);
   const body = renderRecordBody(record.body_text);
@@ -1338,6 +1415,8 @@ async function renderRecord(recordId) {
         </li>
       `) : empty()}
     </section>
+
+    ${medicationHistory}
 
     <section>
       <h2>Текст записи</h2>

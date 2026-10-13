@@ -2,6 +2,14 @@
 
 The frontend is a static, read-only PWA deployed through GitHub Pages.
 
+**Branch / release rule:** UI contributions target `pwa`, not `main`.
+Base new frontend work on the current `pwa` HEAD. See
+[repository agent instructions](../AGENTS.md) and
+[PWA release procedure](../docs/PWA_RELEASE.md). A frontend-only merge into
+`pwa` must never change the accepted production Writer SHA.
+Do not simply retarget PRs developed from `main` without reconciling the
+current `pwa` code, tests, assets and service worker first.
+
 ## Navigation
 
 The mobile menu is collapsed by default (hamburger button); the desktop header
@@ -10,17 +18,15 @@ not a menu. Current State is a composite view; other pages reuse the same live
 rows without copying or synchronizing duplicate medical entities.
 
 1. Текущее состояние — questions about chart conflicts or chart actions, chronic conditions,
-   open episodes, medications, monitoring, visit preparation, future plan.
+   open episodes, medications, visit preparation, future plan.
 2. Хронические состояния
 3. Открытые случаи
 4. Принимаемые препараты
-5. Мониторинг
-6. Подготовка к визиту
-7. Будущий план
-8. Закрытые случаи
-9. Записи
-10. Вакцинация — three owner-facing tables: latest confirmed administrations per
-    infection, upcoming vaccination plan, and complete vaccination chronology.
+5. Подготовка к визиту
+6. Будущий план
+7. Закрытые случаи
+8. Записи
+9. Вакцинация — три таблицы: последние проведённые, запланированные, все вакцинации (REC).
 
 Visit preparation groups plan items explicitly marked as visits/consultations and
 open specialist questions. Specialties are determined only by explicit source

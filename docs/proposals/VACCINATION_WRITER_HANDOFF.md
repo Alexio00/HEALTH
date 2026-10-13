@@ -75,6 +75,22 @@ No patient data, source bytes, real vaccine history or credentials in GitHub,
 test fixtures, logs or actions artifacts. Historical reconciliation #42 must
 remain in the private medical context, not written to public Issues.
 
+## Private pending-change handoff (owner-only Drive)
+
+An additional owner-approved **private clinical correction batch** is awaiting
+Writer capability and independent validation. The authoritative candidate
+is an **owner-only Google Drive document**:
+
+[Private pending correction package — restricted access](https://docs.google.com/document/d/153X5Bc6pa9xWnQNmlOgymQJ7Q6Ns8jOJHFP7adquxEE/edit)
+
+The link is a coordination pointer only; it is not clinical data authorization.
+Do not copy its contents, patient identifiers, REC facts, dates or source bytes
+into this public repository, PR comments, tests or CI logs.
+The parallel Writer development must finish and its current SHA must be
+accepted before the clinical candidate can be constructed or published.
+Use only the bounded Writer and independent clinical verifier; never SQL
+admin direct writes. This draft is not a production migration.
+
 ## Release boundary
 
 This proposal contains **no SQL runtime change**, no migration in

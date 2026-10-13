@@ -7,6 +7,7 @@ issuer merely because it has the same name or the GitHub Actions App source.
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -186,8 +187,8 @@ if __name__ == "__main__":
                    REPO + "/.github/workflows/health-trusted-scope.yml@refs/heads/main"):
             raise ScopeStop("base_trusted_workflow_required")
         accepted = os.getenv("HEALTH_TRUSTED_POLICY_SHA")
-        checked = os.popen("git rev-parse HEAD").read().strip()
-        if not sha40(accepted) or accepted != checked:
+        checked = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, timeout=10).strip()
+        if not sha40(accepted) or accepted != checked or accepted != os.getenv("GITHUB_SHA"):
             raise ScopeStop("accepted_trusted_policy_sha_required")
         with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as file:
             print(json.dumps(check_event(json.load(file), os.getenv("GH_TOKEN")),

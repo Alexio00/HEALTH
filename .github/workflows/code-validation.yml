@@ -66,10 +66,26 @@ jobs:
         with:
           persist-credentials: false
       - name: Frontend syntax and synthetic contract checks
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          if [ -n "$BASE_SHA" ] && [ "$BASE_REF" = "pwa" ]; then
+            git fetch --no-tags origin "$BASE_SHA" "$HEAD_SHA"
+            if git cat-file -e "$BASE_SHA:frontend/release/scope.mjs" 2>/dev/null; then
+              git show "$BASE_SHA:frontend/release/scope.mjs" > "$RUNNER_TEMP/pwa-base-scope.mjs"
+              node "$RUNNER_TEMP/pwa-base-scope.mjs"
+            elif [ "$BASE_SHA" != "93964e3524171d789f03608958a6b0740bae23ee" ]; then
+              echo "FAIL: missing trusted scope policy"
+              exit 1
+            fi
+          fi
           node --check --input-type=module < frontend/app.js
           node --check frontend/sw.js
           node frontend/tests/contract.mjs
+          node frontend/tests/sw.mjs
+          node frontend/tests/scope.mjs
       - name: Python syntax
         run: python3 -m py_compile scripts/migration/full_migration.py
       - name: Migration runner self-test

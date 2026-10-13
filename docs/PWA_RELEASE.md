@@ -51,15 +51,13 @@ that the Pages site will stay unchanged.
 
 ## Branch protection for `pwa` (repository setting)
 
-The branch was **not protected** on 2026-10-13: the GitHub branches API returned
-`protected: false`. A passing deployment gate only blocks *publication* of
-failing code; it cannot itself stop an unreviewed direct push or force-push to
-`pwa`.
+The live branch reports `protected: true` on 2026-10-13.
+Active Ruleset 25010980 requires PR, up-to-date base, and Actions `static`;
+deletion and force-push are blocked and no bypass actors are configured.
 
 The repository is publicly visible, so GitHub Free supports Rulesets/branch
 protection without upgrading. The connected GitHub integration cannot modify
-administration settings (the protection read API returned 403). The owner must
-configure this once in GitHub **Settings → Rules → Rulesets** (or **Branches →
+administration settings (the protection read API returned 403). The owner configured this in GitHub **Settings → Rules → Rulesets** (or **Branches →
 Add branch protection rule**):
 
 - Target only branch `pwa`, set ruleset to **Active**, do not include
@@ -142,3 +140,37 @@ Writer operator with administrative Supabase SQL.
   That transition changes the trust contract and needs an independent audit,
   a one-time coordinated reaccept and explicit owner approval.
 - This `pwa` solution avoids that Writer migration for normal UI-only PRs.
+
+## Trusted PR scope and release-control review
+
+Ordinary PRs may change regular files in frontend/ and only AGENTS.md or
+docs/PWA_RELEASE.md outside it. Backend, SQL, private paths and symlinks fail.
+Release controls (frontend/release/ and the three named PWA workflows)
+require a PR authored by owner ID 308028794 and the exact standalone body line
+`PWA-RELEASE-CONTROL: <40-character head SHA>`. A new head invalidates it.
+This is explicit review of an authorized technical release; never add the line
+to an unknown PR merely to obtain PASS.
+
+The static job loads scope logic from protected base objects, not PR code.
+PWA trusted scope also uses pull_request_target and executes only base code
+with read-only permissions. It reads candidate Git objects without running them.
+Changes to code-validation.yml outside its frontend-check block are forbidden,
+even in a release-control PR. Writer/OIDC checks must remain byte-for-byte.
+
+**Limit:** the current required Ruleset binds the name static to GitHub Actions,
+not an immutable workflow identity. A malicious PR could invent another Actions
+job with that name. pwa-scope is not yet a required check. This is defense in
+depth and a release-review gate, not an unbypassable hostile-contributor boundary.
+Strict protection needs an independently enforced required workflow/status
+issuer or an additional suitable repository rule, reviewed by the owner.
+Do not weaken Rulesets to bootstrap this. Initial policy PR is independently
+reviewed against baseline 93964e3524171d789f03608958a6b0740bae23ee.
+
+## Static-only offline boundary
+
+The worker caches only eight enumerated public shell resources. Every query
+string, OAuth test page, API, arbitrary path, authorization/range request,
+redirect, non-200, wrong MIME and private/no-store/no-cache response is excluded.
+Old health-shell caches are purged on activation; unrelated caches are retained.
+Offline shell availability never means offline medical data: Supabase responses
+are not stored in CacheStorage. OAuth test consent requires network access.

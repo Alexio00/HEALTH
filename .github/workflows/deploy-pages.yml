@@ -35,6 +35,8 @@ jobs:
           node --check frontend/vaccination.mjs
           node --check frontend/supabase-client.js
           node frontend/tests/contract.mjs
+          node frontend/tests/sw.mjs
+          node frontend/tests/scope.mjs
       - name: Public repository secret-pattern guard
         run: python3 scripts/validation/public_secret_guard.py
       - name: Upload verified frontend artifact

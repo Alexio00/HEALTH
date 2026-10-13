@@ -1,0 +1,23 @@
+name: PWA trusted scope
+on:
+  pull_request_target:
+    branches: [pwa]
+    types: [opened, synchronize, reopened, edited]
+permissions:
+  contents: read
+jobs:
+  pwa-scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read candidate objects without executing candidate code
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git fetch --no-tags origin "$HEAD_SHA"
+      - name: Check paths using protected base policy
+        run: node frontend/release/scope.mjs

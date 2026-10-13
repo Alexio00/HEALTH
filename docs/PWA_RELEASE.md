@@ -17,9 +17,13 @@ the clinical authorization workflow from `pwa`.
    workflows changed in the PR.
 2. Obtain a green `HEALTH code validation` on the PR and exact merged `pwa`
    commit. The workflow covers both `pull_request` and `push` on `pwa`.
-3. On the existing workflow `.github/workflows/deploy-pages.yml` (which is
-   registered on default branch `main`), choose **Run workflow**, select
-   **pwa**, and manually dispatch. Verify the deployment conclusion is success.
+3. The `pwa` copy of `.github/workflows/deploy-pages.yml` automatically
+   runs a **fresh** Pages deployment on a `pwa` push affecting `frontend/**`
+   or the workflow. Alternatively select `pwa` under **Run workflow** to
+   create a new run. Check that deployment concluded `success` and the run
+   head branch is `pwa`. Do not use **Re-run job** after an artifact was
+   already uploaded: the same run can then contain two `github-pages`
+   artifacts and `deploy-pages` rejects the ambiguous upload.
 4. Check browser-visible behavior under an authorized session. GitHub Pages
    deployment success is not itself a UI or clinical Writer smoke-test.
 5. Recheck that `main` SHA and Supabase Writer accepted SHA have not moved.
@@ -28,7 +32,8 @@ the clinical authorization workflow from `pwa`.
 The current Pages workflow still automatically deploys on `main` pushes
 that touch `frontend/**` or the Pages workflow. This is a **known limit** of
 the first-stage isolation: such a merge can overwrite the published `pwa`
-assets. If it happens, manually redeploy the exact approved `pwa` revision.
+assets. If it happens, start a **new** `pwa` workflow_dispatch deployment to
+restore the exact approved `pwa` revision.
 Never merge a Writer branch's frontend files into `main` on the assumption
 that the Pages site will stay unchanged.
 

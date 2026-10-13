@@ -2,7 +2,7 @@ name: Deploy HEALTH PWA
 
 on:
   push:
-    branches: [main]
+    branches: [pwa]
     paths:
       - "frontend/**"
       - ".github/workflows/deploy-pages.yml"

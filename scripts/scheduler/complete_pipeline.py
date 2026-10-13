@@ -13,8 +13,9 @@ from complete_cloud import CompleteCloud
 from complete_recovery import recover_archive
 from drive_cloud_journal import DriveCloudJournal
 from drive_rotation import DriveRotation,RotationStop
+from cutover_guard import CutoverStop, require_release_context
 
-EXECUTORS=['complete_archive.py','complete_capture.py','complete_coordination.py','complete_sources.py','complete_payload.py','complete_db_restore.py','complete_auth_restore.py','complete_source_restore.py','complete_recovery.py','complete_preview.py','complete_cloud.py','complete_pipeline.py','drive_rotation.py','drive_cloud_journal.py','drive_transport.py','session_pooler_tls.py']
+EXECUTORS=['complete_archive.py','complete_capture.py','complete_coordination.py','complete_sources.py','complete_payload.py','complete_db_restore.py','complete_auth_restore.py','complete_source_restore.py','complete_recovery.py','complete_preview.py','complete_cloud.py','complete_pipeline.py','drive_rotation.py','drive_cloud_journal.py','drive_transport.py','session_pooler_tls.py','cutover_guard.py']
 def executor_binding():
     pins={x:digest(Path(__file__).with_name(x)) for x in EXECUTORS}
     return hashlib.sha256(json.dumps(pins,sort_keys=True,separators=(',',':')).encode()).hexdigest(),pins
@@ -33,6 +34,8 @@ def retire_bootstrap(*unused):
 
 def run(mode,root,producer_sha,*,serialized):
     if serialized is not True or mode not in ('candidate','activate','daily') or not re.fullmatch('[a-f0-9]{40}',producer_sha):raise SourceStop('reviewed_serialized_pipeline_required')
+    if mode in ('candidate','activate'):
+        require_release_context(os.environ,mode)
     root=private(root,fresh=True);executor_sha,pins=executor_binding()
     (root/'executor-binding.private.json').write_text(json.dumps({'producer_sha':producer_sha,'executor_sha':executor_sha,'files':pins},indent=2))
     config=os.environ['RCLONE_CONFIG_CONTENT']
@@ -51,6 +54,7 @@ def run(mode,root,producer_sha,*,serialized):
             if len(candidates)!=1:raise SourceStop('multiple_pending_candidates_require_exact_reconciliation')
             target=candidates[0]['id'];sha=candidates[0]['appProperties']['health_archive_sha256']
         else:
+            if mode=='activate':raise SourceStop('activation_requires_prior_candidate_and_full_recovery')
             capture_root=root/'capture';capture_root.mkdir(mode=0o700)
             package=preview(capture_root,config)
             if package.get('restricted_capture_role_enforced') is not True:raise SourceStop('restricted_capture_required_for_pipeline')
@@ -102,5 +106,5 @@ if __name__=='__main__':
             raise SourceStop('accepted_immutable_backup_producer_required')
         result=run(args.mode,Path(os.environ['HEALTH_COMPLETE_PRIVATE_ROOT']),producer,serialized=True)
         print(json.dumps({'status': result.get('status'), 'daily_backup_activated': result.get('daily_backup_activated', False), 'production_cutover': False, 'permanent_deletes': 0}))
-    except (SourceStop,RotationStop) as e:print(json.dumps({'status':'STOPPED','safe_reason':str(e),'permanent_deletes':0}));raise SystemExit(2)
+    except (SourceStop,RotationStop,CutoverStop) as e:print(json.dumps({'status':'STOPPED','safe_reason':str(e),'permanent_deletes':0}));raise SystemExit(2)
     except Exception:print(json.dumps({'status':'STOPPED','safe_reason':'private_complete_pipeline_failed','permanent_deletes':0}));raise SystemExit(2)

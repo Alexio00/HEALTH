@@ -42,6 +42,7 @@ class TransferSafety(unittest.TestCase):
             "health-complete-backup.yml",
             "health-backup-preflight.yml",
             "health-backup-activate.yml",
+            "health-backup-release.yml",
             "health-activity.yml",
         ):
             with self.subTest(name=name):

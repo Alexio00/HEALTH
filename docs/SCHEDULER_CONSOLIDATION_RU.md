@@ -47,3 +47,9 @@
 - Уточнить действующие Project State/Manual после подтверждённого перехода. Не объявлять подготовленный код уже работающим.
 
 Связанные задачи: [HEALTH #65](https://github.com/Alexio00/HEALTH/issues/65), [#50](https://github.com/Alexio00/HEALTH/issues/50), [#69](https://github.com/Alexio00/HEALTH/issues/69). Launchers: [Draft PR #72](https://github.com/Alexio00/HEALTH/pull/72). Исторические варианты: #64/#67/#70/#71.
+
+## Предохранитель разового переноса (пока Draft)
+
+Кандидатный `cutover_guard.py` отказывает `candidate`/`activate`, если не подтверждены: точный принятый Writer/main SHA, точно принятый checkout SHA Scheduler, доверенный main-only ручной workflow владельца, два независимых owner-asserted gate флага (`HEALTH_INREPO_RELEASE_ENABLED=true` и `HEALTH_LEGACY_BACKUP_PAUSED=true`), а также ручная фраза `LEGACY_SHEDULLER_PAUSED_AND_IDLE`. Новый daily backup должен оставаться выключенным во время этой процедуры. Эти флаги **не доказывают фактическое отсутствие запуска в SHEDULLER** — владелец должен вручную проверить состояние Actions и последний complete ACTIVE до установки флагов. Кандидатный запуск тоже загружает архив в общую папку `CompleteSets`: его нельзя выполнять, пока старый SHEDULLER работает.
+
+`activate` запрещён без ранее созданного `CANDIDATE`; после запуска `candidate` необходим review полного независимого восстановления. Если понадобится откат к старому Scheduler после появления нового `CANDIDATE`, сначала отдельно согласовать и безопасно разрешить чужой candidate/journal: старый runner может подобрать его при следующем запуске. Не включать SHEDULLER вслепую. Запуск release workflow добавляется в Draft PR #72 и не внедрён в main. Правила CI и реальный cutover остаются отдельной приёмкой.

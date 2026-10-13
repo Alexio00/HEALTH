@@ -43,6 +43,7 @@ jobs:
           python3 scripts/scheduler/test_complete_sources.py -v
           python3 scripts/scheduler/test_complete_restore.py -v
           python3 scripts/scheduler/test_candidate_provenance.py -v
+          python3 scripts/scheduler/test_cutover_guard.py -v
           python3 scripts/scheduler/test_drive_rotation.py -v
       - name: Heartbeat 15/18-day synthetic tests
         run: node --test scripts/automation/health_activity.test.mjs

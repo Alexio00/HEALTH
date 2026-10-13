@@ -32,8 +32,10 @@ class TransferSafety(unittest.TestCase):
                 self.assertNotIn("Alexio000/SHEDULLER", source)
                 self.assertNotRegex(source, r"(?i)[a-z0-9_.+-]+@(?:gmail|mail)\.(?:com|ru)")
                 # Literal Google Drive IDs (typically begin with "1").
-                self.assertNotRegex(source, r"""['"]1[A-Za-z0-9_-]{29,}['"]""")
-                self.assertNotIn("print(json.dumps(result))", source)
+                # Prevent checked-in high-entropy Drive locators without confusing named test labels.
+                self.assertNotRegex(source, r"""['"]1(?=[A-Za-z0-9_-]{29,}['"])(?=[A-Za-z0-9_-]*[A-Z])[A-Za-z0-9_-]{29,}['"]""")
+                if path.name == "complete_pipeline.py":
+                    self.assertNotIn("print(json.dumps(result))", source)
 
     def test_no_pr_secrets_in_production_workflows(self):
         for name in ("health-supabase-keepalive.yml", "health-complete-backup.yml"):

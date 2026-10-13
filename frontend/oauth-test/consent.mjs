@@ -1,7 +1,7 @@
-import { consentAllowed,callbackAllowed } from './consent-policy.mjs';
-// Deployment configuration is public, not a server credential. Empty fields fail closed.
-// Configure only after the exact callback/client are registered in HEALTH-TEST.
-const CONFIG={publishableKey:'',clientId:'',callback:''};
+import { consentAllowed,callbackAllowed,connectionConfigAllowed } from './consent-policy.mjs';
+// Runtime parameters live in private TEST configuration, never in public GitHub.
+let CONFIG=null;
+const CONFIG_URL='https://yjmcesdayfmfissghzgm.supabase.co/functions/v1/health-chat-mcp-test-v1/connection-info';
 const ROOT='https://yjmcesdayfmfissghzgm.supabase.co/auth/v1';
 const $=id=>document.getElementById(id);
 const status=text=>{$('status').textContent=text;};
@@ -47,8 +47,20 @@ for(const action of ['approve','deny'])$(action).addEventListener('click',async(
   token=null;reviewed=null;location.assign(result.redirect_url);
  }catch{token=null;reviewed=null;status('Результат согласия не подтверждён. Не повторяй автоматически; начни новое подключение.');}
 });
-if(typeof authId==='string'&&/^[a-f0-9-]{36}$/i.test(authId)
- &&CONFIG.publishableKey.startsWith('sb_publishable_')&&CONFIG.clientId&&CONFIG.callback){
- $('login').querySelector('button').disabled=false;status('Войди в существующую учётную запись HEALTH-TEST.');
+async function initialize() {
+ if(typeof authId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(authId)){
+  status('Начни подключение из ChatGPT: отсутствует корректный запрос OAuth.');return;
+ }
+ try {
+  const response=await fetch(CONFIG_URL,{method:'GET',cache:'no-store',credentials:'omit',
+   redirect:'error',referrerPolicy:'no-referrer',signal:AbortSignal.timeout(5000)});
+  if(!response.ok)throw Error('CONFIG_UNAVAILABLE');
+  const text=await response.text();if(text.length>2048)throw Error('CONFIG_TOO_LARGE');
+  const config=JSON.parse(text);if(!connectionConfigAllowed(config))throw Error('CONFIG_REJECTED');
+  CONFIG=Object.freeze(config);
+  $('login').querySelector('button').disabled=false;
+  status('Войди в существующую учётную запись HEALTH-TEST.');
+ }catch{CONFIG=null;status('Настройка подключения недоступна. Вход закрыт до её проверки.');}
 }
+initialize();
 window.addEventListener('pagehide',()=>{token=null;reviewed=null;});

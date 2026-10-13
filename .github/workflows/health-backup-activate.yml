@@ -1,0 +1,95 @@
+name: HEALTH one-time backup acceptance and activation (MANUAL ONLY)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type CUTOVER_WITH_OLD_SCHEDULER_DISABLED; old SHEDULLER backup must have been disabled and all previous runs finished."
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: health-inrepo-complete-backup
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    name: New executor full restore and single backup rotation
+    if: >-
+      github.repository == 'Alexio00/HEALTH' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor_id == '308028794' &&
+      vars.HEALTH_INREPO_ACTIVATION_ENABLED == 'true' &&
+      inputs.confirmation == 'CUTOVER_WITH_OLD_SCHEDULER_DISABLED'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: health-private-recovery
+    env:
+      HEALTH_RCLONE_VERSION: "1.75.1"
+      HEALTH_COMPLETE_SERIALIZED: "1"
+      HEALTH_REQUIRE_RESTRICTED_CAPTURE: "1"
+      HEALTH_ACCEPTED_BACKUP_SHA: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}
+      SUPABASE_DB_URL: ${{ secrets.HEALTH_BACKUP_DB_URL }}
+      HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
+      RCLONE_CONFIG_CONTENT: ${{ secrets.HEALTH_BACKUP_RCLONE_CONFIG }}
+      HEALTH_COMPLETE_RECOVERY_RCLONE: ${{ secrets.HEALTH_COMPLETE_RECOVERY_RCLONE }}
+      HEALTH_PRIMARY_SOURCE_FOLDER_ID: ${{ secrets.HEALTH_PRIMARY_SOURCE_FOLDER_ID }}
+      HEALTH_FROZEN_LINEAGE_SHA256: ${{ secrets.HEALTH_FROZEN_LINEAGE_SHA256 }}
+      HEALTH_FROZEN_ORIGINAL_COUNT: ${{ secrets.HEALTH_FROZEN_ORIGINAL_COUNT }}
+      HEALTH_BACKUP_PARENT_FOLDER_ID: ${{ secrets.HEALTH_BACKUP_PARENT_FOLDER_ID }}
+      HEALTH_PRIMARY_DRIVE_OWNER_EMAIL: ${{ secrets.HEALTH_PRIMARY_DRIVE_OWNER_EMAIL }}
+      HEALTH_BACKUP_DRIVE_OWNER_EMAIL: ${{ secrets.HEALTH_BACKUP_DRIVE_OWNER_EMAIL }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Fail closed before any Drive read or mutation
+        env:
+          GITHUB_ACTOR_ID: ${{ github.actor_id }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY'
+          import os,re,subprocess
+          sha=os.environ.get('GITHUB_SHA','')
+          if (not re.fullmatch('[a-f0-9]{40}',sha)
+              or sha!=os.environ.get('HEALTH_ACCEPTED_BACKUP_SHA')
+              or sha!=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+              or os.environ.get('GITHUB_ACTOR_ID')!='308028794'
+              or os.environ.get('GITHUB_EVENT_NAME')!='workflow_dispatch'):
+              raise RuntimeError('reviewed_owner_executor_and_dispatch_required')
+          keys=('SUPABASE_DB_URL','HEALTH_SUPABASE_CA_PEM','RCLONE_CONFIG_CONTENT',
+                'HEALTH_COMPLETE_RECOVERY_RCLONE','HEALTH_PRIMARY_SOURCE_FOLDER_ID',
+                'HEALTH_FROZEN_LINEAGE_SHA256','HEALTH_FROZEN_ORIGINAL_COUNT',
+                'HEALTH_BACKUP_PARENT_FOLDER_ID','HEALTH_PRIMARY_DRIVE_OWNER_EMAIL',
+                'HEALTH_BACKUP_DRIVE_OWNER_EMAIL')
+          if any(not os.environ.get(k) for k in keys):
+              raise RuntimeError('private_activation_configuration_incomplete')
+          print('PASS: authorized one-time operator and private inputs present')
+          PY
+      - name: Install checksum-verified rclone
+        run: bash scripts/scheduler/install_rclone.sh
+      - name: Pull pinned PostgreSQL recovery images
+        run: python3 scripts/scheduler/pull_fixed_recovery_images.py
+      - name: Full isolated restoration then owner-authorized single rotation
+        run: |
+          set -euo pipefail
+          umask 077
+          export HEALTH_COMPLETE_PRIVATE_ROOT="$RUNNER_TEMP/health-one-time-activation-private"
+          mkdir -m 700 "$HEALTH_COMPLETE_PRIVATE_ROOT"
+          python3 scripts/scheduler/complete_pipeline.py --mode activate
+      - name: Remove private activation data
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os,pathlib,shutil
+          runner=pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+          root=runner/'health-one-time-activation-private'
+          if root.exists():
+              if root.is_symlink() or root.resolve().parent!=runner:
+                  raise RuntimeError('private_activation_cleanup_boundary_rejected')
+              shutil.rmtree(root)
+          PY

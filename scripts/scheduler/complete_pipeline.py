@@ -97,7 +97,10 @@ if __name__=='__main__':
         if event not in ('schedule','workflow_dispatch'):raise SourceStop('scheduled_or_owner_dispatch_required')
         if event=='workflow_dispatch' and os.environ.get('GITHUB_ACTOR_ID')!='308028794':raise SourceStop('owner_dispatch_required')
         if args.mode!='daily' and event!='workflow_dispatch':raise SourceStop('activation_requires_owner_dispatch')
-        result=run(args.mode,Path(os.environ['HEALTH_COMPLETE_PRIVATE_ROOT']),os.environ['GITHUB_SHA'],serialized=True)
+        producer=os.environ.get('HEALTH_BACKUP_PRODUCER_SHA','')
+        if not re.fullmatch('[a-f0-9]{40}',producer):
+            raise SourceStop('accepted_immutable_backup_producer_required')
+        result=run(args.mode,Path(os.environ['HEALTH_COMPLETE_PRIVATE_ROOT']),producer,serialized=True)
         print(json.dumps({'status': result.get('status'), 'daily_backup_activated': result.get('daily_backup_activated', False), 'production_cutover': False, 'permanent_deletes': 0}))
     except (SourceStop,RotationStop) as e:print(json.dumps({'status':'STOPPED','safe_reason':str(e),'permanent_deletes':0}));raise SystemExit(2)
     except Exception:print(json.dumps({'status':'STOPPED','safe_reason':'private_complete_pipeline_failed','permanent_deletes':0}));raise SystemExit(2)

@@ -22,7 +22,7 @@ const context = vm.createContext({
   CSS: { escape(x) { return x; } }
 });
 const harness = js.replace(/^import .*;\s*$/gm, "").replace(/\nboot\(\);\s*$/, "");
-vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, plannedVisitSpecialties, isMedicalCardQuestion, questionSpecialties, medicationRecordIds, latestMedicationRecordId, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable, shouldPinTableHeader };", context);
+vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, plannedVisitSpecialties, isMedicalCardQuestion, questionSpecialties, medicationRecordIds, latestMedicationRecordId, medicationHistoriesForRecord, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable, shouldPinTableHeader };", context);
 const x = context.expose;
 const nav = [...html.matchAll(/<a href="#\/[\w-]*">[^<]+<\/a>/g)].map(m => m[0]);
 assert.equal(nav.length, 10, "ten distinct navigation entries");
@@ -173,6 +173,12 @@ assert.equal(x.latestMedicationRecordId(activeMed,
   "REC-20261001-001");
 assert.equal(x.latestMedicationRecordId(activeMed, new Map()), "",
   "missing/unreadable records must not produce broken links");
+const syntheticHistory = x.medicationHistoriesForRecord("REC-20261001-001", [
+  { name: "Синтетический препарат", ...activeMed },
+  { name: "Другой препарат", metadata: { source_record_ids: ["REC-20230101-002"] } }
+]);
+assert.equal(syntheticHistory.length, 1, "only the matching medication contributes history");
+assert.equal(syntheticHistory[0].recordIds.join(","), "REC-20250101-270");
 
 const rec = x.renderRecordBody("# Тестовая запись\n\n## Обстоятельства\n\nПервый абзац.\n\nВторой абзац.");
 assert(rec.includes("<h3>Обстоятельства</h3>"));

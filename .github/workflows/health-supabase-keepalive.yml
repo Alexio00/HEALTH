@@ -30,15 +30,21 @@ jobs:
       HEALTH_KEEPALIVE_DB_URL: ${{ secrets.HEALTH_KEEPALIVE_DB_URL }}
       HEALTH_SUPABASE_CA_PEM: ${{ secrets.HEALTH_SUPABASE_CA_PEM }}
     steps:
+      - name: Reject absent or invalid keepalive code pin
+        run: |
+          python3 - <<'PY'
+          import os,re
+          if not re.fullmatch('[a-f0-9]{40}',os.environ.get('HEALTH_KEEPALIVE_ACCEPTED_SHA','')):
+              raise RuntimeError('missing_accepted_keepalive_pin')
+          PY
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ vars.HEALTH_KEEPALIVE_ACCEPTED_SHA }}
           persist-credentials: false
       - name: Match checked-out SHA to approved main
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$GITHUB_SHA" = "$HEALTH_KEEPALIVE_ACCEPTED_SHA"
+          test "$(git rev-parse HEAD)" = "$HEALTH_KEEPALIVE_ACCEPTED_SHA"
       - name: Install PostgreSQL client
         run: |
           set -euo pipefail

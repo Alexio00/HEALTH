@@ -1,5 +1,6 @@
 import { createClient } from "./supabase-client.js";
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config.js";
+import { buildVaccinationView } from "./vaccination.mjs";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -526,7 +527,7 @@ async function route() {
     } else if (["chronic", "open-cases", "medications", "monitoring", "visit-preparation", "future-plan"].includes(parts[0])) {
       await renderCurrentState(parts[0]);
     } else if (parts[0] === "vaccination") {
-      view.innerHTML = '<h1>Вакцинация</h1><p class="empty">Раздел пока не заполнен</p>';
+      await renderVaccination();
     } else if (parts[0] === "closed-cases") {
       await renderClosedCases();
     } else if (parts[0] === "cases" && parts[1]) {
@@ -768,6 +769,93 @@ function visitPreparation(planItems, questions) {
         </div>
       </details>`;
   }).join("");
+}
+
+// Vaccination is a read-only projection: REC administration evidence and plan
+// evidence remain distinct. Unknown stages and vaccine brands are not guessed.
+function vaccinationRecCell(item) {
+  const links = [];
+  if (item.appointmentRecordId) {
+    links.push('<span>Назн.: ' + recLink(item.appointmentRecordId) + '</span>');
+  }
+  if (item.basisRecordId
+      && item.basisRecordId !== item.appointmentRecordId
+      && item.basisRecordId !== item.administrationRecordId) {
+    links.push('<span>Осн.: ' + recLink(item.basisRecordId) + '</span>');
+  }
+  if (item.administrationRecordId) {
+    links.push('<span>Пров.: ' + recLink(item.administrationRecordId) + '</span>');
+  }
+  return links.length ? '<span class="rec-inline">' + links.join('') + '</span>' : '—';
+}
+
+function vaccinationControl(item, section) {
+  if (section === "latest") {
+    if (!item.next) return "—";
+    const next = item.next;
+    const due = next.date ? fmtDate(next.date) : next.dateText || "срок не определён";
+    return '<span class="vaccination-control">' +
+      esc(next.stage === "—" ? "Следующий этап" : next.stage) + ' · ' + esc(due) +
+      (next.overdue ? ' <span class="vaccination-overdue">Просрочено</span>' : '') +
+      '</span>';
+  }
+  if (item.overdue) return '<span class="vaccination-overdue">Просрочено</span>';
+  return esc(item.sourceStatus || "—");
+}
+
+function vaccinationRows(items, section) {
+  return items.map(item => {
+    const dateText = item.date ? fmtDate(item.date) : item.dateText || "—";
+    const status = section === "latest" ? "Проведена" : item.sourceStatus || "—";
+    return {
+      attrs: { "data-status": status },
+      cells: [
+        tableCell('<strong>' + esc(item.infection) + '</strong>', item.infection),
+        tableCell(esc(item.stage), item.stage),
+        tableCell(esc(dateText), item.date || dateText),
+        tableCell(esc(item.vaccine || "—"), item.vaccine || ""),
+        tableCell(vaccinationControl(item,section), status),
+        tableCell(vaccinationRecCell(item), [
+          item.appointmentRecordId,item.basisRecordId,item.administrationRecordId
+        ].filter(Boolean).join(" "))
+      ]
+    };
+  });
+}
+
+async function renderVaccination() {
+  const [records, plan] = await Promise.all([
+    supabase.from("records")
+      .select("record_id,record_date,title,summary,status,tags,metadata")
+      .order("record_date",{ascending:false}),
+    supabase.from("plan_items")
+      .select("plan_item_id,title,due_on,status,basis_record_id,metadata")
+      .order("due_on",{ascending:true,nullsFirst:false})
+  ]);
+  if (records.error) throw records.error;
+  if (plan.error) throw plan.error;
+  const vaccine = buildVaccinationView(records.data || [], plan.data || []);
+  const headers = ["Инфекция(и)","Этап","Дата","Вакцина","Контроль","REC"];
+  const statuses = uniqueValues(vaccine.history.map(item => item.sourceStatus));
+  view.innerHTML = [
+    '<h1>Вакцинация</h1>',
+    '<section><h2>Последние проведённые вакцинации</h2>',
+    filterableTable(headers, vaccinationRows(vaccine.latest,"latest"), {
+      id:"vaccination-latest", emptyLabel:"Подтверждённых введений в REC не найдено"
+    }), '</section>',
+    '<section><h2>Запланированные вакцинации</h2>',
+    filterableTable(headers, vaccinationRows(vaccine.planned,"planned"), {
+      id:"vaccination-planned", emptyLabel:"Активных пунктов вакцинации в плане нет"
+    }), '</section>',
+    '<section><h2>Все вакцинации</h2>',
+    statuses.length > 1 ? '<div class="filter-bar" aria-label="Фильтр истории вакцинаций">' +
+      compactSelect("Статус","vaccination-history-status",statuses) + '</div>' : '',
+    filterableTable(headers, vaccinationRows(vaccine.history,"history"), {
+      id:"vaccination-history", emptyLabel:"Сведений о вакцинации пока нет"
+    }), '</section>'
+  ].join("\n");
+  bindFilterableTables();
+  bindAttributeFilters("vaccination-history", [{id:"vaccination-history-status",attr:"status"}]);
 }
 
 async function renderCurrentState(mode = "all") {

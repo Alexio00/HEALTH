@@ -63,7 +63,7 @@ class TransferSafety(unittest.TestCase):
             GITHUB_SHA=sha, HEALTH_KEEPALIVE_ACCEPTED_SHA=sha,
         )
         from unittest.mock import patch
-        with patch.object(module.subprocess, "check_output", return_value=sha + "\\n"):
+        with patch.object(module.subprocess, "check_output", return_value=sha + "\n"):
             module.validate_context(good)
             # Later Writer main commits do not revoke an unchanged, accepted keepalive executor.
             module.validate_context({**good, "GITHUB_SHA": "c" * 40})

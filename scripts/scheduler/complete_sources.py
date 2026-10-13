@@ -191,7 +191,7 @@ def package_candidate(database, source, frozen, output):
         z.write(output/'manifest.private.json','manifest.private.json')
     sha=digest(archive);proof,_=verify_archive(archive,sha)
     proof.update(status='ACTUAL_COMPLETE_CANDIDATE_PACKAGED_NOT_RESTORED',archive_bytes=archive.stat().st_size,
-        source_corpus_files=len(manifest_source['objects']),source_ids_bound=bound,frozen_original_identities_content_covered=272,
+        source_corpus_files=len(manifest_source['objects']),source_ids_bound=bound,frozen_original_identities_content_covered=FROZEN_COUNT,
         all_schema_tables=len(capture['all_schema_table_fingerprints']),auth_tables=len(capture['auth_fingerprints']),
         clinical_tables=len(capture['clinical_fingerprints']),production_writes=False,remote_uploads=False,rotation_enabled=False)
     return proof

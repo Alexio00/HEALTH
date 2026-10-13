@@ -11,10 +11,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SKIP_DIRS = {".git", "node_modules", "dist", "coverage"}
-SKIP_SUFFIXES = {".md"}
+SKIP_SUFFIXES = set()
 SKIP_NAMES = {"public_secret_guard.py"}
 
 PATTERNS = {
+    "production_email_literal": re.compile(r"[A-Za-z0-9._%+-]+@(?:gmail\.com|mail\.ru)", re.I),
+    "private_drive_document_link": re.compile(r"(?:docs\.google\.com/(?:document|spreadsheets)/d/|drive\.google\.com/(?:file/d/|drive/folders/))[A-Za-z0-9_-]{15,}"),
     "supabase_secret_key": re.compile(r"sb_secret_[A-Za-z0-9_-]{20,}"),
     "database_url_password": re.compile(r"postgres(?:ql)?://[^:\s]+:[^@/\s]{8,}@"),
     "client_secret_value": re.compile(r"""client_secret\s*[:=]\s*["']?[A-Za-z0-9_-]{20,}""", re.I),

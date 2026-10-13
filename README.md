@@ -1,42 +1,27 @@
-# HEALTH
+# HEALTH — медицинская информационная система
 
-Private-data-safe public codebase for a personal health record system.
+**Публичный репозиторий содержит только код и техническую документацию. Медицинские данные находятся в закрытых сервисах.**
 
-## Scope
+## Действующая архитектура
+- Supabase HEALTH — канонические REC, полный текст, Cases, Labs, актуальное состояние, операции и проверки.
+- Приватный Google Drive HEALTH/Sources — исходные медицинские документы.
+- GitHub HEALTH — код, миграции, технические и управляющие документы, статический PWA только для чтения.
+- Приватный GitHub SHEDULLER — ежедневное полное резервирование Supabase/Auth/ролей/Sources на независимый Drive.
+- Ограниченный Writer — запись по явному поручению владельца, с отдельным проверяющим, подписанной авторизацией и ограниченными SQL RPC. Он **не равен** обычному коннектору Supabase.
 
-This repository contains only application code, database schema/migrations, API contracts, tests, deployment logic, and synthetic fixtures. It must never contain real medical records, laboratory results, source documents, private storage identifiers, credentials, secrets, or production configuration values.
+**Запись из нового ChatGPT-проекта пока не подключена**: требуется [защищённый шлюз](docs/WRITER_CHAT_GATEWAY_RU.md) и самостоятельное подтверждение его полномочий. Секреты GitHub Actions читаются только исполнительными заданиями, а не ChatGPT.
 
-## Target architecture
+**Начать здесь:** [docs/START_HERE.md](docs/START_HERE.md). [Состояние](docs/PROJECT_STATE.md) · [Руководство](docs/PROJECT_MANUAL.md) · [Промпт для ChatGPT](docs/CHATGPT_PROJECT_PROMPT.md) · [Актуальная документация](docs/CURRENT_DOCUMENTATION.md).
 
-- PostgreSQL (Supabase-compatible) as the canonical structured database.
-- Provider-neutral source model: logical source identity is separated from physical storage location.
-- Read-only PWA hosted on GitHub Pages.
-- The owner authorized Supabase canonical cutover on 2026-10-13. Actual activation is confirmed by the live private governing Project State and runtime readback.
-- Post-cutover AI writes use the bounded Writer RPC path and private chat operator described in [Writer operation](docs/WRITER_OPERATOR.md).
-- Independent backups of database and source files.
-- Scheduled jobs live outside this public repository.
-- Old Drive Registry/REC Docs and originals remain preserved; they are not routine write targets after confirmed cutover. Their disposal requires a separate owner decision.
+## Состав
+- `docs/` — управляющие правила, архитектура, безопасность и исторические аудиты.
+- `supabase/migrations/` — каноническая история миграций схемы; `db/migrations/` — ранние агрегированные снимки.
+- `scripts/writer/` — код ограниченного Writer, независимой проверки и синтетических тестов.
+- `scripts/migration/` и `scripts/validation/` — перенос данных и проверки.
+- `frontend/` — статический PWA на GitHub Pages, доступ к медицинским данным только через авторизованную сессию и SELECT.
+- `.github/workflows/` — безопасная проверка кода, развёртывание интерфейса и подпись точных разрешений Writer.
 
-## Repository layout
+## Защита данных
+Запрещено коммитить REC, реальные результаты, медицинские исходники, исходные имена файлов, приватные идентификаторы Drive, учётные записи, пароль базы, токены, файлы `.env` и секреты. Допускаются лишь синтетические тесты. Данные в GitHub Actions для Writer ограничены непрозрачными ключами, типом авторизации и хешами.
 
-- `docs/` — architecture, data model, security, migration, recovery and project state.
-- `supabase/migrations/` — canonical timestamped Supabase migration history.
-- `db/migrations/` — earlier aggregated migration snapshots retained for reference.
-- `db/tests/` — schema/invariant tests.
-- `api/` — API contracts and design notes.
-- `scripts/writer/` — bounded canonical Writer, private chat operator and synthetic integration tests.
-- `frontend/` — read-only PWA.
-- `scripts/migration/` — fail-closed full-migration package/staging/fingerprint tooling.
-- `scripts/validation/` — validation tooling.
-- `tests/` — integration/e2e tests.
-- `.github/workflows/` — public-repository workflows that are safe without medical data.
-
-## Security boundary
-
-The implemented runtime and production verification boundary are described in
-[Writer operation](docs/WRITER_OPERATOR.md). Earlier component tests are retained
-as historical evidence in [Source and authorization tests](docs/WRITER_SOURCE_AUTHORIZATION_TEST_BOUNDARY.md).
-
-Use aliases and environment variables for operational accounts and provider identifiers. Commit only `.env.example`, never real `.env` files.
-
-Real health data must stay in the configured private database and private source storage.
+Старые Google Drive `HEALTH DB` и GitHub `HEALTH_DB_old` не используются для текущих медицинских операций. Они остаются архивными доказательствами до отдельного решения об удалении. Изменение `main` меняет принятую версию кода Writer и требует повторного принятия SHA; не сливать изменения вслепую.

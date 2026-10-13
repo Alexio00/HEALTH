@@ -4,18 +4,19 @@ The registered folder is checked against owner/verifier identities and actual
 write capability. No existing inventory, file update or purge method is used.
 Publication still requires the separate Source verifier RPC and candidate.
 """
-import re,urllib.parse
+import os,re,urllib.parse
 from drive_provider import identifier
 from drive_resumable import ResumableDriveProvider,Wire
 from postgres_upload_journal import PostgresUploadJournal
 from source_saga import SagaError
 
-OWNER='zak2harov@gmail.com'
-VERIFIER='alex2samara@gmail.com'
+OWNER=os.environ.get('HEALTH_SOURCE_OWNER_EMAIL','')
+VERIFIER=os.environ.get('HEALTH_SOURCE_VERIFIER_EMAIL','')
 
 class SourceDriveProvider(ResumableDriveProvider):
     def __init__(self,folder,writer,verifier,journal,writer_wire=None,verifier_wire=None):
         if not isinstance(journal,PostgresUploadJournal):raise SagaError('source_sql_journal_required')
+        if not OWNER or not VERIFIER or OWNER==VERIFIER:raise SagaError('source_account_configuration_required')
         self.folder=identifier(folder);self.writer=writer;self.verifier=verifier;self.journal=journal;self.created={}
         self.writer_wire=writer_wire or Wire(writer.token);self.verifier_wire=verifier_wire or Wire(verifier.token)
         if writer.request('/drive/v3/about?fields=user(emailAddress)')['user']['emailAddress']!=OWNER:

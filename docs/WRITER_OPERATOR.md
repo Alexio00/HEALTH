@@ -1,66 +1,26 @@
-# Bounded Writer operation
+# Ограниченный Writer — действующий порядок
 
-The canonical Writer is installed through versioned migrations into the private
-`health_writer` schema. Installation starts disabled. Preparing an operation,
-projecting a candidate, uploading a Source and publishing require the enabled
-runtime, a finalized accepted migration, the registered primary Source folder
-and the exact accepted code pin. Installing the schema does not release the
-frozen original project or perform owner cutover.
+Канонический Writer установлен в закрытой схеме `health_writer` Supabase. Миграции устанавливают его выключенным; включение подтверждается отдельным решением владельца и фактическими runtime-проверками. Действие по поручению владельца **выбирает Writer автоматически**, но не обходит его обязательные доказательства.
 
-`chat_worker.py` performs only bounded RPC operations. Medical intent, candidate
-rows, review projections and evidence remain in private local files. The ordinary
-`health_writer` login inherits only `health_writer_executor`. The separate
-`health_writer_verifier_login` inherits only `health_writer_verifier`; neither
-login can select or modify clinical tables directly, edit private control tables,
-become the owner, or self-authorize. Provision connection files and CA pins
-privately. Use separate operator profiles: the writing profile contains no
-verifier connection or independent Google credential, and neither profile
-contains a database owner credential.
+## Роли и секреты
+`scripts/writer/chat_worker.py` вызывает только ограниченные RPC. Медицинский intent, точные кандидаты до/после и доказательства находятся в защищённых локальных файлах, не в GitHub. Роль `health_writer` имеет права ограниченного исполнителя; `health_writer_verifier_login` — отдельная роль проверяющего. Ни одна не читает и не изменяет медицинские таблицы напрямую, не администрирует контрольные таблицы, не становится владельцем и не может сама себя авторизовать.
 
-Each clear owner chat request becomes an immutable intent with the exact message
-digest and conversation reference. The operator dispatches
-`writer-authorization.yml` automatically using the configured GitHub owner.
-GitHub receives only an opaque request key, approval kind and digest. The Edge
-broker verifies the GitHub signature, issuer, audience, age, owner and repository
-IDs, exact main workflow and accepted commit before invoking a fixed server-only
-RPC. It never receives medical payloads or lets the request select a schema.
-Writer has no authorization broker service key. Repository changes require an
-accepted new commit before further authorizations can run.
+Оператору нужны приватные файлы профилей, connection files, CA и OAuth. Секреты должны предоставляться в отдельном защищённом контуре. **GitHub Actions Secrets нельзя прочитать обычным плагином GitHub или сделать доступными модели через Project Instructions.** Для нового проекта необходимо подключить утверждённый приватный оператор: наличие только GitHub/Supabase/Drive-коннекторов недостаточно. Прямой Supabase SQL-коннектор не заменяет Writer.
 
-The writer prepares a durable operation and proposes an exact before/after
-candidate. The independent verifier reads only that approved candidate through
-`review_candidate`, checks the registered semantic rules, provides actual
-rule-specific methodology and evidence digests, and verifies changed lab rows
-against literal originals. The client does not generate PASS receipts. An AI
-performing this review must retain the exact evidence locally and use the
-separate verifier profile. Missing, expired or differently bound evidence
-blocks publication. Finalization publishes the delta, validation results and
-audit together; repeating finalization returns the same operation.
+Идентичности Drive Writer и независимого Reader передаются через закрытые `HEALTH_SOURCE_OWNER_EMAIL` и `HEALTH_SOURCE_VERIFIER_EMAIL`, а не публикуются в коде. Обе переменные обязательны и должны соответствовать профилю/фактическим аккаунтам. **Перед принятием данной кодовой поправки** нужно обеспечить это окружение действующему приватному оператору и выполнить тесты; иначе операции намеренно прекращаются.
 
-Source uploads use an owner-only adapter with the durable SQL resumable journal.
-It cannot attest independent verification. The separate reader performs a full
-byte digest and verifies identity, owner, parent, marker, protocol and stable
-provider metadata before issuing an exact candidate-bound receipt. An uncertain
-upload resumes or reconciles the same provider object; existing originals are
-not overwritten. Backup capture and Writer use the same exclusion boundary.
+## Подписание авторизации
+Каждое явное поручение владельца превращается в неизменяемый intent с хешем текста и ссылкой на беседу. Клиент сам вызывает `writer-authorization.yml` из принятого `main`. GitHub получает **только** непрозрачный request key, тип `intent`/`candidate` и SHA-256. Серверный broker проверяет GitHub OIDC-подпись, исполнителя, репозиторий, workflow, ветку, возраст и принятый SHA. Ключ service_role Writer не передаётся.
 
-An owner-approved historical Record exception permits only the date/ID equality
-check for one exact whole row. The private baseline and owner-decision digests
-bind that exception; any field change invalidates it. The current operation's
-rule 11 audit explicitly discloses its use. Other fields and new records remain
-strict. No public migration contains a private Record ID or clinical value.
+После `PREPARED` формируется точный кандидат before/after. Независимый verifier через `review_candidate` проверяет применимые семантические правила и лабораторные значения буквально по источнику. Сам клиент не выпускает фиктивные `PASS`-расписки. Изменение кандидата/оснований, просрочка или несовпадение хеша обнуляет доказательства. Публикация и Validation/Audit атомарны, повторный вызов завершения той же операции идемпотентен.
 
-Synthetic suites exercise local restricted TCP, actual Google upload recovery
-and independent byte readback. Isolated Supabase TEST runs exercise the canonical
-RPC engine with real signed GitHub OIDC and idempotent publication. Administrator
-semantic receipts in those synthetic runs are simulations; their PASS is not
-evidence for a production medical operation. Each such operation still needs
-its own current independent review.
+## Источники
+Загрузка нового файла — только создание через зарегистрированный Source root и длительный SQL resumable journal. Авторизованный загрузчик **не** может подтверждать независимую проверку. Отдельный reader полностью скачивает байты, проверяет владелец/родитель/маркер/размер/SHA-256/версию и формирует расписку для точного кандидата. При потерянном ответе нужно согласовать ту же сессию/объект, не создавать дубликат и не перезаписывать оригинал. Backup capture и Writer имеют общую блокировку.
 
-Recovery first verifies the exact captured database, roles and fingerprints.
-Then the recovery executor deliberately disables Writer, clears its code pin
-and disables upload folders. Pending operations, NNN reservations, approvals,
-audit rows and resumable session URIs remain preserved. After independent
-verification of a recreated Source root, recovery binds that new root while
-Writer stays disabled. Activation and reconciliation require separate current
-acceptance; restoring an archive never resumes pending writes automatically.
+## Исключения и восстановление
+Единственное историческое исключение даты/ID ограничено заранее утверждённым SHA **неизменённой полной строки** и показывается в текущем аудите; новые записи строги. Синтетические тесты подтверждают механику, но не заменяют независимый медицинский аудит производственной операции.
+
+Восстановление проверяет исходный архив, затем намеренно выключает Writer, сбрасывает code pin и разрешения upload. Незавершённые операции, NNN и журналы сохраняются. Приём нового Source root и разрешение записи требуют отдельного актуального решения. При изменении `main` старый pin не принимается автоматически.
+
+## Технические файлы
+`scripts/writer/chat_worker.py`, `source_drive_provider.py`, `postgres_upload_journal.py`, `canonical_approval_edge.ts`, `signed_canonical_authorization.py`; действующие SQL-миграции — `supabase/migrations/`. [Руководство](PROJECT_MANUAL.md) · [Безопасность](SECURITY.md).

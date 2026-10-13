@@ -1,13 +1,25 @@
-# Current documentation and evidence scope
+# Актуальная документация и область применимости доказательств
 
-The owner authorized canonical Supabase cutover and bounded Writer activation on 2026-10-13. Repository documentation describes implementation; the live private governing Project State/Manual and operation-bound readback determine actual activation and medical authority.
+## Приоритет
+1. Прямое решение владельца, не противоречащее неизменяемым ограничениям безопасности.
+2. Принятые `docs/PROJECT_MANUAL.md` и `docs/PROJECT_STATE.md` в GitHub HEALTH.
+3. Фактическое состояние Supabase, принятый SHA и ограниченный Writer.
+4. Датированные технические аудиты и исторические проекты только для справки.
 
-Current implementation: `WRITER_OPERATOR.md`, `WRITER_SESSION_POOLER_RUNTIME_POLICY.md`, `WRITER_MIGRATION_LEDGER.md`, `DATA_MODEL.md`, `SECURITY.md`, `AUTH_RECOVERY.md`, `BACKUP_AND_RECOVERY.md` and the canonical timestamped migrations. `PROJECT_MANUAL.md` describes current operating boundaries; `ARCHITECTURE.md` describes the accepted storage/write path.
+После принятия управляющей документации в `main` прежние Google Docs и Registry не являются актуальными правилами.
 
-Earlier design/acceptance records: `API.md`, `AI_WRITE_OPERATION_DESIGN.md`, `AI_WRITE_ACCEPTANCE_PLAN.md`, `AI_WRITE_AUDIT_CLARIFICATIONS.md`, `AI_WRITE_RULE_TRACEABILITY.md`, `WRITE_PATH_DECISION.md`, `POST_CUTOVER_AI_WRITE_PROTOCOL.md`, `WRITER_DELETION_PROTOCOL_CANDIDATE.md`, `WRITER_SOURCE_AUTHORIZATION_TEST_BOUNDARY.md`, `writer-resumable-test-acceptance-20261012.md`. Their historical deferred/disabled states or simulated semantic PASS do not override the current implementation or authorize a new clinical operation. Current correction/removal behavior is exact candidate CAS, retained REC identity/NNN and prior-state audit, typed derivative deletion under actual independent review, and no physical REC/Source purge. Ambiguous clinical impacts require the owner's decision.
+## Недостающая интеграция
 
-Migration/MVP/audit records (`MIGRATION*`, `FULL_MIGRATION_PLAN.md`, `MVP_*`, `WORK_ACCEPTANCE_20261011.md`, `PRODUCTION_ACCEPTANCE_RECONCILIATION.md`, `MISSING_CHECK_APPLICABILITY_20261011.md`) preserve historical scopes and pins. Do not rerun or re-finalize the completed full migration because of a historical startup description.
+Новый ChatGPT Project пока не подключён к приватному Writer. Целевой интерфейс и критерии его приёмки описаны в [WRITER_CHAT_GATEWAY_RU.md](WRITER_CHAT_GATEWAY_RU.md). GitHub Secrets доступны только соответствующим заданиям Actions, но не подключённому чату. Нельзя считать дизайн готовым подключением или делать медицинские изменения административным SQL.
 
-Checks are scoped: exact test inputs, actual source byte reads, full archive recovery, current migration/row fingerprints and new medical operations have separate evidence. Rule 18 requires its operation's lab context; owner-waived manual PWA testing is not a PASS. One unchanged whole-row historical date/ID exception does not relax new-record validation. Recovery never automatically resumes Writer or pending uploads.
+## Текущая реализация
+[Архитектура](ARCHITECTURE.md), [данные](DATA_MODEL.md), [безопасность](SECURITY.md), [оператор Writer](WRITER_OPERATOR.md), [политика SQL/TLS](WRITER_SESSION_POOLER_RUNTIME_POLICY.md), [реестр миграций Writer](WRITER_MIGRATION_LEDGER.md), [Auth](AUTH_RECOVERY.md), [резервирование](BACKUP_AND_RECOVERY.md). Точное описание исходного SQL — `supabase/migrations/`.
 
-The old project, old Registry/REC Docs and originals remain preserved. Public repositories contain no medical rows, original filenames, private provider locators or credentials. External ChatGPT project instructions require owner installation of the current private prompt distribution; unavailable bounded-operator capability must keep that chat read-only.
+## Исторические материалы
+`AI_WRITE_*`, `API.md`, `WRITE_PATH_DECISION.md`, `POST_CUTOVER_AI_WRITE_PROTOCOL.md`, `WRITER_DELETION_PROTOCOL_CANDIDATE.md`, `WRITER_SOURCE_AUTHORIZATION_TEST_BOUNDARY.md`, `writer-resumable-test-acceptance-20261012.md` относятся к предшествующим проектам/тестам. Их статусы «отложено», «Writer выключен», синтетические PASS и допущения не заменяют действующих проверок.
+
+`MIGRATION*`, `FULL_MIGRATION_PLAN.md`, `MVP_*`, `WORK_ACCEPTANCE_20261011.md`, `PRODUCTION_ACCEPTANCE_RECONCILIATION.md`, `MISSING_CHECK_APPLICABILITY_20261011.md` — исторические свидетельства переноса. Не повторять завершённую миграцию только из-за упоминания прежнего подготовительного этапа.
+
+Каждая проверка имеет границы: синтетические данные, реальные байты Source, точная база, конкретный код или операция. Правило 18 требует лабораторных оснований данной операции. Отказ владельца от ручного UI-теста — не равнозначен PASS. Исключение даты/ID действует лишь для одной неизменённой исторической строки. После восстановления Writer не запускается автоматически.
+
+Публичный репозиторий не должен содержать медицинские строки, приватные URL, исходные имена файлов и учётные данные. **Весь архив документации на независимом носителе пока не доказан:** до настройки резервирования нельзя удалять старые управляющие копии или считать историю GitHub достаточной.

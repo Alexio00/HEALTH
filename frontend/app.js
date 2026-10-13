@@ -855,10 +855,10 @@ function vaccinationRecCell(item) {
   if (item.basisRecordId
       && item.basisRecordId !== item.appointmentRecordId
       && item.basisRecordId !== item.administrationRecordId) {
-    links.push('<span>Осн.: ' + recLink(item.basisRecordId) + '</span>');
+    links.push('<span title="Основание REC">' + recLink(item.basisRecordId) + '</span>');
   }
   if (item.administrationRecordId) {
-    links.push('<span>Пров.: ' + recLink(item.administrationRecordId) + '</span>');
+    links.push('<span title="Запись о проведении">' + recLink(item.administrationRecordId) + '</span>');
   }
   return links.length ? '<span class="rec-inline">' + links.join('') + '</span>' : '—';
 }

@@ -59,8 +59,10 @@ administrations and vaccination Plan items, including cancelled historical Plan
 items, with an optional status filter. Columns: infection(s), stage (V1..Vn or
 RV when supported), date, vaccine brand, next-stage/status control, and REC links.
 
-The REC cell distinguishes an explicit appointment (`Назн.`), a supporting
-basis (`Осн.`), and an administration record (`Пров.`). A basis REC is
+The REC cell keeps links to explicit appointments (`Назн.`), supporting
+basis RECs and administration RECs. Supporting and administration links have
+no visible `Осн.:` or `Пров.:` prefix; the role is retained as a hover title.
+A basis REC is
 **not** automatically asserted to be a medical prescription. Current schema
 does not store new appointment/administration relations; the page reads optional
 existing metadata for explicit links and leaves unsupported links empty. A
@@ -125,6 +127,14 @@ This is presentation-only and does not change row contents or filtering.
 
 REC presentation is owner-facing rather than migration-facing: legacy YAML/frontmatter is hidden, technical source roles/hashes are not shown, Sources open the primary Google Drive original directly, and source page numbers remain visible because they locate the evidence inside multi-page originals.
 
+
+## Prose alignment
+
+Long prose paragraphs in expanded case/question/visit cards, case summaries and
+REC bodies use justified alignment. A last (or only) line remains left-aligned.
+Headings, disclosure labels, lists, compact REC links, tables and individual
+row values remain left-aligned. Source text and paragraph boundaries are not
+modified in the database.
 
 ## REC body cleanup
 

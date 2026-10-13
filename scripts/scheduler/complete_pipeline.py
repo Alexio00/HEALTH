@@ -81,7 +81,11 @@ def run(mode,root,producer_sha,*,serialized):
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--mode',choices=['candidate','activate','daily'],required=True);args=parser.parse_args()
     try:
-        if os.environ.get('GITHUB_REPOSITORY')!='Alexio00/HEALTH' or os.environ.get('GITHUB_ACTOR_ID')!='308028794' or os.environ.get('HEALTH_COMPLETE_SERIALIZED')!='1':raise SourceStop('exact_scheduler_workflow_identity_required')
+        if os.environ.get('GITHUB_REPOSITORY')!='Alexio00/HEALTH' or os.environ.get('GITHUB_REF')!='refs/heads/main' or os.environ.get('HEALTH_COMPLETE_SERIALIZED')!='1':raise SourceStop('exact_scheduler_workflow_identity_required')
+        event=os.environ.get('GITHUB_EVENT_NAME','')
+        if event not in ('schedule','workflow_dispatch'):raise SourceStop('scheduled_or_owner_dispatch_required')
+        if event=='workflow_dispatch' and os.environ.get('GITHUB_ACTOR_ID')!='308028794':raise SourceStop('owner_dispatch_required')
+        if args.mode!='daily' and event!='workflow_dispatch':raise SourceStop('activation_requires_owner_dispatch')
         result=run(args.mode,Path(os.environ['HEALTH_COMPLETE_PRIVATE_ROOT']),os.environ['GITHUB_SHA'],serialized=True)
         print(json.dumps({'status': result.get('status'), 'daily_backup_activated': result.get('daily_backup_activated', False), 'production_cutover': False, 'permanent_deletes': 0}))
     except (SourceStop,RotationStop) as e:print(json.dumps({'status':'STOPPED','safe_reason':str(e),'permanent_deletes':0}));raise SystemExit(2)

@@ -58,7 +58,19 @@ class FakeCloud:
         self.files_verified=False
     def meta(self,id):return copy.deepcopy(self.items[id])
     def children(self,id):
+        if id==NEW:
+            if self.files_verified:
+                return [dict(id="syntheticfile123",name="complete-recovery.zip",
+                    sha256Checksum=SHA,size="20")]
+            return []
         return [self.meta(k) for k in self.items if k!=PARENT and self.items[k].get("trashed") is False]
+    def quarantine_incomplete_upload(self,folder,sha,producer,journal):
+        stub=object.__new__(CompleteCloud)
+        stub.parent=self.parent
+        stub.meta=self.meta
+        stub.children=self.children
+        stub.t=self.t
+        return CompleteCloud.quarantine_incomplete_upload(stub,folder,sha,producer,journal)
     def finish_upload(self,m,producer):
         # Integrate the actual CompleteCloud method with a simulated SHA-verified download.
         stub=object.__new__(CompleteCloud)
@@ -119,6 +131,67 @@ class ReconciliationTests(unittest.TestCase):
         cloud.items["extra_folder"]=meta("extra_folder","CANDIDATE")
         with self.assertRaisesRegex(SourceStop,"conflicting_candidates"):
             choose_existing("candidate",cloud,FakeJournal(),PRODUCER,SHA)
+
+    def test_incomplete_daily_quarantine_then_next_daily_can_capture(self):
+        cloud=FakeCloud("UPLOADING");journal=FakeJournal()
+        with self.assertRaisesRegex(SourceStop,"candidate_remote_archive_rejected"):
+            choose_existing("daily",cloud,journal,PRODUCER,SHA)
+        self.assertEqual(cloud.t.patch_count,0)
+        self.assertEqual(cloud.items[OLD]["appProperties"]["health_recovery_state"],"ACTIVE")
+        status=cloud.quarantine_incomplete_upload(NEW,SHA,PRODUCER,journal)
+        self.assertEqual(status["status"],"INCOMPLETE_UPLOADING_QUARANTINED")
+        self.assertEqual(cloud.items[NEW]["appProperties"]["health_recovery_state"],"ABANDONED")
+        self.assertEqual(cloud.items[OLD]["appProperties"]["health_recovery_state"],"ACTIVE")
+        self.assertEqual(choose_existing("daily",cloud,journal,PRODUCER,SHA),None)
+        # Next daily can now create an independent new candidate.
+        cloud.items["syntheticfreshfolder123"]=meta("syntheticfreshfolder123","CANDIDATE")
+        self.assertEqual(choose_existing("daily",cloud,journal,PRODUCER,SHA),
+                         ("syntheticfreshfolder123",SHA,False))
+        self.assertEqual(cloud.items[OLD]["appProperties"]["health_recovery_state"],"ACTIVE")
+
+    def test_full_upload_accepted_during_daily_no_quarantine(self):
+        cloud=FakeCloud("UPLOADING");cloud.files_verified=True
+        self.assertEqual(choose_existing("daily",cloud,FakeJournal(),PRODUCER,SHA),(NEW,SHA,False))
+        self.assertEqual(cloud.items[NEW]["appProperties"]["health_recovery_state"],"CANDIDATE")
+        with self.assertRaises(SourceStop):
+            cloud.quarantine_incomplete_upload(NEW,SHA,PRODUCER,FakeJournal())
+
+    def test_complete_remote_upload_not_marked_abandoned(self):
+        cloud=FakeCloud("UPLOADING");cloud.files_verified=True
+        with self.assertRaisesRegex(SourceStop,"complete_metadata_requires_resume"):
+            cloud.quarantine_incomplete_upload(NEW,SHA,PRODUCER,FakeJournal())
+        self.assertEqual(cloud.t.patch_count,0)
+
+    def test_quarantine_rejects_wrong_identity_digest_pending_and_second_candidate(self):
+        for sha,producer in [("c"*64,PRODUCER),(SHA,"c"*40)]:
+            cloud=FakeCloud("UPLOADING")
+            with self.assertRaises(SourceStop):
+                cloud.quarantine_incomplete_upload(NEW,sha,producer,FakeJournal())
+            self.assertEqual(cloud.t.patch_count,0)
+        cloud=FakeCloud("UPLOADING")
+        with self.assertRaisesRegex(SourceStop,"pending_rotation"):
+            cloud.quarantine_incomplete_upload(NEW,SHA,PRODUCER,FakeJournal("PROMOTED"))
+        self.assertEqual(cloud.t.patch_count,0)
+        cloud=FakeCloud("UPLOADING")
+        cloud.items["anothercandidate123"]=meta("anothercandidate123","CANDIDATE")
+        with self.assertRaisesRegex(SourceStop,"one_upload_one_active"):
+            cloud.quarantine_incomplete_upload(NEW,SHA,PRODUCER,FakeJournal())
+        self.assertEqual(cloud.t.patch_count,0)
+
+    def test_quarantine_lost_patch_response_readback(self):
+        for loss in ("before","after"):
+            cloud=FakeCloud("UPLOADING")
+            cloud.t.lose_candidate=loss
+            if loss=="before":
+                with self.assertRaisesRegex(RuntimeError,"lost_before_candidate"):
+                    cloud.quarantine_incomplete_upload(NEW,SHA,PRODUCER,FakeJournal())
+                self.assertEqual(cloud.items[NEW]["appProperties"]["health_recovery_state"],"UPLOADING")
+                cloud.t.lose_candidate=None
+                self.assertEqual(cloud.quarantine_incomplete_upload(NEW,SHA,PRODUCER,FakeJournal())["permanent_deletes"],0)
+            else:
+                self.assertEqual(cloud.quarantine_incomplete_upload(NEW,SHA,PRODUCER,FakeJournal())["permanent_deletes"],0)
+            self.assertEqual(cloud.items[NEW]["appProperties"]["health_recovery_state"],"ABANDONED")
+            self.assertEqual(cloud.items[OLD]["appProperties"]["health_recovery_state"],"ACTIVE")
 
     def test_activate_does_not_pick_unfinished_upload(self):
         cloud=FakeCloud("UPLOADING");cloud.files_verified=True

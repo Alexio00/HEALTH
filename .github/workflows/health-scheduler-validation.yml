@@ -1,27 +1,25 @@
-name: HEALTH scheduler candidate nonsecret checks
+name: HEALTH scheduler-code nonsecret checks
 
 on:
   pull_request:
-    branches: [scheduler, main]
+    branches: [scheduler-code]
     paths:
-      - ".github/workflows/health-supabase-keepalive.yml"
-      - ".github/workflows/health-complete-backup.yml"
-      - ".github/workflows/health-backup-preflight.yml"
-      - ".github/workflows/health-backup-activate.yml"
       - ".github/workflows/health-scheduler-validation.yml"
       - "scripts/scheduler/**"
       - "scripts/automation/supabase_keepalive.py"
       - "scripts/automation/test_scheduler_transfer.py"
-  workflow_dispatch:
+      - "scripts/automation/health_activity.*"
+      - "docs/SCHEDULER_CONSOLIDATION_RU.md"
+      - "docs/HEALTH_ACTIVITY_RU.md"
 
 permissions:
   contents: read
 
 jobs:
   scheduler-synthetic:
-    name: Synthetic backup and keepalive contract
+    name: Synthetic Scheduler candidate tests (NOT independent acceptance)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       HEALTH_BACKUP_PARENT_FOLDER_ID: synthetic_backup_parent_id
       HEALTH_BACKUP_DRIVE_OWNER_EMAIL: backup@example.invalid
@@ -33,11 +31,11 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - name: Python syntax and safe public guard
+      - name: Check syntax and public data boundaries
         run: |
           python3 -m compileall -q scripts/scheduler scripts/automation
           python3 scripts/validation/public_secret_guard.py
-      - name: Synthetic transfer, archive, source and recovery tests
+      - name: Scheduler and backup synthetic tests
         run: |
           python3 -m unittest discover -v -s scripts/automation -p test_scheduler_transfer.py
           python3 scripts/scheduler/test_complete_archive.py -v
@@ -46,3 +44,5 @@ jobs:
           python3 scripts/scheduler/test_complete_restore.py -v
           python3 scripts/scheduler/test_candidate_provenance.py -v
           python3 scripts/scheduler/test_drive_rotation.py -v
+      - name: Heartbeat 15/18-day synthetic tests
+        run: node --test scripts/automation/health_activity.test.mjs

@@ -26,8 +26,7 @@ rows without copying or synchronizing duplicate medical entities.
 6. Будущий план
 7. Закрытые случаи
 8. Записи
-9. Вакцинация — currently a placeholder in this branch; new dashboard changes
-   are handled in their own PR targeting `pwa` after conflict reconciliation.
+9. Вакцинация — три таблицы: последние проведённые, запланированные, все вакцинации (REC).
 
 Visit preparation groups plan items explicitly marked as visits/consultations and
 open specialist questions. Specialties are determined only by explicit source
@@ -42,6 +41,33 @@ The pre-existing MVP specialist questions are displayed only under Visit
 Preparation by default.
 
 The UI deliberately mirrors the useful reading patterns of the legacy HealthDB files while reading live structured data from Supabase.
+
+## Vaccination page
+
+The page derives its read-only view from live `records` summaries and
+`plan_items`; no vaccination events, patient identifiers, or source texts are
+baked into public assets. The implicit category constraint on `plan_items`
+(`metadata.kind=вакцинация`) is always applied and is not user-editable.
+Relevant confirmed REC administrations (even those absent from Plan) are also
+included in the chronology. Consultations, antibody testing and cancelled REC
+must not become completed vaccine doses.
+
+The first table contains only the most recent confirmed administration covering
+each infection, including combination vaccines. The second includes active
+planned doses, even overdue or undated ones. The third is a union of completed
+administrations and vaccination Plan items, including cancelled historical Plan
+items, with an optional status filter. Columns: infection(s), stage (V1..Vn or
+RV when supported), date, vaccine brand, next-stage/status control, and REC links.
+
+The REC cell distinguishes an explicit appointment (`Назн.`), a supporting
+basis (`Осн.`), and an administration record (`Пров.`). A basis REC is
+**not** automatically asserted to be a medical prescription. Current schema
+does not store new appointment/administration relations; the page reads optional
+existing metadata for explicit links and leaves unsupported links empty. A
+future canonical relationship model and comprehensive reconciliation are separate
+clinical-data work and are not silently performed by a frontend deploy.
+Unknown dates, stages and vaccines are not inferred. Overdue is a display-only
+comparison against the current Moscow calendar date, never a database mutation.
 
 ## Security boundary
 

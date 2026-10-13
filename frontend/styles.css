@@ -238,6 +238,19 @@ h3 { margin: 1.4rem 0 .6rem; }
 .case-card[hidden] { display: none; }
 .question-card summary { line-height: 1.35; }
 .rec-inline { display: flex; flex-wrap: wrap; gap: .35rem .7rem; }
+.rec-inline > span { white-space: nowrap; }
+.vaccination-control { display: inline-block; min-width: 9rem; }
+.vaccination-overdue {
+  display: inline-block;
+  padding: .12rem .45rem;
+  border: 1px solid #b42318;
+  border-radius: .4rem;
+  color: #9c1c12;
+  background: #fff2f0;
+  font-size: .83rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
 
 .table-wrap {
   width: 100%;

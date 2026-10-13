@@ -106,7 +106,7 @@ def _coordinated_preview(root,config,env,dbroot,coordinator):
             recovery=root/'recovery';recovery.mkdir(mode=0o700)
             proof['fresh_database_auth_restore']=recover_archive(package/'complete-recovery.zip',proof['archive_sha256'],recovery)
         proof.update(status='ACTUAL_PORTABLE_COMPLETE_PREVIEW_PACKAGE_PASS',source_capture=source_proof,
-            workflow_sha=os.environ.get('GITHUB_SHA'),run_id=os.environ.get('GITHUB_RUN_ID'),run_attempt=os.environ.get('GITHUB_RUN_ATTEMPT'),
+            workflow_sha=os.environ.get('HEALTH_BACKUP_PRODUCER_SHA'),workflow_event_sha=os.environ.get('GITHUB_SHA'),run_id=os.environ.get('GITHUB_RUN_ID'),run_attempt=os.environ.get('GITHUB_RUN_ATTEMPT'),
             restricted_capture_role_enforced=capture['restricted_role_enforced'],capture_role=capture['capture_role'],full_replacement_backup_accepted=False,
             source_writer_serialization_enforced=True,coordination_key=63741020261013,production_activation=False)
         (root/'preview-aggregate.json').write_text(json.dumps(proof,indent=2))

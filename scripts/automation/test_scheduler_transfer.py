@@ -49,6 +49,20 @@ class TransferSafety(unittest.TestCase):
                 self.assertIn("contents: read", text)
                 self.assertIn("HEALTH_INREPO_", text)
 
+    def test_backup_executor_sha_is_independent_of_writer_main(self):
+        workflow = (WORKFLOWS / "health-complete-backup.yml").read_text(encoding="utf-8")
+        preflight = (WORKFLOWS / "health-backup-preflight.yml").read_text(encoding="utf-8")
+        activate = (WORKFLOWS / "health-backup-activate.yml").read_text(encoding="utf-8")
+        for item in (workflow, preflight, activate):
+            self.assertIn("ref: ${{ vars.HEALTH_BACKUP_EXECUTOR_SHA }}", item)
+            self.assertIn("HEALTH_BACKUP_PRODUCER_SHA", item)
+            self.assertIn("git','rev-parse','HEAD'", item)
+            self.assertNotIn("expected!=os.environ.get('GITHUB_SHA')", item)
+        runner = (SCHEDULER / "complete_pipeline.py").read_text(encoding="utf-8")
+        self.assertIn("os.environ.get('HEALTH_BACKUP_PRODUCER_SHA','')", runner)
+        self.assertNotIn("os.environ['GITHUB_SHA'],serialized=True", runner)
+        self.assertIn("candidate_producer_sha_or_archive_binding_mismatch", runner)
+
     def test_keepalive_context_must_bind_repo_ref_sha(self):
         from importlib.util import module_from_spec, spec_from_file_location
 

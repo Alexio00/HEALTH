@@ -27,6 +27,7 @@ jobs:
       github.repository == 'Alexio00/HEALTH' &&
       github.ref == 'refs/heads/main' &&
       vars.HEALTH_INREPO_HEARTBEAT_ENABLED == 'true' &&
+      github.sha == vars.HEALTH_RELEASE_MAIN_ACCEPTED_SHA &&
       ((github.event_name == 'schedule' && github.event.schedule == '17 5 * * *') ||
        (github.event_name == 'workflow_dispatch' && inputs.mode == 'heartbeat' && github.actor_id == '308028794'))
     runs-on: ubuntu-24.04
@@ -58,6 +59,7 @@ jobs:
       github.repository == 'Alexio00/HEALTH' &&
       github.ref == 'refs/heads/main' &&
       vars.HEALTH_INREPO_HEARTBEAT_ENABLED == 'true' &&
+      github.sha == vars.HEALTH_RELEASE_MAIN_ACCEPTED_SHA &&
       ((github.event_name == 'schedule' && github.event.schedule == '43 8 * * *') ||
        (github.event_name == 'workflow_dispatch' && inputs.mode == 'check' && github.actor_id == '308028794'))
     runs-on: ubuntu-24.04

@@ -113,7 +113,9 @@
 - [Scheduler Code #82](https://github.com/Alexio00/HEALTH/issues/82): ложная свежесть heartbeat, trusted evidence и overdue semantics.
 - [Architecture #65](https://github.com/Alexio00/HEALTH/issues/65): safe backup consolidation, single-archive cutover и межрепозиторная координация.
 - [HIGH #50](https://github.com/Alexio00/HEALTH/issues/50): доверенный required status issuer отсутствует; действующая ручная exact-SHA приёмка не превращает CI в trusted security gate.
-- Draft [#72](https://github.com/Alexio00/HEALTH/pull/72) / [#73](https://github.com/Alexio00/HEALTH/pull/73): не объединять со старыми #64/#71, не допускать двух независимых реализаций heartbeat.
+- Кодовый кандидат [#73](https://github.com/Alexio00/HEALTH/pull/73) и последовательные доработки [#81](https://github.com/Alexio00/HEALTH/pull/81) → [#88](https://github.com/Alexio00/HEALTH/pull/88); обязательна итоговая отдельная exact-SHA приёмка составного кода.
+- Main launcher: [#89](https://github.com/Alexio00/HEALTH/pull/89) — замещающий Draft кандидат к [#72](https://github.com/Alexio00/HEALTH/pull/72), а не вторая независимая схема. Не сливать оба; ожидается архитектурное решение.
+- При сочетании #81/#88 и #89: `install_rclone.sh` требует независимый архивный SHA-256 в `HEALTH_RCLONE_ARCHIVE_SHA256`; три workflow установки rclone в #89 пока не передают это значение. Координатору отправлен handoff в PR #83; release — NO-GO до исправления и негативных тестов.
 - [GitHub schedule semantics](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows), [notifications](https://docs.github.com/en/actions/concepts/workflows-and-actions/notifications-for-workflow-runs), [scheduled workflow disabling](https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/disabling-and-enabling-a-workflow).
 
-**До отдельного независимого exact-SHA review и owner GO: документация/синтетика בלבד, Production Scheduler — NO-GO.**
+**До отдельного независимого exact-SHA review и owner GO: только проектная документация и синтетические тесты; production Scheduler — NO-GO.**

@@ -75,6 +75,8 @@ jobs:
           node --check --input-type=module < frontend/app.js
           node --check frontend/sw.js
           node frontend/tests/contract.mjs
+      - name: Proposed release-train path contract (advisory, not trusted issuer)
+        run: python3 -m unittest discover -v -s scripts/validation -p 'test_release_train_scope.py'
       - name: Python syntax
         run: python3 -m py_compile scripts/migration/full_migration.py
       - name: Migration runner self-test

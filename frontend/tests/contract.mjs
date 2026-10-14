@@ -319,6 +319,36 @@ const numberedPlans = plannedVaccinations([
 assert.deepEqual(numberedPlans.map(item => item.stage),["Rv1","Rv2","Rv","Rv1"],
   "metadata wins over explicit title; unnumbered revaccination stays unnumbered");
 
+// PWA80-M01: a fragment is not evidence for transferring a numbered stage
+// to every infection, nor for turning a future plan into a completed dose.
+const ambiguousStages = actualVaccinations([
+  {record_id:"REC-20110101-111",record_date:"2011-01-01",tags:["VACCINATION"],
+    summary:"Вакцинация: корь (ЖКВ, Rv2), краснуха (V1)"},
+  {record_id:"REC-20110102-112",record_date:"2011-01-02",tags:["VACCINATION"],
+    summary:"Вакцинация: корь, краснуха (Rv2)"},
+  {record_id:"REC-20110103-113",record_date:"2011-01-03",tags:["VACCINATION"],
+    summary:"Вакцинация: корь (ЖКВ, V1), в будущем ревакцинация Rv2"},
+  {record_id:"REC-20110104-114",record_date:"2011-01-04",tags:["VACCINATION"],
+    summary:"Вакцинация: корь (ЖКВ, Rv2); следующая ревакцинация Rv3"},
+  {record_id:"REC-20110105-115",record_date:"2011-01-05",tags:["VACCINATION"],
+    summary:"Вакцинация: корь (ЖКВ); планируется ревакцинация Rv2"},
+  {record_id:"REC-20110106-116",record_date:"2011-01-06",tags:["VACCINATION"],
+    summary:"Вакцинация: корь (ЖКВ, V1) и повторно Rv2"}
+]);
+const stagedByRecord = new Map(ambiguousStages.map(item => [item.administrationRecordId, item]));
+assert.equal(stagedByRecord.get("REC-20110101-111")?.stage,"—",
+  "different infection stages cannot be collapsed into Rv2");
+assert.equal(stagedByRecord.get("REC-20110102-112")?.stage,"—",
+  "a multi-infection fragment cannot automatically share a numbered stage");
+assert.equal(stagedByRecord.get("REC-20110103-113")?.stage,"V1",
+  "future booster cannot replace the performed first stage");
+assert.equal(stagedByRecord.get("REC-20110104-114")?.stage,"Rv2",
+  "future Rv3 cannot replace the administered Rv2");
+assert.equal(stagedByRecord.get("REC-20110105-115")?.stage,"—",
+  "an only-planned Rv2 cannot be reported as administered");
+assert.equal(stagedByRecord.get("REC-20110106-116")?.stage,"—",
+  "two nonfuture stage claims in one fragment must remain ambiguous");
+
 const vaccineView=buildVaccinationView(vaccinationRecords,vaccinationPlans,"2026-10-13");
 assert.equal(vaccineView.planned.length,3,"cancelled plan does not appear among upcoming doses");
 assert.equal(vaccineView.history.length,doses.length+future.length);

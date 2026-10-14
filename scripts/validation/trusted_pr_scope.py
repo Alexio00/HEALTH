@@ -59,7 +59,9 @@ def safe_path(path, controls, writer_sql=False):
     if parts[0] == "frontend" and not writer_sql and any(
             term in part.casefold() for part in parts[1:] for term in SENSITIVE_NAMES):
         raise ScopeStop("sensitive_frontend_file_forbidden")
-    if path.casefold().endswith(DENIED_SUFFIXES):
+    # Reject dotted .env variants, not just the last filename suffix.
+    filename = parts[-1].casefold()
+    if "env" in filename.split(".") or filename.endswith(DENIED_SUFFIXES):
         if not (writer_sql and path.endswith(".sql") and path.startswith(WRITER_SQL_PREFIXES)):
             raise ScopeStop("backend_or_secret_extension_forbidden")
 

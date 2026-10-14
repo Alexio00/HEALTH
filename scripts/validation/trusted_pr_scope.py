@@ -15,6 +15,7 @@ import urllib.request
 
 REPO = "Alexio00/HEALTH"
 OWNER_ID = 308028794
+REPO_ID = 1408460030  # Current GitHub repository numeric ID
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 PWA_DOCS = {"AGENTS.md", "docs/PWA_RELEASE.md"}
 PWA_CONTROLS = set() # No PR-controlled workflow or release checks
@@ -44,6 +45,16 @@ class ScopeStop(RuntimeError):
 
 def sha40(value):
     return isinstance(value, str) and SHA.fullmatch(value) is not None
+
+
+def is_base_repo(obj):
+    if not isinstance(obj, dict):
+        return False
+    owner = obj.get("owner")
+    return (obj.get("full_name") == REPO
+            and type(obj.get("id")) is int and obj["id"] == REPO_ID
+            and isinstance(owner, dict)
+            and type(owner.get("id")) is int and owner["id"] == OWNER_ID)
 
 
 def safe_path(path, controls, writer_sql=False):

@@ -50,7 +50,7 @@ class RotationTests(unittest.TestCase):
         def restore(id):
             self.fake.objects[NEW+'file']['sha256Checksum']='c'*64
             return {'status':'ACTUAL_SYNTHETIC_SET_BYTES_READBACK_PASS','archive_sha256':SHA}
-        with self.assertRaisesRegex(RotationStop,'current_archive_rejected'):self.rotation.promote(NEW,SHA,restore)
+        with self.assertRaisesRegex(RotationStop,'complete_set_physical_archive_checksum_rejected'):self.rotation.promote(NEW,SHA,restore)
         self.assertFalse(self.fake.patches)
     def test_lost_promote_reply_reopen_does_not_trash_new(self):
         self.fake.lose_promote=True

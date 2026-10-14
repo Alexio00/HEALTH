@@ -9,14 +9,17 @@ class FakeDrive:
         self.objects={};self.patches=[];self.lose_promote=False;self.lose_trash=False
         self.objects[PARENT]={'id':PARENT,'name':'HEALTH_SYNTHETIC_BACKUP_ROTATION_unit','mimeType':'application/vnd.google-apps.folder','parents':[],'trashed':False,'appProperties':{}}
         for id,state,sha,suffix in [(OLD,'ACTIVE','b'*64,'1234abcd'),(NEW,'CANDIDATE',SHA,'abcd1234')]:
-            self.objects[id]={'id':id,'name':'complete-20261012T000000Z-'+suffix,'mimeType':'application/vnd.google-apps.folder','parents':[PARENT],'trashed':False,'appProperties':{'health_complete_set':'v1','health_archive_sha256':sha,'health_recovery_state':state}}
+            self.objects[id]={'id':id,'name':'complete-20261012T000000Z-'+suffix,'mimeType':'application/vnd.google-apps.folder','parents':[PARENT],'trashed':False,'appProperties':{'health_complete_set':'v1','health_archive_sha256':sha,'health_archive_bytes':'20','health_recovery_state':state}}
             file=id+'file';self.objects[file]={'id':file,'name':'complete-recovery.zip','mimeType':'application/zip','parents':[id],'trashed':False,'sha256Checksum':sha,'size':'20'}
         for m in self.objects.values():m.update(owners=[{'emailAddress':OWNER}],permissions=[{'type':'user','role':'owner','emailAddress':OWNER}])
     def request(self,path,method='GET',body=None,**kwargs):
         if path.startswith('/drive/v3/about'):return {'user':{'emailAddress':OWNER}}
         if path.startswith('/drive/v3/files?'):
             q=urllib.parse.parse_qs(urllib.parse.urlsplit(path).query)['q'][0];parent=q.split("'")[1]
-            return {'files':[{'id':id} for id,m in self.objects.items() if m.get('parents')==[parent] and m.get('trashed') is False]}
+            visible_only='trashed=false' in q
+            return {'files':[{'id':id} for id,m in self.objects.items()
+                             if m.get('parents')==[parent]
+                             and (not visible_only or m.get('trashed') is False)]}
         id=path.split('/')[4].split('?')[0];m=self.objects[id]
         if method=='PATCH':
             p=json.loads(body);self.patches.append((id,p))

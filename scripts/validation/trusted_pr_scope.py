@@ -107,16 +107,20 @@ def check_scope(changes, mode, author_id, body, head, tree_head, tree_base):
                 raise ScopeStop("forbidden_" + mode.replace("-", "_") + "_path")
             if control:
                 touched_controls.append(path)
-        for path, tree in ((new, tree_head), (old or new, tree_base)):
-            if path is None:
-                continue
-            item = tree.get(path)
-            if item is not None and item != ("blob", "100644"):
-                raise ScopeStop("nonregular_or_symlink_content")
-        if entry["status"] != "removed" and new not in tree_head:
-            raise ScopeStop("head_path_missing")
-        if entry["status"] in ("removed", "renamed") and (old or new) not in tree_base:
-            raise ScopeStop("base_path_missing")
+        status = entry["status"]
+        head_item = tree_head.get(new)
+        base_item = tree_base.get(old or new)
+        if status == "added":
+            if head_item != ("blob", "100644") or base_item is not None:
+                raise ScopeStop("added_tree_state_invalid")
+        elif status == "removed":
+            if head_item is not None or base_item != ("blob", "100644"):
+                raise ScopeStop("removed_tree_state_invalid")
+        elif status == "renamed":
+            if old == new or head_item != ("blob", "100644") or base_item != ("blob", "100644"):
+                raise ScopeStop("renamed_tree_state_invalid")
+        elif head_item != ("blob", "100644") or base_item != ("blob", "100644"):
+            raise ScopeStop("changed_tree_state_invalid")
     prefix = {"pwa": "PWA-RELEASE-CONTROL: ",
               "scheduler-code": "SCHEDULER-CONTROL: ",
               "writer-code": WRITER_OWNER_ATTESTATION}[mode]

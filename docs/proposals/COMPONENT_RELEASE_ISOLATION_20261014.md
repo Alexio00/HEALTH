@@ -36,6 +36,21 @@
 
 **Постоянную ветку `architecture` не создавать.** Общесистемная архитектура — временная `maintenance/*` / `docs/*` ветка с Draft PR в `main`. Компонентные детали живут рядом с конкретным компонентом: PWA-политика в `pwa`, Scheduler design в `scheduler-code`, Writer design в `writer-code`. Общая документация после согласования принимается только в предусмотренное main-окно, с соблюдением фактического Writer SHA gate.
 
+### Подтверждённые GitHub Rulesets (readback 14.10.2026)
+
+Прямое чтение `GET /repos/Alexio00/HEALTH/branches/{branch}` и `GET /repos/Alexio00/HEALTH/rulesets/{id}` через GitHub:
+
+| Ветка | `protected` | Активный Ruleset | Required check | Вывод |
+|---|---:|---|---|---|
+| `main` | true | 25010398 — Protect Writer main | **нет** | PR, no delete/force push, без bypass |
+| `pwa` | true | 25010980 — Protect PWA | `static` (integration ID 15368) | Scope spoof HIGH #50 **открыт** |
+| `scheduler-code` | true | 25029979 — Protect Scheduler Code | **нет** | PR и no delete/force push есть, независимого mandatory check нет |
+| `writer-code` | **false** | **отсутствует** | **нет** | **НЕ сливать PR в эту ветку до отдельного принятия защиты** |
+
+Все три существующие правила `enforcement=active`, `bypass_actors=[]`, требуют PR и запрещают удаление и non-fast-forward. `protected=true` не доказывает защиту required check от имитации другим workflow. Эту таблицу надо снова перечитать непосредственно перед включением новых rules/merge.
+
+**Следующее конкретное действие владельца в GitHub Settings → Rules → Rulesets:** создать активную веточно-адресную защиту `writer-code` (PR required, block force-push/deletion, без bypass). Для `scheduler-code` не включать непроверенную обязательную проверку до успешного независимого trusted issuer и отрицательных PR тестов. До выполнения соответствующих проверок держать оба PR #35 и #73 в Draft, не запускать release. Административное редактирование GitHub Rulesets недоступно текущему коннектору, поэтому изменения настроек этим документом **не сделаны**.
+
 ### Контроль защиты и необходимое действие владельца
 
 GitHub-ветка **не защищается самим созданием**. Для `writer-code` и `scheduler-code` нужно через GitHub Settings → Rules → Rulesets независимо подтвердить:

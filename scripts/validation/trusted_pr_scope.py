@@ -31,6 +31,11 @@ SCHEDULER_FILES = {
     "docs/HEALTH_ACTIVITY_RU.md",
 }
 SCHEDULER_CONTROLS = {".github/workflows/health-scheduler-validation.yml"}
+WRITER_CONTROLS = {".github/workflows/code-validation.yml"}
+WRITER_PREFIXES = ("scripts/writer/", "scripts/validation/", "db/", "supabase/",
+                   "docs/proposals/")
+WRITER_SQL_PREFIXES = ("scripts/writer/", "scripts/validation/", "db/", "supabase/")
+WRITER_OWNER_ATTESTATION = "WRITER-CONTROL: "
 DENIED_SEGMENTS = {"private", "secrets", "records", "sources", "labs"}
 DENIED_SUFFIXES = (".sql", ".pem", ".key", ".env")
 VALID_STATUSES = {"added", "modified", "removed", "renamed", "changed", "copied"}
@@ -44,7 +49,7 @@ def sha40(value):
     return isinstance(value, str) and SHA.fullmatch(value) is not None
 
 
-def safe_path(path, controls):
+def safe_path(path, controls, writer_sql=False):
     if not isinstance(path, str) or not path or path.startswith("/") or "\\" in path:
         raise ScopeStop("invalid_path")
     parts = path.split("/")
@@ -55,16 +60,18 @@ def safe_path(path, controls):
     if any(part.casefold() in DENIED_SEGMENTS for part in parts):
         raise ScopeStop("private_path_forbidden")
     if path.casefold().endswith(DENIED_SUFFIXES):
-        raise ScopeStop("backend_or_secret_extension_forbidden")
+        if not (writer_sql and path.endswith(".sql") and path.startswith(WRITER_SQL_PREFIXES)):
+            raise ScopeStop("backend_or_secret_extension_forbidden")
 
 
 def check_scope(changes, mode, author_id, body, head, tree_head, tree_base):
     """Full old+new path check (including renames and deletion) and tree modes."""
-    if mode not in ("pwa", "scheduler-code") or not sha40(head):
+    if mode not in ("pwa", "scheduler-code", "writer-code") or not sha40(head):
         raise ScopeStop("unsupported_base_or_head")
     if not changes or len(changes) > 3000:
         raise ScopeStop("empty_or_oversized_pr")
-    controls = PWA_CONTROLS if mode == "pwa" else SCHEDULER_CONTROLS
+    controls = {"pwa": PWA_CONTROLS, "scheduler-code": SCHEDULER_CONTROLS,
+                "writer-code": WRITER_CONTROLS}[mode]
     touched_controls = []
     seen = set()
     for entry in changes:
@@ -80,14 +87,21 @@ def check_scope(changes, mode, author_id, body, head, tree_head, tree_base):
         for path in (new, old):
             if path is None:
                 continue
-            safe_path(path, controls)
+            safe_path(path, controls, writer_sql=(mode == "writer-code"))
             if mode == "pwa":
                 permitted = path.startswith("frontend/") or path in PWA_DOCS or path in controls
                 control = path in controls or path.startswith("frontend/release/")
-            else:
+            elif mode == "scheduler-code":
                 permitted = (path.startswith("scripts/scheduler/")
                              or path in SCHEDULER_FILES or path in controls)
                 control = path in controls
+            else:
+                permitted = (path.startswith(WRITER_PREFIXES)
+                             or path.startswith("docs/WRITER_")
+                             or path in controls)
+                # All Writer changes are privileged candidates: owner acknowledgement
+                # here is *not* clinical acceptance or an independent review.
+                control = permitted
             if not permitted:
                 raise ScopeStop("forbidden_" + mode.replace("-", "_") + "_path")
             if control:
@@ -102,10 +116,12 @@ def check_scope(changes, mode, author_id, body, head, tree_head, tree_base):
             raise ScopeStop("head_path_missing")
         if entry["status"] in ("removed", "renamed") and (old or new) not in tree_base:
             raise ScopeStop("base_path_missing")
+    prefix = {"pwa": "PWA-RELEASE-CONTROL: ",
+              "scheduler-code": "SCHEDULER-CONTROL: ",
+              "writer-code": WRITER_OWNER_ATTESTATION}[mode]
     if touched_controls and not (author_id == OWNER_ID and
             isinstance(body, str) and
-            ("PWA-RELEASE-CONTROL: " if mode == "pwa" else "SCHEDULER-CONTROL: ") + head
-            in body.splitlines()):
+            prefix + head in body.splitlines()):
         raise ScopeStop("control_changes_require_owner_exact_head")
     return {"scope": mode, "checked_files": len(changes),
             "control_paths": len(set(touched_controls))}
@@ -153,7 +169,7 @@ def check_event(event, token):
     current = api("/repos/" + REPO + "/pulls/" + str(number), token)
     head = event_pr.get("head", {}).get("sha")
     mode = event_pr.get("base", {}).get("ref")
-    if (mode not in ("pwa", "scheduler-code") or not sha40(head)
+    if (mode not in ("pwa", "scheduler-code", "writer-code") or not sha40(head)
             or current.get("state") != "open"
             or current.get("head", {}).get("sha") != head
             or current.get("base", {}).get("ref") != mode

@@ -154,21 +154,13 @@ No patient data, source bytes, real vaccine history or credentials in GitHub,
 test fixtures, logs or actions artifacts. Historical reconciliation #42 must
 remain in the private medical context, not written to public Issues.
 
-## Private pending-change handoff (owner-only Drive)
+## Private pending-change handoff (owner-only channel)
 
-An additional owner-approved **private clinical correction batch** is awaiting
-Writer capability and independent validation. The authoritative candidate
-is an **owner-only Google Drive document**:
+A separate clinical correction request may exist in the private owner-approved HEALTH work area. Its exact document locator, identifiers, details and medical payload must remain exclusively in the private authorized context. This public design proposal does **not** identify, approve, verify or authorize any private clinical candidate.
 
-[Private pending correction package — restricted access](https://docs.google.com/document/d/153X5Bc6pa9xWnQNmlOgymQJ7Q6Ns8jOJHFP7adquxEE/edit)
+Do not publish private document URLs or IDs in GitHub, comments, CI, code fixtures or public reports. Use the existing bounded Writer and an independent verifier only after a separate exact owner-approved medical instruction and accepted release.
 
-The link is a coordination pointer only; it is not clinical data authorization.
-Do not copy its contents, patient identifiers, REC facts, dates or source bytes
-into this public repository, PR comments, tests or CI logs.
-The parallel Writer development must finish and its current SHA must be
-accepted before the clinical candidate can be constructed or published.
-Use only the bounded Writer and independent clinical verifier; never SQL
-admin direct writes. This draft is not a production migration.
+**Privacy disposition:** an earlier public PR revision contained a direct private document locator. Removal from current HEAD does **not** remove that historical exposure from Git history, PR diffs, caches or forks. The Product Owner must separately decide the appropriate historical exposure response; never republish the locator while documenting or reviewing it.
 
 ## Release boundary
 

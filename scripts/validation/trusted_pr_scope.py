@@ -144,6 +144,32 @@ def api(path, token):
         raise ScopeStop("github_api_read_failed") from None
 
 
+TRUSTED_WORKFLOW_PATH = ".github/workflows/health-trusted-scope.yml"
+
+
+def check_trusted_policy_release(accepted, checked, event_sha, expected_blob, token):
+    """Fail closed on accepted policy commit AND immutable default-workflow blob.
+
+    The two pins are independent: main HEAD may advance without silently
+    accepting a new executable policy or changed issuing workflow. The event
+    SHA is GitHub's default-main workflow source for pull_request_target.
+    This does not itself prove Ruleset issuer identity or authorize merging.
+    """
+    if (not sha40(accepted) or not sha40(checked) or not sha40(event_sha)
+            or not sha40(expected_blob) or checked != accepted):
+        raise ScopeStop("independent_policy_pin_required")
+    metadata = api("/repos/" + REPO + "/contents/" + TRUSTED_WORKFLOW_PATH +
+                   "?ref=" + event_sha, token)
+    if (not isinstance(metadata, dict)
+            or metadata.get("type") != "file"
+            or metadata.get("path") != TRUSTED_WORKFLOW_PATH
+            or metadata.get("sha") != expected_blob
+            or not isinstance(metadata.get("size"), int)
+            or metadata["size"] <= 0):
+        raise ScopeStop("trusted_default_workflow_blob_changed")
+    return True
+
+
 def git_tree(token, commit):
     if not sha40(commit):
         raise ScopeStop("commit_sha_invalid")
@@ -204,8 +230,10 @@ if __name__ == "__main__":
             raise ScopeStop("base_trusted_workflow_required")
         accepted = os.getenv("HEALTH_TRUSTED_POLICY_SHA")
         checked = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, timeout=10).strip()
-        if not sha40(accepted) or accepted != checked or accepted != os.getenv("GITHUB_SHA"):
-            raise ScopeStop("accepted_trusted_policy_sha_required")
+        check_trusted_policy_release(
+            accepted, checked, os.getenv("GITHUB_SHA"),
+            os.getenv("HEALTH_TRUSTED_WORKFLOW_BLOB_SHA"),
+            os.getenv("GH_TOKEN"))
         with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as file:
             print(json.dumps(check_event(json.load(file), os.getenv("GH_TOKEN")),
                              sort_keys=True))

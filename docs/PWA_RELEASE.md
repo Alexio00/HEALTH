@@ -241,3 +241,11 @@ default-branch change/Writer acceptance, or a separately controlled external
 check issuer. The current task performs neither. Do not add a non-existent check
 to the Ruleset: that would deadlock PRs. GitHub reference:
 https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target
+
+## Независимость от большого обновления Writer — контроль на 14.10.2026
+
+PWA-only функциональность на **существующем** read-only контракте можно продолжать и выпускать через `pwa` независимо от нового Writer. При этом безопасность не выводится из места размещения файла: изменения OAuth/consent, Supabase-client, service worker, релизного скрипта и GitHub Actions требуют отдельного threat-review, а issue [#50](https://github.com/Alexio00/HEALTH/issues/50) остаётся незакрытым HIGH. Новая медицинская запись, новая writable схема или статусы вакцинации относятся к `WRITER_IMPACT` ([#62](https://github.com/Alexio00/HEALTH/issues/62)) и **не должны** активироваться на PWA до соответствующего принятия bounded Writer/Verifier/Validation и независимого readback. PR [#51](https://github.com/Alexio00/HEALTH/pull/51) и [#59](https://github.com/Alexio00/HEALTH/pull/59) требуют выделения отдельно выпускаемой визуальной части, если зависимости новых медицинских сущностей нельзя исключить.
+
+Имеется staging ветка `writer-code` для будущего независимого релиза Writer, но она **не исполняется и не принимается** автоматически. Производственный Writer по-прежнему привязан к exact `main` SHA до security-acceptance новой модели. Исполняемый Scheduler отдельно готовится в `scheduler-code` (#73), а launchers в default main (#72) требуют отдельного окна. PWA CI/release не должны триггерить Writer authorizer, GitHub dispatch или backup, и не получают клинических credentials.
+
+Подробный дизайн — [Draft PR #76](https://github.com/Alexio00/HEALTH/pull/76). Этот раздел применим только как инструкция PWA-разработки, не как разрешение на Writer/main merge или смену авторизации.

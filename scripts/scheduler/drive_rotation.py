@@ -100,6 +100,23 @@ class DriveRotation:
         if previous.get('trashed') is not True:
             raise RotationStop('completed_rotation_old_not_trashed')
 
+    def verify_mutation_preflight(self,target,sha,old,done):
+        current=self.set(target,sha)
+        target_state=current['appProperties'].get('health_recovery_state')
+        if target_state not in ('CANDIDATE','ACTIVE'):raise RotationStop('rotation_target_state_changed')
+        expected=set()
+        for binding in old:
+            previous=self.set(binding['id'],binding['sha'],allow_trashed=True)
+            if previous['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('previous_active_set_changed')
+            if binding['id'] in done and previous.get('trashed') is not True:raise RotationStop('completed_rotation_old_not_trashed')
+            if previous.get('trashed') is False:expected.add(binding['id'])
+        if target_state=='ACTIVE':expected.add(target)
+        actual=[m['id'] for m in self.children(self.parent)
+                if m.get('appProperties',{}).get('health_complete_set')=='v1'
+                and m.get('appProperties',{}).get('health_recovery_state')=='ACTIVE']
+        if len(actual)!=len(set(actual)) or set(actual)!=expected:raise RotationStop('rotation_active_inventory_changed')
+        return target_state
+
     def promote(self,target,sha,restore):
         target=identity(target)
         with self.j.lock():

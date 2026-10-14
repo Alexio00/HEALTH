@@ -19,8 +19,21 @@ class GatewayContractTests(unittest.TestCase):
 
     def test_ready_is_explicit(self):
         result = capability(ready())
-        self.assertEqual(result.mode, "WRITE_READY")
-        self.assertEqual(result.accepted_sha, SHA)
+        self.assertEqual(result.mode, "PRECONDITIONS_MATCH")
+        self.assertEqual(result.matching_sha, SHA)
+        self.assertNotEqual(result.mode, "WRITE_READY")
+
+    def test_claimed_readiness_never_authorizes_a_write(self):
+        # These values could have been supplied by an untrusted JSON caller.
+        # Their equality is not evidence of OAuth, owner consent or accepted SHA.
+        data = ready()
+        for key in ("main_sha", "runtime_sha", "workflow_sha"):
+            data[key] = "0" * 40
+        observation = capability(data)
+        self.assertEqual(observation.mode, "PRECONDITIONS_MATCH")
+        self.assertEqual(observation.matching_sha, "0" * 40)
+        self.assertNotEqual(observation.mode, "WRITE_READY")
+        self.assertFalse(hasattr(observation, "accepted_sha"))
 
     def test_fail_closed_on_missing_or_forged_readback(self):
         data = ready(); del data["oauth_owner_verified"]

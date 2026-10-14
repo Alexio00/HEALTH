@@ -16,6 +16,7 @@ jobs:
     if: >-
       github.repository == 'Alexio00/HEALTH' &&
       github.ref == 'refs/heads/main' &&
+      github.event_name == 'workflow_dispatch' &&
       github.actor_id == '308028794' &&
       vars.HEALTH_INREPO_PREFLIGHT_ENABLED == 'true' &&
       github.sha == vars.HEALTH_RELEASE_MAIN_ACCEPTED_SHA

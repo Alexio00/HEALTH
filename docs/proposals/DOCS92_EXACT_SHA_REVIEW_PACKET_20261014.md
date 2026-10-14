@@ -16,7 +16,7 @@ Freeze BASE `3409791f1ffc5749020e7ff07139b0cec722f6fc`, HEAD **`94f4d61e18e0aecf
   `docs/SECURITY.md`.
 - Full diff/Filenames сверены через GitHub на этой линии, никакого `scripts/`, `.github/workflows/`, `supabase/`, `frontend/`, `AGENTS.md` изменения нет.
 - Приватные **действующие** Project State/Manual прочитаны 14.10.2026. State сообщает: Supabase ACTIVE; Writer ENABLED, accepted exact `main` SHA выше, 270 REC; старый SHEDULLER продолжает backup 03:00 Europe/Moscow; Owner exact-SHA manual tech release установлен, Issue #50 HIGH OPEN. Текущие приватные документы авторитетнее публичных исторических снимков.
-- Проверка документации на HEAD до последней узкой поправки: локальные Markdown links всех семи файлов ведут на существующие пути в дереве HEAD, нет буквальных private Google Docs URL / Drive locators / email. HEAD-поправка была в одном `DATA_MODEL.md`, поэтому **необходима финальная повторная автоматическая проверка всех семи файлов на final exact HEAD** до утверждения.
+- Финальная повторная проверка **на точном HEAD** выполнена после поправок: все семь файлов, **18 относительных ссылок**, ноль неразрешённых путей; в текущих версиях нет буквальных private Google Docs URL, Drive locators и email. Эта статическая проверка не устанавливает доступность внешних GitHub ссылок и не доказывает приватность всей Git истории.
 - `HEALTH code validation` GitHub Actions на final HEAD: **SUCCESS**, но это PR-controlled CI, не независимый trust issuer.
 - Принятый `main` по повторному readback не изменился на момент проверки; защитный main Ruleset 25010398 ACTIVE. Эти статусы требуют непосредственно pre-merge readback.
 
@@ -33,7 +33,7 @@ Freeze BASE `3409791f1ffc5749020e7ff07139b0cec722f6fc`, HEAD **`94f4d61e18e0aecf
 | Exact BASE/HEAD, seven-path diff | PASS — GitHub metadata | Повторить по HEAD непосредственно перед GO |
 | GitHub code validation | PASS на финальном HEAD | Не заменяет независимую приёмку |
 | Scope: no executable, SQL, workflow edits | PASS по paths/diff | Подтвердить на финальном SHA |
-| Локальные Markdown links, отсутствие private URL/email | PASS до финальной 1-файловой поправки | Повторить на **точном** финальном HEAD |
+| Локальные Markdown links (18), отсутствие private URL/email | PASS на exact финальном HEAD | Не заменяет независимый semantic/history review |
 | Действующий private State/Manual vs public texts | Выполнен архитектурный cross-check | Аудитор независимо сверяет смысл |
 | **Нет потери технической семантики из английских оригиналов** | **NOT VERIFIED независимо** | Ключевой документальный risk: compare every removed invariant to Russian replacement/linked authoritative doc |
 | Внешние links / страницы документов / команды | **NOT VERIFIED** | Проверить независимым read-only review |

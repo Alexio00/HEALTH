@@ -71,7 +71,7 @@ def capability(readback: Mapping[str, Any]) -> Capability:
         if readback[key] is not True:
             reasons.append(key + "_not_verified")
     versions = (readback["main_sha"], readback["runtime_sha"], readback["workflow_sha"])
-    if any(not isinstance(v, str) or not _SHA.fullmatch(v) for v in versions):
+    if any(type(v) is not str or not _SHA.fullmatch(v) for v in versions):
         reasons.append("invalid_version_pin")
     elif len(set(versions)) != 1:
         reasons.append("version_pin_mismatch")

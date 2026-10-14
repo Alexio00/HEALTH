@@ -47,7 +47,9 @@ def sha40(value):
 
 
 def safe_path(path, controls, writer_sql=False):
-    if not isinstance(path, str) or not path or path.startswith("/") or "\\" in path:
+    if (not isinstance(path, str) or not path or path.startswith("/")
+            or "\\" in path or any(ord(char) < 32 or ord(char) == 127 for char in path)
+            or "%00" in path.casefold()):
         raise ScopeStop("invalid_path")
     parts = path.split("/")
     if any(not part or part in (".", "..") for part in parts):

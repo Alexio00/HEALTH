@@ -99,6 +99,43 @@ class CloudDoneReplayTests(unittest.TestCase):
             self.rotation.promote(NEW, SHA, self.restore)
         self.assertEqual(self.fake.patches, patches)
 
+    def test_done_rejects_physical_zip_checksum_drift_without_metadata_change(self):
+        self.complete()
+        self.fake.objects[OLD + 'file']['sha256Checksum'] = 'c' * 64
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'complete_set_physical_archive_checksum_rejected'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'DONE')
+        self.assertEqual(self.fake.patches, before)
+        self.assertEqual(self.fake.objects[OLD]['appProperties']['health_archive_sha256'], 'b' * 64)
+
+    def test_done_rejects_physical_zip_size_drift(self):
+        self.complete()
+        self.fake.objects[OLD + 'file']['size'] = '21'
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'complete_set_physical_archive_size_rejected'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'DONE')
+        self.assertEqual(self.fake.patches, before)
+
+    def test_done_fails_closed_when_trashed_zip_inaccessible(self):
+        self.complete()
+        self.fake.objects.pop(OLD + 'file')
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'complete_set_physical_archive_identity_rejected'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'DONE')
+        self.assertEqual(self.fake.patches, before)
+
+    def test_done_missing_physical_zip_checksum_fails_closed(self):
+        self.complete()
+        self.fake.objects[OLD + 'file'].pop('sha256Checksum')
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'complete_set_physical_archive_checksum_rejected'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'DONE')
+        self.assertEqual(self.fake.patches, before)
+
     def promoted_done(self):
         self.j.plan(NEW, PARENT, SHA, [{'id': OLD, 'sha': 'b' * 64}])
         self.fake.objects[NEW]['appProperties']['health_recovery_state'] = 'ACTIVE'
@@ -124,6 +161,25 @@ class CloudDoneReplayTests(unittest.TestCase):
         self.fake.objects[OLD]['appProperties']['health_archive_sha256'] = 'c' * 64
         before = list(self.fake.patches)
         with self.assertRaisesRegex(RotationStop, 'complete_set_digest_binding_rejected'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'PROMOTED')
+        self.assertEqual(self.fake.patches, before)
+
+    def test_promoted_done_rejects_physical_zip_checksum_drift_without_patch(self):
+        self.promoted_done()
+        self.fake.objects[OLD + 'file']['sha256Checksum'] = 'c' * 64
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'complete_set_physical_archive_checksum_rejected'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'PROMOTED')
+        self.assertEqual(self.fake.patches, before)
+        self.assertEqual(self.fake.objects[OLD]['appProperties']['health_archive_sha256'], 'b' * 64)
+
+    def test_promoted_done_rejects_renamed_physical_zip(self):
+        self.promoted_done()
+        self.fake.objects[OLD + 'file']['name'] = 'unexpected.zip'
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'complete_set_physical_archive_identity_rejected'):
             self.rotation.promote(NEW, SHA, self.restore)
         self.assertEqual(self.j.read()['state'], 'PROMOTED')
         self.assertEqual(self.fake.patches, before)

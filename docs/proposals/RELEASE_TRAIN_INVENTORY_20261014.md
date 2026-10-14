@@ -2,7 +2,7 @@
 
 > **POINT-IN-TIME TECHNICAL INVENTORY / DRAFT ONLY.** Not a governing policy, production release, security gate, approval, or clinical authorization. Live private Project State / Project Manual override this snapshot. Re-read all SHA, PR heads, review threads, CI, GitHub rulesets and runtime before decisions. No patient data or credentials included.
 >
-> This document is a short-lived coordination input for [PR #76](../../pull/76), [Issue #69](../../issues/69), [Issue #62](../../issues/62), [Issue #65](../../issues/65), and [HIGH #50](../../issues/50). Close/archive this snapshot after incorporating accepted conclusions into governing technical docs; do not create a second permanent policy.
+> This document is a short-lived coordination input for [PR #76](https://github.com/Alexio00/HEALTH/pull/76), [Issue #69](https://github.com/Alexio00/HEALTH/issues/69), [Issue #62](https://github.com/Alexio00/HEALTH/issues/62), [Issue #65](https://github.com/Alexio00/HEALTH/issues/65), and [HIGH #50](https://github.com/Alexio00/HEALTH/issues/50). Close/archive this snapshot after incorporating accepted conclusions into governing technical docs; do not create a second permanent policy.
 
 ## Verified source state
 

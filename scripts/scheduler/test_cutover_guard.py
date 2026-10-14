@@ -17,6 +17,7 @@ class CutoverGuardTests(unittest.TestCase):
             GITHUB_ACTIONS="true", GITHUB_REPOSITORY="Alexio00/HEALTH",
             GITHUB_REF="refs/heads/main", GITHUB_EVENT_NAME="workflow_dispatch",
             GITHUB_ACTOR_ID="308028794", GITHUB_WORKFLOW_REF=WORKFLOW,
+            GITHUB_RUN_ATTEMPT="1", GITHUB_TRIGGERING_ACTOR="trusted-owner",
             GITHUB_SHA=self.MAIN, HEALTH_RELEASE_MAIN_ACCEPTED_SHA=self.MAIN,
             HEALTH_COMPLETE_SERIALIZED="1", HEALTH_INREPO_RELEASE_ENABLED="true",
             HEALTH_LEGACY_BACKUP_PAUSED="true",
@@ -44,6 +45,7 @@ class CutoverGuardTests(unittest.TestCase):
             ("GITHUB_EVENT_NAME", "pull_request"),
             ("GITHUB_ACTOR_ID", "123"),
             ("GITHUB_WORKFLOW_REF", "Alexio00/HEALTH/.github/workflows/evil.yml@refs/heads/main"),
+            ("GITHUB_RUN_ATTEMPT", "2"),
             ("HEALTH_COMPLETE_SERIALIZED", "0"),
             ("HEALTH_INREPO_RELEASE_ENABLED", "false"),
             ("HEALTH_LEGACY_BACKUP_PAUSED", "false"),
@@ -64,6 +66,37 @@ class CutoverGuardTests(unittest.TestCase):
                 del bad[key]
                 with self.assertRaises(CutoverStop):
                     require_release_context(bad, "candidate", self.PIN)
+
+    def test_replayed_owner_dispatch_with_different_triggering_actor_is_rejected(self):
+        # GitHub keeps GITHUB_ACTOR_ID, SHA, ref, and original inputs on re-run.
+        # Only GITHUB_RUN_ATTEMPT reliably distinguishes this attempt.
+        for mode in ("candidate", "activate", "quarantine-orphan"):
+            initial = self.valid(mode)
+            if mode == "quarantine-orphan":
+                initial.update(
+                    HEALTH_ORPHAN_ACK="ABANDON_INCOMPLETE_UPLOADING_ONLY",
+                    HEALTH_ORPHAN_FOLDER_ID="syntheticfolder123",
+                )
+            with self.subTest(mode=mode, attempt="first"):
+                self.assertTrue(require_release_context(initial, mode, self.PIN))
+            replay = dict(initial, GITHUB_RUN_ATTEMPT="2",
+                          GITHUB_TRIGGERING_ACTOR="different-rerun-user")
+            with self.subTest(mode=mode, attempt="second"), self.assertRaisesRegex(
+                CutoverStop, "release_rerun_or_missing_attempt_rejected"
+            ):
+                require_release_context(replay, mode, self.PIN)
+
+    def test_missing_noncanonical_or_incremented_attempt_fails_closed(self):
+        for attempt in (None, "", "0", "01", "2", "3", "bogus"):
+            env = self.valid()
+            if attempt is None:
+                del env["GITHUB_RUN_ATTEMPT"]
+            else:
+                env["GITHUB_RUN_ATTEMPT"] = attempt
+            with self.subTest(attempt=attempt), self.assertRaisesRegex(
+                CutoverStop, "release_rerun_or_missing_attempt_rejected"
+            ):
+                require_release_context(env, "candidate", self.PIN)
 
     def test_quarantine_is_owner_only_and_exact(self):
         good=self.valid("quarantine-orphan")

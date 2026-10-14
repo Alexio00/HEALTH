@@ -24,6 +24,10 @@ def sha(value):
 def require_release_context(env, mode, checked_out_sha=None):
     if mode not in ("candidate", "activate", "quarantine-orphan"):
         raise CutoverStop("manual_release_mode_required")
+    # GitHub re-runs preserve the original github.actor and authorization inputs.
+    # Each privileged operation therefore requires a fresh first-attempt dispatch.
+    if env.get("GITHUB_RUN_ATTEMPT") != "1":
+        raise CutoverStop("release_rerun_or_missing_attempt_rejected")
     if (env.get("GITHUB_ACTIONS") != "true"
             or env.get("GITHUB_REPOSITORY") != REPO
             or env.get("GITHUB_REF") != "refs/heads/main"

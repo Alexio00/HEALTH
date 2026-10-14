@@ -177,7 +177,7 @@ class ScopeFixtures(unittest.TestCase):
             verify("scripts/writer/x.py", "writer-code", OWNER,
                    "WRITER-CONTROL: " + HEAD, status="renamed",
                    previous=".github/workflows/writer-authorization.yml")
-        with self.assertRaisesRegex(ScopeStop, "nonregular"):
+        with self.assertRaisesRegex(ScopeStop, "tree_state_invalid"):
             verify("scripts/writer/gateway_contract.py", "writer-code", OWNER,
                    "WRITER-CONTROL: " + HEAD, reg="120000")
         with self.assertRaisesRegex(ScopeStop, "control_changes_require_owner_exact_head"):

@@ -71,9 +71,8 @@ class DriveCloudJournal:
         if previous and previous['state']!='DONE':raise RotationStop('previous_rotation_needs_reconciliation')
         if len(old)>1:raise RotationStop('cloud_journal_single_old_required')
         for binding in old:
-            identity(binding['id'])
-            if (binding['id']==target or not isinstance(binding,dict)
-                    or set(binding)!={'id','sha','zip_id'}
+            if (not isinstance(binding,dict) or set(binding)!={'id','sha','zip_id'}
+                    or identity(binding['id'])==target
                     or not re.fullmatch('[a-f0-9]{64}',binding['sha'])
                     or identity(binding['zip_id'])==binding['id']):
                 raise RotationStop('cloud_journal_old_zip_id_binding_required')

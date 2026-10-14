@@ -273,7 +273,7 @@ const doses = actualVaccinations(vaccinationRecords);
 assert.equal(doses.length,12,"one row per separately administered vaccine, plus one combined MMR");
 assert.equal(doses.filter(x => x.date === "2004-03-05").length,2,"slash-separated injections stay separate");
 assert.equal(doses.filter(x => x.infection === "Грипп").length,1,"cancelled and legacy consultation cannot invent flu doses");
-assert.equal(doses.find(x => x.infection === "Грипп")?.stage,"RV","flu is RV even if source says V1");
+assert.equal(doses.find(x => x.infection === "Грипп")?.stage,"Rv","flu is Rv even if source says V1");
 assert.equal(doses.find(x => x.infection === "Пневмококковая инфекция")?.vaccine,"Превенар 13");
 assert.equal(doses.find(x => x.infection === "Герпес 1–2 типа")?.stage,"V5");
 assert(doses.find(x => x.infection === "Клещевой энцефалит"));
@@ -287,7 +287,7 @@ assert(doses.every(x => x.administrationRecordId && !x.basisRecordId));
 
 const future = plannedVaccinations(vaccinationPlans,"2026-10-13");
 assert.equal(future.length,4,"category filter is immutable and must include cancelled plan history");
-assert.equal(future.find(x => x.id === "plan:1").stage,"RV");
+assert.equal(future.find(x => x.id === "plan:1").stage,"Rv");
 assert.equal(future.find(x => x.id === "plan:1").basisRecordId,"REC-20050115-001");
 assert.equal(future.find(x => x.id === "plan:1").appointmentRecordId,null,"supporting REC is not silently a prescription");
 assert.equal(future.find(x => x.id === "plan:2").sourceStatus,"Просрочено");
@@ -295,7 +295,30 @@ assert.equal(future.find(x => x.id === "plan:3").stage,"V1–V5");
 assert(!future.find(x => x.id === "plan:3").overdue,"undated items are not overdue");
 const akds = plannedVaccinations([{plan_item_id:99,title:"Ревакцинация АКДС",status:"planned",metadata:{kind:"вакцинация"}}],"2026-10-13")[0];
 assert.equal(akds.infection,"Дифтерия, столбняк, коклюш");
-assert.equal(akds.stage,"RV");
+assert.equal(akds.stage,"Rv");
+// Synthetic evidence: normalize letter case, never invent a missing booster index.
+const numberedRecords = [
+  {record_id:"REC-20090115-101",record_date:"2009-01-15",status:"active",tags:["VACCINATION"],
+    summary:"Вакцинация: корь (ЖКВ, Rv1)"},
+  {record_id:"REC-20100115-102",record_date:"2010-01-15",status:"active",tags:["VACCINATION"],
+    summary:"Вакцинация: пневмококковая инфекция (Превенар 13, RV2)"}
+];
+const numbered = actualVaccinations(numberedRecords);
+assert.equal(numbered.find(x => x.infection === "Корь")?.stage,"Rv1");
+assert.equal(numbered.find(x => x.infection === "Пневмококковая инфекция")?.stage,"Rv2");
+const numberedPlans = plannedVaccinations([
+  {plan_item_id:101,title:"Ревакцинация от кори",status:"planned",
+    metadata:{kind:"вакцинация",stage:"rv1"}},
+  {plan_item_id:102,title:"Ревакцинация от кори (Rv2)",status:"planned",
+    metadata:{kind:"вакцинация"}},
+  {plan_item_id:103,title:"Ревакцинация от кори",status:"planned",
+    metadata:{kind:"вакцинация"}},
+  {plan_item_id:104,title:"Ревакцинация от кори (Rv2)",status:"planned",
+    metadata:{kind:"вакцинация",stage:"RV1"}}
+],"2026-10-13");
+assert.deepEqual(numberedPlans.map(item => item.stage),["Rv1","Rv2","Rv","Rv1"],
+  "metadata wins over explicit title; unnumbered revaccination stays unnumbered");
+
 const vaccineView=buildVaccinationView(vaccinationRecords,vaccinationPlans,"2026-10-13");
 assert.equal(vaccineView.planned.length,3,"cancelled plan does not appear among upcoming doses");
 assert.equal(vaccineView.history.length,doses.length+future.length);

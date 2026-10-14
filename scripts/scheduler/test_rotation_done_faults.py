@@ -32,6 +32,25 @@ class CloudDoneReplayTests(unittest.TestCase):
         self.assertEqual(self.j.read()['state'], 'DONE')
         self.assertTrue(self.fake.objects[OLD]['trashed'])
 
+    def test_integrated_preflight_rejects_zip_id_swap_during_restore_before_active(self):
+        # #95 R5B pre-mutation gate must enforce #94 exact physical ZIP identity.
+        def restored_after_swap(target):
+            self.assertEqual(target, NEW)
+            original = self.fake.objects.pop(OLD + 'file')
+            replacement = dict(original, id='syntheticreplacementzip123')
+            self.fake.objects[replacement['id']] = replacement
+            return {'status': 'ACTUAL_SYNTHETIC_SET_BYTES_READBACK_PASS',
+                    'archive_sha256': SHA}
+        with self.assertRaisesRegex(
+            RotationStop, 'complete_set_physical_archive_id_binding_rejected'
+        ):
+            self.rotation.promote(NEW, SHA, restored_after_swap)
+        self.assertEqual(self.j.read()['state'], 'PLANNED')
+        self.assertEqual(self.fake.objects[NEW]['appProperties']['health_recovery_state'],
+                         'CANDIDATE')
+        self.assertFalse(self.fake.objects[OLD]['trashed'])
+        self.assertEqual(self.fake.patches, [])
+
     def test_done_retry_is_read_only_and_reverifies(self):
         self.complete()
         patches = list(self.fake.patches)

@@ -17,11 +17,7 @@ REPO = "Alexio00/HEALTH"
 OWNER_ID = 308028794
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 PWA_DOCS = {"AGENTS.md", "docs/PWA_RELEASE.md"}
-PWA_CONTROLS = {
-    ".github/workflows/deploy-pages.yml",
-    ".github/workflows/code-validation.yml",
-    ".github/workflows/pwa-scope.yml",
-}
+PWA_CONTROLS = set() # No PR-controlled workflow or release checks
 SCHEDULER_FILES = {
     "scripts/automation/supabase_keepalive.py",
     "scripts/automation/test_scheduler_transfer.py",
@@ -30,15 +26,16 @@ SCHEDULER_FILES = {
     "docs/SCHEDULER_CONSOLIDATION_RU.md",
     "docs/HEALTH_ACTIVITY_RU.md",
 }
-SCHEDULER_CONTROLS = {".github/workflows/health-scheduler-validation.yml"}
-WRITER_CONTROLS = {".github/workflows/code-validation.yml"}
+SCHEDULER_CONTROLS = set()
+WRITER_CONTROLS = set()
 WRITER_PREFIXES = ("scripts/writer/", "scripts/validation/", "db/", "supabase/",
                    "docs/proposals/")
 WRITER_SQL_PREFIXES = ("scripts/writer/", "scripts/validation/", "db/", "supabase/")
 WRITER_OWNER_ATTESTATION = "WRITER-CONTROL: "
-DENIED_SEGMENTS = {"private", "secrets", "records", "sources", "labs"}
-DENIED_SUFFIXES = (".sql", ".pem", ".key", ".env")
-VALID_STATUSES = {"added", "modified", "removed", "renamed", "changed", "copied"}
+DENIED_SEGMENTS = {"private", "secrets", "records", "sources", "labs", "auth", "oauth", "credentials", "tokens", "keys", "release", "deploy", "service-worker", "service_role" }
+SENSITIVE_NAMES = ("secret", "credential", "token", "password", "auth", "oauth", "supabase", "writer", "workflow", "release", "deploy", "service-worker", "serviceworker", "apikey", "api-key")
+DENIED_SUFFIXES = (".sql", ".pem", ".key", ".env", ".p12", ".pfx", ".jks", ".asc", ".gpg")
+VALID_STATUSES = {"added", "modified", "removed", "renamed", "changed"}
 
 
 class ScopeStop(RuntimeError):
@@ -59,6 +56,8 @@ def safe_path(path, controls, writer_sql=False):
         raise ScopeStop("hidden_or_unsafe_path")
     if any(part.casefold() in DENIED_SEGMENTS for part in parts):
         raise ScopeStop("private_path_forbidden")
+    if parts[0] == "frontend" and not writer_sql and any(term in parts[-1].casefold() for term in SENSITIVE_NAMES):
+        raise ScopeStop("sensitive_frontend_file_forbidden")
     if path.casefold().endswith(DENIED_SUFFIXES):
         if not (writer_sql and path.endswith(".sql") and path.startswith(WRITER_SQL_PREFIXES)):
             raise ScopeStop("backend_or_secret_extension_forbidden")
@@ -81,24 +80,26 @@ def check_scope(changes, mode, author_id, body, head, tree_head, tree_base):
         old = entry.get("previous_filename") if entry["status"] == "renamed" else None
         if entry["status"] == "renamed" and not old:
             raise ScopeStop("rename_missing_previous_path")
-        if new in seen:
+        if new in seen or (old is not None and old in seen):
             raise ScopeStop("duplicate_file_entry")
         seen.add(new)
+        if old is not None:
+            seen.add(old)
         for path in (new, old):
             if path is None:
                 continue
             safe_path(path, controls, writer_sql=(mode == "writer-code"))
             if mode == "pwa":
-                permitted = path.startswith("frontend/") or path in PWA_DOCS or path in controls
-                control = path in controls or path.startswith("frontend/release/")
+                permitted = path.startswith("frontend/") or path in PWA_DOCS
+                control = path in controls
             elif mode == "scheduler-code":
                 permitted = (path.startswith("scripts/scheduler/")
-                             or path in SCHEDULER_FILES or path in controls)
+                             or path in SCHEDULER_FILES)
                 control = path in controls
             else:
                 permitted = (path.startswith(WRITER_PREFIXES)
                              or path.startswith("docs/WRITER_")
-                             or path in controls)
+                             )
                 # All Writer changes are privileged candidates: owner acknowledgement
                 # here is *not* clinical acceptance or an independent review.
                 control = permitted

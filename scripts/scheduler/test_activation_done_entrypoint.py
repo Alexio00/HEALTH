@@ -112,6 +112,14 @@ class ActivationEntrypointDoneTests(unittest.TestCase):
         self.assertEqual(self.transport.patches, self.patches_before)
         self.assertNotIn('health_full_restore_archive', self.transport.objects[PARENT]['appProperties'])
 
+    def test_done_rejects_physical_zip_checksum_not_just_folder_binding(self):
+        self.transport.objects[OLD + 'file']['sha256Checksum'] = 'c' * 64
+        with self.assertRaisesRegex(RotationStop, 'complete_set_physical_archive_checksum_rejected'):
+            self.execute()
+        self.assertEqual(self.transport.patches, self.patches_before)
+        self.assertEqual(self.transport.objects[OLD]['appProperties']['health_archive_sha256'], 'b' * 64)
+        self.assertNotIn('health_full_restore_archive', self.transport.objects[PARENT]['appProperties'])
+
     def test_old_archive_returns_from_trash_must_refuse_activation(self):
         self.transport.objects[OLD]['trashed'] = False
         with self.assertRaisesRegex(RotationStop, 'completed_rotation_old_not_trashed'):
@@ -143,6 +151,15 @@ class ActivationEntrypointDoneTests(unittest.TestCase):
         self.assertNotIn('health_full_restore_archive', self.transport.objects[PARENT]['appProperties'])
         self.assertEqual(self.transport.objects[PARENT]['appProperties']['health_r_state'], 'PROMOTED')
         self.assertEqual(self.transport.patches, self.patches_before)
+
+    def test_promoted_done_rejects_changed_physical_zip_checksum(self):
+        self.transport.objects[PARENT]['appProperties']['health_r_state'] = 'PROMOTED'
+        self.transport.objects[OLD + 'file']['sha256Checksum'] = 'c' * 64
+        with self.assertRaisesRegex(RotationStop, 'complete_set_physical_archive_checksum_rejected'):
+            self.execute()
+        self.assertEqual(self.transport.patches, self.patches_before)
+        self.assertEqual(self.transport.objects[PARENT]['appProperties']['health_r_state'], 'PROMOTED')
+        self.assertNotIn('health_full_restore_archive', self.transport.objects[PARENT]['appProperties'])
 
     def test_promoted_done_old_state_changed_rejects_before_marker(self):
         self.transport.objects[PARENT]['appProperties']['health_r_state'] = 'PROMOTED'

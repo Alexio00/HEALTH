@@ -70,21 +70,103 @@ function vaccineName(fragment) {
   return found ? found[1] : "";
 }
 
-function stageForActual(fragment, keys) {
-  if (keys.includes("flu")) return "RV";
-  if (has(fragment, /\bR\d+\b|\bRV\b|ревакцинац/iu)) return "RV";
-  if (has(fragment, /первая вакцинация основного курса/iu)) return "V1";
-  if (has(fragment, /\b1[-‑]й этап/iu)) return "V1";
-  const dose = fragment.match(/\bV([1-9]\d*)\b/iu)
-    || fragment.match(/(?:доз[аыуе]|доза\s*№)\s*([1-9]\d*)/iu)
-    || fragment.match(/([1-9]\d*)[-‑]?(?:я|ая)\s+доз[аыуе]/iu);
-  if (dose) return "V" + dose[1];
-  if (has(fragment, /вторая вакцинация/iu)) return "V2";
-  if (has(fragment, /компонент\s*II\b/iu)) return "V2";
-  if (has(fragment, /компонент\s*I\b/iu)) return "V1";
-  return "—";
+// This projection is intentionally conservative: planned administrations must
+// not become "actual" infections or stages solely because they share a REC.
+const FUTURE_CLAUSE = /(?:в\s+будущем|в\s+дальнейшем|следующ\p{L}*|предстоит|планир\p{L}*|запланир\p{L}*|рекоменд\p{L}*|назначен\p{L}*|будет\s+(?:сделан\p{L}*|выполнен\p{L}*|проведен\p{L}*|проведён\p{L}*))/iu;
+const EXPLICIT_STAGE = /\b(?:RV[1-9]\d*|R[1-9]\d*|V[1-9]\d*)\b|доз[аыуе]\s*№?\s*[1-9]\d*|[1-9]\d*[-‑]?(?:я|ая)\s+доз[аыуе]|(?:перв\p{L}*|втор\p{L}*)\s+вакцинац/iu;
+
+// Split only at event boundaries OUTSIDE parentheses. A comma inside
+// "(Rv2, запланирована)" is part of the same, future-only vaccination.
+function logicalAdministrationClauses(source) {
+  const clauses = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    if (char === "(") depth++;
+    else if (char === ")") {
+      depth--;
+      if (depth < 0) return null;
+    }
+    if (depth !== 0) continue;
+    const conjunction = source.slice(i, i + 3).toLocaleLowerCase("ru") === " и ";
+    if (char === "," || char === ";" || conjunction) {
+      clauses.push(source.slice(start, i).trim());
+      if (conjunction) i += 2;
+      start = i + 1;
+    }
+  }
+  if (depth !== 0) return null; // Malformed event evidence: fail closed.
+  clauses.push(source.slice(start).trim());
+  return clauses.filter(Boolean);
 }
 
+// A plan can follow an explicitly recorded stage INSIDE one parenthesis,
+// e.g. "(ЖКВ, V1, краснуха запланирована)". Retain the prior event only
+// when its own stage is explicit AND the suffix names a separate antigen
+// or future revaccination. "(Rv2, запланирована)" is never sufficient.
+function performedPrefixBeforeInlinePlan(clause) {
+  const future = FUTURE_CLAUSE.exec(clause);
+  if (!future) return null;
+  const before = clause.slice(0, future.index);
+  const split = Math.max(before.lastIndexOf(","), before.lastIndexOf(";"));
+  if (split < 0) return null;
+  const prefix = clause.slice(0, split).trim();
+  const futureTail = clause.slice(split + 1).trim();
+  const earlier = targets(prefix);
+  const later = targets(futureTail);
+  if (!EXPLICIT_STAGE.test(prefix) || !earlier) return null;
+  const separateAntigen = Boolean(later &&
+    later.keys.some(key => !earlier.keys.includes(key)));
+  const futureBooster = /\bRV[1-9]\d*\b|\bR[1-9]\d*\b|ревакцинац/iu.test(futureTail);
+  if (!separateAntigen && !futureBooster) return null;
+  const open = (prefix.match(/\(/g) || []).length - (prefix.match(/\)/g) || []).length;
+  if (open < 0) return null;
+  return prefix + ")".repeat(open);
+}
+
+function performedAdministration(fragment) {
+  const clauses = logicalAdministrationClauses(String(fragment || ""));
+  if (!clauses) return "";
+  const performed = [];
+  for (const clause of clauses) {
+    if (FUTURE_CLAUSE.test(clause)) {
+      // Standalone ", запланирована" is a postfix status for the
+      // immediately preceding event, not a new medical event.
+      if (/^(?:запланир\p{L}*|планир\p{L}*|назначен\p{L}*|рекоменд\p{L}*|предстоит)[.!]?$/iu.test(clause))
+        performed.pop();
+      const prefix = performedPrefixBeforeInlinePlan(clause);
+      if (prefix) performed.push(prefix);
+      break;
+    }
+    performed.push(clause);
+  }
+  return performed.join(", ").trim();
+}
+function stageForActual(fragment, keys) {
+  const performed = performedAdministration(fragment);
+  if (!performed) return "—";
+  const claims = [];
+  // Read all explicit dose references, not just the first Latin stage token.
+  for (const match of performed.matchAll(/\b(?:RV[1-9]\d*|RV|R[1-9]\d*|V[1-9]\d*)\b/giu)) {
+    const code = match[0].toUpperCase();
+    claims.push(code.startsWith("RV") ? "Rv" + code.slice(2)
+      : code.startsWith("R") ? "Rv" : code);
+  }
+  for (const match of performed.matchAll(/доз[аыуе]\s*№?\s*([1-9]\d*)|([1-9]\d*)[-‑]?(?:я|ая)\s+доз[аыуе]/giu)) {
+    claims.push("V" + (match[1] || match[2]));
+  }
+  if (has(performed, /первая вакцинация основного курса|\b1[-‑]й этап|компонент\s*I\b/iu)) claims.push("V1");
+  if (has(performed, /вторая вакцинация|компонент\s*II\b/iu)) claims.push("V2");
+  if (has(performed, /ревакцинац/iu) && !claims.some(stage => stage.startsWith("Rv"))) claims.push("Rv");
+  const unique = uniq(claims);
+  if (unique.length > 1) return "—";
+  // Preserve the previously accepted seasonal-flu display convention.
+  if (keys.includes("flu")) return "Rv";
+  if (!unique.length) return "—";
+  // A shared multi-infection REC does not prove a shared numbered booster.
+  if (keys.length > 1 && /^Rv\d+$/.test(unique[0])) return "—";
+  return unique[0];
+}
 function administeredSummary(summary) {
   const s = String(summary || "");
   return has(s, /(^|\s)Вакцинация\s*:|выполнена вакцинация|привит[аы]?\s+от|вакцинация против|вторая вакцинация|вторая доза/iu);
@@ -125,7 +207,7 @@ function bodyAdministrationFragments(body) {
     const isBullet = /^\s*[-*]\s+/.test(line);
     const candidate = clean.replace(/^[-*]\s*/, "");
     const explicit = /^(?:вакцинирован[аы]?\s+от|вакцинация\s+против|против\s+|вакцина\s*:)/iu.test(candidate);
-    if (isBullet && explicit && !/заплан|рекоменд|предстоит/iu.test(candidate)) {
+    if (isBullet && explicit) {
       flush();
       pending = candidate;
     } else if (pending && !isBullet && clean
@@ -154,14 +236,16 @@ export function actualVaccinations(records) {
     const fromBody = fromBodyEvidence;
     const fragments = fromBody.length ? fromBody : splitAdministrationSummary(summary);
     for (const fragment of fragments) {
-      const target = targets(fragment);
+      const performed = performedAdministration(fragment);
+      if (!performed) continue;
+      const target = targets(performed);
       if (!target) continue;
       const keys = target.keys;
       const label = target.label;
       events.push({
         kind:"actual", id:String(record.record_id) + ":" + keys.join("-"),
-        keys, infection:label, stage:stageForActual(fragment, keys),
-        date:record.record_date, vaccine:vaccineName(fragment),
+        keys, infection:label, stage:stageForActual(performed, keys),
+        date:record.record_date, vaccine:vaccineName(performed),
         appointmentRecordId:recId(record.metadata?.appointment_record_id),
         administrationRecordId:recId(record.record_id),
         basisRecordId:null, status:"done", sourceStatus:"Проведена"
@@ -174,9 +258,12 @@ export function actualVaccinations(records) {
 function stageForPlan(item) {
   const meta = item.metadata || {};
   if (/^V[1-9]\d*$/iu.test(String(meta.stage || ""))) return String(meta.stage).toUpperCase();
-  if (/^RV$/iu.test(String(meta.stage || ""))) return "RV";
+  const metadataBooster = String(meta.stage || "").match(/^RV([1-9]\d*)?$/iu);
+  if (metadataBooster) return "Rv" + (metadataBooster[1] || "");
+  const titleBooster = String(item.title || "").match(/\bRv([1-9]\d*)\b/iu);
+  if (titleBooster) return "Rv" + titleBooster[1];
   if (has(item.title, /повторный курс.*5\s+доз/iu)) return "V1–V5";
-  if (has(item.title, /ревакцинац|ежегодн/iu)) return "RV";
+  if (has(item.title, /ревакцинац|ежегодн/iu)) return "Rv";
   return "—";
 }
 

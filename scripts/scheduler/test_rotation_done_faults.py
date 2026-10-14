@@ -128,6 +128,25 @@ class CloudDoneReplayTests(unittest.TestCase):
         self.assertTrue(self.fake.objects[OLD]['trashed'])
         self.assertEqual(self.fake.objects[NEW]['appProperties']['health_recovery_state'], 'ACTIVE')
 
+    def test_cloud_journal_persists_zip_id_and_version_2(self):
+        self.complete()
+        saved=self.fake.objects[PARENT]['appProperties']
+        self.assertEqual(saved['health_r_v'],'2')
+        self.assertEqual(saved['health_r_old'],OLD)
+        self.assertEqual(saved['health_r_old_zip'],OLD+'file')
+        self.assertEqual(self.j.read()['state'],'DONE')
+
+    def test_done_missing_zip_binding_in_v2_fails_closed(self):
+        self.complete()
+        props=self.fake.objects[PARENT]['appProperties']
+        props.pop('health_r_old_zip')
+        before=dict(props)
+        patches=list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop,'cloud_journal_old_zip_id_binding_required'):
+            self.rotation.promote(NEW,SHA,self.restore)
+        self.assertEqual(props,before)
+        self.assertEqual(self.fake.patches,patches)
+
     def test_done_legacy_v1_no_zip_binding_fails_closed(self):
         self.complete()
         properties = self.fake.objects[PARENT]['appProperties']
@@ -216,6 +235,19 @@ class CloudDoneReplayTests(unittest.TestCase):
         self.assertEqual(self.j.read(), before)
         self.assertEqual(self.fake.patches, patches)
         self.assertEqual(self.fake.objects[PARENT]['appProperties']['health_r_state'], 'PROMOTED')
+        self.assertTrue(self.fake.objects[OLD]['trashed'])
+
+    def test_promoted_done_legacy_v1_without_zip_binding_fails_closed(self):
+        self.promoted_done()
+        props=self.fake.objects[PARENT]['appProperties']
+        props.pop('health_r_old_zip')
+        props['health_r_v']='1'
+        before=dict(props)
+        patches=list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop,'cloud_journal_old_zip_id_binding_required'):
+            self.rotation.promote(NEW,SHA,self.restore)
+        self.assertEqual(props,before)
+        self.assertEqual(self.fake.patches,patches)
         self.assertTrue(self.fake.objects[OLD]['trashed'])
 
     def test_promoted_done_rejects_renamed_physical_zip(self):

@@ -4,7 +4,7 @@
 Каноническая медицинская информация и полный текст REC находятся в приватном PostgreSQL/Supabase. Медицинские идентификаторы стабильны и независимы от файлового провайдера. Оригинальные Source хранятся на приватном Drive; физические идентификаторы используются как локаторы, а не как медицинские ID. Все производные данные имеют явное основание.
 
 ## Сущности
-- `records`: `record_id`, `nnn`, `record_date`, `title`, `record_type`, `summary`, `body_text`, `status`, `confidence`, `provenance_status`, `metadata`. Обязательный полный текст. ID не переиспользуется.
+- `records`: `record_id`, `nnn`, `record_date`, `title`, `type`, `record_type`, `tags`, `summary`, `body_text`, `status`, `confidence`, `provenance_status`, `source_label`, `source_request_id`, `source_pages`, `metadata`. Обязательный полный текст. ID не переиспользуется.
 - `sources`: логический `source_id`, путь, исходное имя (только приватно), MIME, размер, SHA-256, дата, метаданные.
 - `source_locations`: физический provider, account alias, provider object ID, роль PRIMARY/BACKUP. Хранится приватно.
 - `record_sources`: связь многие-ко-многим REC ↔ Source со страницами и provenance.
@@ -22,3 +22,6 @@
 
 ## Отличия от прежнего Drive-native
 Google Docs больше не являются каноническим хранилищем REC; полный читаемый текст принадлежит `records.body_text`. Физические Source-локаторы отделены от идентичностей. Целостность обеспечивают SQL-ограничения, Writer и актуальная Validation, а не старая Google Sheets Registry. Старые Docs остаются историческими свидетельствами.
+
+## Неутверждённые расширения
+Новая нормализованная модель вакцинаций (Issue [#62](https://github.com/Alexio00/HEALTH/issues/62), Draft [#45](https://github.com/Alexio00/HEALTH/pull/45)) не входит в действующую схему. Она требует согласованного Writer/Verifier/Validation/reader contract и одного проверенного migration release до активации. Отображение уже имеющихся записей вакцинаций в PWA — отдельный read-only UI контур и не подтверждает наличие нового канонического реестра.

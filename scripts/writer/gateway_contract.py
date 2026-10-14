@@ -32,11 +32,11 @@ def _exact(data: Mapping[str, Any], keys: frozenset[str], error: str) -> None:
 
 def workflow_envelope(request_key: str, kind: str, digest: str) -> dict[str, str]:
     """Только три непрозрачных параметра GitHub OIDC; никаких медицинских данных."""
-    if not isinstance(request_key, str) or not _KEY.fullmatch(request_key):
+    if type(request_key) is not str or not _KEY.fullmatch(request_key):
         raise GatewayBlocked("invalid_request_key")
     if type(kind) is not str or kind not in ("intent", "candidate"):
         raise GatewayBlocked("invalid_approval_kind")
-    if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
+    if type(digest) is not str or not _DIGEST.fullmatch(digest):
         raise GatewayBlocked("invalid_digest")
     return {"request_key": request_key, "kind": kind, "digest": digest}
 
@@ -89,10 +89,10 @@ def safe_status(result: Mapping[str, Any]) -> dict[str, str]:
     key = result["request_key"]
     state = result["state"]
     digest = result["result_sha"]
-    if not isinstance(key, str) or not _KEY.fullmatch(key):
+    if type(key) is not str or not _KEY.fullmatch(key):
         raise GatewayBlocked("status_key_invalid")
     if type(state) is not str or state not in ("PREPARED", "COMMITTED_REGISTRY", "VALIDATED", "FINALIZED", "FAILED", "BLOCKED"):
         raise GatewayBlocked("status_state_invalid")
-    if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
+    if type(digest) is not str or not _DIGEST.fullmatch(digest):
         raise GatewayBlocked("status_digest_invalid")
     return {"request_key": key, "state": state, "result_sha": digest}

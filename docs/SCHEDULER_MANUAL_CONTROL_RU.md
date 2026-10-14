@@ -33,7 +33,7 @@
 ### Порядок одной проверки
 
 1. Сверить current GitHub branch HEAD для `SHEDULLER/main`, `HEALTH/main`, `HEALTH/scheduler-code` с принятым для каждого компонента SHA (не переносить pin между разными ветками). Не менять Variables.
-2. Открыть Actions run history SHEDULLER и **отфильтровать event=schedule**. По каждой из двух активностей найти run за проверяемую календарную дату *в UTC*. Если отсутствует — зафиксировать `RUN_MISSING`; не ждать встроенного failed email.
+2. Открыть Actions run history SHEDULLER и **отфильтровать event=schedule**. По каждой из двух активностей найти run за проверяемую календарную дату *в UTC*. Если запись отсутствует за рассматриваемые UTC-сутки, проверить соседние сутки: сильная задержка GitHub может перенести `created_at` через полночь и сделать привязку к плановому cron-слоту неоднозначной. До корреляции ставить `MISSING_OR_CROSS_DAY_UNCONFIRMED`; не ждать встроенного failed email.
 3. Зафиксировать `run_id`, `run_attempt`, `event`, `head_sha`, `created_at`, `run_started_at`, `completed_at`, `conclusion`, actor. Не смешивать manual rerun и scheduled run.
 4. Backup: раскрыть **job statuses**. `complete=success` при `database/sources/verification=skipped` — ожидаемая ветка нового full pipeline. Если работают legacy stages без `complete`, отметить другой тип резервирования. Зелёный run не подтверждает «полный complete».
 5. Только при уполномоченном доступе к приватным evidence отдельно проверить состояние Backup Health: один ACTIVE, идентичность/целостность remote archive, независимый full DB/Auth/roles/Sources restore receipt и единый Writer/backup lock. **Не скачивать** архив в обычный публичный контур и не выводить IDs/медицинские строки/логи в GitHub.

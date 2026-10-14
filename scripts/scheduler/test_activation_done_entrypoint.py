@@ -126,6 +126,57 @@ class ActivationEntrypointDoneTests(unittest.TestCase):
             self.execute()
         self.assertEqual(self.transport.patches, self.patches_before)
 
+    def test_promoted_done_valid_history_reconciles(self):
+        self.transport.objects[PARENT]['appProperties']['health_r_state'] = 'PROMOTED'
+        result = self.execute()
+        self.assertEqual(result['status'], 'ACTUAL_VERIFIED_COMPLETE_BACKUP_ROTATION_PASS')
+        self.assertEqual(result['rotation']['previous_sets_trashed'], 1)
+        self.assertEqual(self.transport.objects[PARENT]['appProperties']['health_r_state'], 'DONE')
+        self.assertEqual([id for id, payload in self.transport.patches
+                          if id == OLD and 'trashed' in payload], [OLD])
+
+    def test_promoted_done_changed_old_digest_rejects_before_marker(self):
+        self.transport.objects[PARENT]['appProperties']['health_r_state'] = 'PROMOTED'
+        self.transport.objects[OLD]['appProperties']['health_archive_sha256'] = 'c' * 64
+        with self.assertRaisesRegex(RotationStop, 'complete_set_digest_binding_rejected'):
+            self.execute()
+        self.assertNotIn('health_full_restore_archive', self.transport.objects[PARENT]['appProperties'])
+        self.assertEqual(self.transport.objects[PARENT]['appProperties']['health_r_state'], 'PROMOTED')
+        self.assertEqual(self.transport.patches, self.patches_before)
+
+    def test_promoted_done_old_state_changed_rejects_before_marker(self):
+        self.transport.objects[PARENT]['appProperties']['health_r_state'] = 'PROMOTED'
+        self.transport.objects[OLD]['appProperties']['health_recovery_state'] = 'CANDIDATE'
+        with self.assertRaisesRegex(RotationStop, 'completed_rotation_old_state_changed'):
+            self.execute()
+        self.assertEqual(self.transport.objects[PARENT]['appProperties']['health_r_state'], 'PROMOTED')
+        self.assertEqual(self.transport.patches, self.patches_before)
+
+    def test_done_replay_rejects_foreign_same_digest_candidate(self):
+        rival = copy.deepcopy(self.transport.objects[NEW])
+        rival.update(id='syntheticrival1234',
+                     name='complete-20261013T000000Z-deadbeef')
+        rival['appProperties']['health_recovery_state'] = 'CANDIDATE'
+        self.transport.objects[rival['id']] = rival
+        with self.assertRaisesRegex(pipeline.SourceStop, 'completed_rotation_conflicting_candidate'):
+            self.execute()
+        self.assertEqual(self.transport.patches, self.patches_before)
+        self.assertTrue(self.transport.objects[OLD]['trashed'])
+        self.assertNotIn('health_full_restore_archive', self.transport.objects[PARENT]['appProperties'])
+
+    def test_promoted_replay_rejects_foreign_candidate(self):
+        self.transport.objects[PARENT]['appProperties']['health_r_state'] = 'PROMOTED'
+        rival = copy.deepcopy(self.transport.objects[NEW])
+        rival.update(id='syntheticrival1234',
+                     name='complete-20261013T000000Z-deadbeef')
+        rival['appProperties']['health_recovery_state'] = 'CANDIDATE'
+        self.transport.objects[rival['id']] = rival
+        with self.assertRaisesRegex(pipeline.SourceStop, 'pending_rotation_foreign_candidate'):
+            self.execute()
+        self.assertEqual(self.transport.objects[PARENT]['appProperties']['health_r_state'], 'PROMOTED')
+        self.assertEqual(self.transport.patches, self.patches_before)
+
+
 
 if __name__ == '__main__':
     unittest.main()

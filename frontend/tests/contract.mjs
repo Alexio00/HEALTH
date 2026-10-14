@@ -391,6 +391,53 @@ assert.equal(bodyMixed.length,1,"performed body line retained even when plan fol
 assert.deepEqual(bodyMixed[0].keys,["measles"],"body future infection excluded");
 console.log("PASS PWA80-M01 R2 postfix plans, mixed antigens, conflicting textual doses");
 
+// PWA80-M01-R3: a comma/semicolon INSIDE an event is not an administration
+// boundary. Postfix "Rv2, запланирована" must never be shown as performed.
+const r3 = [
+  ["141","Вакцинация: краснуха (Rv2, запланирована)",null],
+  ["142","Вакцинация: краснуха (Rv2; запланирована)",null],
+  ["143","Вакцинация: краснуха Rv2, запланирована",null],
+  ["144","Вакцинация: краснуха (Rv2) запланирована",null],
+  ["145","Вакцинация: краснуха (Rv2, рекомендована)",null],
+  ["146","Вакцинация: корь (ЖКВ, V1), краснуха (Rv2, запланирована)",["measles","V1"]],
+  ["147","Вакцинация: корь (ЖКВ, V1, краснуха запланирована)",["measles","V1"]],
+  ["148","Вакцинация: корь (ЖКВ, V1, Rv2 запланирована)",["measles","V1"]],
+  ["149","Вакцинация: корь (ЖКВ, V1), краснуха, запланирована",["measles","V1"]],
+  ["150","Вакцинация: корь (ЖКВ, Rv2), краснуха (Rv2, запланирована)",["measles","Rv2"]],
+  ["151","Вакцинация: корь (ЖКВ, V1) и краснуха (Rv2, запланирована)",["measles","V1"]],
+  ["152","Вакцинация: корь (ЖКВ, V1; доза 2)",["measles","—"]],
+  ["153","Вакцинация: краснуха (V1)",["rubella","V1"]]
+];
+const r3Events = actualVaccinations(r3.map(([nnn, summary]) => ({
+  record_id:"REC-20110401-" + nnn,record_date:"2011-04-01",
+  tags:["VACCINATION"],summary
+})));
+const r3ById = new Map(r3Events.map(event => [event.administrationRecordId,event]));
+for (const [nnn,,expect] of r3) {
+  const id = "REC-20110401-" + nnn;
+  const found = r3ById.get(id);
+  if (!expect) {
+    assert.equal(found,undefined,id + ": future-only vaccination must not be actual");
+  } else {
+    assert(found,id + ": previous performed event must remain visible");
+    assert.deepEqual(found.keys,[expect[0]],id + ": future antigen not administered");
+    assert.equal(found.stage,expect[1],id + ": performed stage only");
+  }
+}
+const r3Body = actualVaccinations([
+  {record_id:"REC-20110401-154",record_date:"2011-04-01",tags:["VACCINATION"],
+    summary:"Осмотр перед вакцинацией",
+    body_text:"## Вакцинация\\n- Вакцинация против краснухи (Rv2, запланирована)"},
+  {record_id:"REC-20110401-155",record_date:"2011-04-01",tags:["VACCINATION"],
+    summary:"Осмотр перед вакцинацией",
+    body_text:"## Вакцинация\\n- Вакцинация против кори (ЖКВ, V1)\\n- Вакцинация против краснухи (Rv2, запланирована)\\n## Рекомендации\\n- Вакцинация против паротита"}
+]);
+assert.equal(r3Body.length,1,"future-only body must not create administered events");
+assert.equal(r3Body[0].administrationRecordId,"REC-20110401-155");
+assert.deepEqual(r3Body[0].keys,["measles"],"future-only body infection excluded");
+assert.equal(r3Body[0].stage,"V1");
+console.log("PASS PWA80-M01 R3 balanced events, postfix plans and future-only body");
+
 const vaccineView=buildVaccinationView(vaccinationRecords,vaccinationPlans,"2026-10-13");
 assert.equal(vaccineView.planned.length,3,"cancelled plan does not appear among upcoming doses");
 assert.equal(vaccineView.history.length,doses.length+future.length);

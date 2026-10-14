@@ -1,10 +1,11 @@
 """Nonsecret negative fixtures for trusted scope; never calls GitHub."""
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from trusted_pr_scope import check_scope, ScopeStop
+from trusted_pr_scope import check_scope, check_trusted_policy_release, ScopeStop
 
 HEAD = "a" * 40
 OWNER = 308028794
@@ -85,6 +86,51 @@ class ScopeFixtures(unittest.TestCase):
             verify(".github/workflows/health-trusted-scope.yml")
         with self.assertRaises(ScopeStop):
             verify(".github/workflows/health-trusted-scope.yml", "scheduler-code")
+
+    def test_independent_policy_pin_survives_unrelated_main_update(self):
+        old_accepted = "a" * 40
+        moved_main = "c" * 40
+        original_workflow_blob = "d" * 40
+        metadata = {"type": "file",
+                    "path": ".github/workflows/health-trusted-scope.yml",
+                    "sha": original_workflow_blob, "size": 999}
+        with patch("trusted_pr_scope.api", return_value=metadata) as fetch:
+            self.assertTrue(check_trusted_policy_release(
+                old_accepted, old_accepted, moved_main,
+                original_workflow_blob, "synthetic-readonly-token"))
+            self.assertEqual(fetch.call_count, 1)
+            self.assertIn("?ref=" + moved_main, fetch.call_args.args[0])
+
+    def test_independent_policy_pin_rejects_malformed_unaccepted_code(self):
+        token = "synthetic-readonly-token"
+        with patch("trusted_pr_scope.api") as fetch:
+            for args in ((None, "a" * 40, "b" * 40, "c" * 40, token),
+                         ("a" * 40, "e" * 40, "b" * 40, "c" * 40, token),
+                         ("a" * 40, "a" * 40, None, "c" * 40, token),
+                         ("a" * 40, "a" * 40, "b" * 40, "", token)):
+                with self.subTest(args=args), self.assertRaisesRegex(
+                        ScopeStop, "independent_policy_pin_required"):
+                    check_trusted_policy_release(*args)
+            fetch.assert_not_called()
+
+    def test_independent_policy_pin_rejects_changed_workflow_and_invalid_metadata(self):
+        pin = "a" * 40
+        for metadata in ({"type": "file",
+                          "path": ".github/workflows/health-trusted-scope.yml",
+                          "sha": "b" * 40, "size": 100},
+                         {"type": "dir", "path": ".github/workflows/health-trusted-scope.yml",
+                          "sha": "c" * 40, "size": 100},
+                         {"type": "file", "path": ".github/workflows/other.yml",
+                          "sha": "c" * 40, "size": 100},
+                         {"type": "file",
+                          "path": ".github/workflows/health-trusted-scope.yml",
+                          "sha": "c" * 40, "size": 0}):
+            with self.subTest(metadata=metadata), patch(
+                    "trusted_pr_scope.api", return_value=metadata):
+                with self.assertRaisesRegex(
+                        ScopeStop, "trusted_default_workflow_blob_changed"):
+                    check_trusted_policy_release(pin, pin, "b" * 40,
+                                                 "c" * 40, "synthetic-token")
 
     def test_writer_branch_bounded_code_requires_owner_exact_sha(self):
         candidates = ("scripts/writer/gateway_contract.py",

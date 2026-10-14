@@ -8,7 +8,7 @@ untrusted state: it never substitutes for fresh archive/recovery verification.
 import json,re
 from drive_rotation import OWNER,RotationJournal,RotationStop,identity
 
-KEYS=('v','target','sha','old','old_sha','state','done')
+KEYS=('v','target','sha','old','old_sha','old_zip','state','done')
 PREFIX='health_r_'
 class DriveCloudJournal:
     def __init__(self,transport,parent,local_lock_file,*,serialized):
@@ -26,16 +26,20 @@ class DriveCloudJournal:
         if not isinstance(properties,dict):raise RotationStop('cloud_journal_properties_rejected')
         p={k[len(PREFIX):]:v for k,v in properties.items() if k.startswith(PREFIX)}
         if not p:return None
-        if set(p)!=set(KEYS) or any(not isinstance(v,str) for v in p.values()) or p['v']!='1':raise RotationStop('cloud_journal_format_rejected')
+        # v1 has no immutable ZIP Drive ID; do not infer one on replay.
+        if set(p)!=set(KEYS) or any(not isinstance(v,str) for v in p.values()) or p['v']!='2':
+            raise RotationStop('cloud_journal_old_zip_id_binding_required')
         if not re.fullmatch('[a-f0-9]{64}',p['sha']) or p['state'] not in ('PLANNED','PROMOTED','DONE') or p['done'] not in ('0','1'):
             raise RotationStop('cloud_journal_binding_rejected')
         target=identity(p['target']);old=[];done=[]
         if p['old']:
             old_id=identity(p['old'])
             if old_id==target or not re.fullmatch('[a-f0-9]{64}',p['old_sha']):raise RotationStop('cloud_journal_old_binding_rejected')
-            old=[{'id':old_id,'sha':p['old_sha']}]
+            old_zip=identity(p['old_zip'])
+            if old_zip==old_id:raise RotationStop('cloud_journal_old_zip_id_binding_rejected')
+            old=[{'id':old_id,'sha':p['old_sha'],'zip_id':old_zip}]
             if p['done']=='1':done=[old_id]
-        elif p['old_sha'] or p['done']!='0':raise RotationStop('cloud_journal_empty_old_rejected')
+        elif p['old_sha'] or p['old_zip'] or p['done']!='0':raise RotationStop('cloud_journal_empty_old_rejected')
         if p['state']=='PLANNED' and done or p['state']=='DONE' and len(old)!=len(done):raise RotationStop('cloud_journal_progress_rejected')
         return {'target':target,'parent':self.parent,'sha':p['sha'],'old':json.dumps(old),'done':json.dumps(done),'state':p['state']}
     def get(self,target):
@@ -45,8 +49,14 @@ class DriveCloudJournal:
         if self.read()!=previous:raise RotationStop('cloud_journal_concurrent_change')
         old=json.loads(row['old']);done=json.loads(row['done'])
         if len(old)>1 or done not in ([],[old[0]['id']] if old else []):raise RotationStop('cloud_journal_single_old_required')
-        p=dict(v='1',target=row['target'],sha=row['sha'],old=old[0]['id'] if old else '',
-               old_sha=old[0]['sha'] if old else '',state=row['state'],done='1' if done else '0')
+        for binding in old:
+            if (not isinstance(binding,dict) or set(binding)!={'id','sha','zip_id'}
+                    or identity(binding['id'])==identity(binding['zip_id'])
+                    or not re.fullmatch('[a-f0-9]{64}',binding['sha'])):
+                raise RotationStop('cloud_journal_old_zip_id_binding_required')
+        p=dict(v='2',target=row['target'],sha=row['sha'],old=old[0]['id'] if old else '',
+               old_sha=old[0]['sha'] if old else '',old_zip=old[0]['zip_id'] if old else '',
+               state=row['state'],done='1' if done else '0')
         properties={PREFIX+k:v for k,v in p.items()}
         if any(len(k.encode())+len(v.encode())>124 for k,v in properties.items()):raise RotationStop('cloud_journal_property_limit')
         self.t.request('/drive/v3/files/'+self.parent+'?fields=id,appProperties',method='PATCH',body=json.dumps({'appProperties':properties}).encode(),content_type='application/json')
@@ -62,7 +72,11 @@ class DriveCloudJournal:
         if len(old)>1:raise RotationStop('cloud_journal_single_old_required')
         for binding in old:
             identity(binding['id'])
-            if binding['id']==target or not re.fullmatch('[a-f0-9]{64}',binding['sha']):raise RotationStop('cloud_journal_old_binding_rejected')
+            if (binding['id']==target or not isinstance(binding,dict)
+                    or set(binding)!={'id','sha','zip_id'}
+                    or not re.fullmatch('[a-f0-9]{64}',binding['sha'])
+                    or identity(binding['zip_id'])==binding['id']):
+                raise RotationStop('cloud_journal_old_zip_id_binding_required')
         row=dict(target=target,parent=parent,sha=sha,old=json.dumps(old),done='[]',state='PLANNED')
         self.save(previous,row);return row
     def state(self,target,state,done=None):

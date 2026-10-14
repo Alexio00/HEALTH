@@ -7,10 +7,11 @@ Product Owner выбрал временный **ручной эксплуата�
 
 | Компонент | Target | BASE_SHA (40) | HEAD_SHA (40) | Diff |
 |---|---|---|---|---|
-| [PR #73](https://github.com/Alexio00/HEALTH/pull/73): executable code + nonsecret tests | `scheduler-code` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | `f8a4acc582e94f665fb58e840db7769c8e936553` | 34 added files, 67 commits vs base |
+| [PR #73](https://github.com/Alexio00/HEALTH/pull/73): исторический executable candidate | `scheduler-code` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | `f8a4acc582e94f665fb58e840db7769c8e936553` | Superseded составным #90; не сливать как второй выпуск |
 | [PR #72](https://github.com/Alexio00/HEALTH/pull/72): старый launcher candidate | `main` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | `4d4659312cf89ad02b5e778b8c037db5c9e426e3` | 5 новых workflow; **не выпускать совместно с #89** |
 | [PR #89](https://github.com/Alexio00/HEALTH/pull/89): исправленный кандидат trusted default-main launchers | `main` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | `82c6d75ee839ee766896fed817712459733680a1` | Те же 5 workflow + 4 точечных исправления относительно #72; отдельная приёмка обязательна |
-| [PR #81](https://github.com/Alexio00/HEALTH/pull/81) → [#88](https://github.com/Alexio00/HEALTH/pull/88): stacked Scheduler Code | `scheduler-code` через зависимые feature branches | `f8a4acc582e94f665fb58e840db7769c8e936553` → `35218a67af482820ee83373e3a3fff3c60f6c931` | `84b8c37cfe41d3425d2b125649a787566936ec17` | Исправления доверенного rclone-архива и повторной ротации; итоговый combined diff ещё требует независимого review |
+| [PR #81](https://github.com/Alexio00/HEALTH/pull/81) → [#88](https://github.com/Alexio00/HEALTH/pull/88): историческая stacked цепочка | `scheduler-code` через feature branches | `f8a4acc582e94f665fb58e840db7769c8e936553` → `35218a67af482820ee83373e3a3fff3c60f6c931` | `84b8c37cfe41d3425d2b125649a787566936ec17` | #88 получил независимый FAIL при повторном activate/DONE; сохраняется история, но не GO |
+| [PR #90](https://github.com/Alexio00/HEALTH/pull/90): текущий объединённый Scheduler Code | `scheduler-code` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | `09e0ff0a9f6f33780a07eaabc4087a2b094e10ef` | 37 файлов vs base; +3 файла относительно #88, из них 2 изменены, 1 добавлен. CI success, самостоятельный независимый review ещё требуется; #82 не исправлен |
 | [PR #86](https://github.com/Alexio00/HEALTH/pull/86): this documentation | `scheduler-code` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | **moving HEAD, fetch again** | documentation only, **не часть** frozen #73 code review |
 
 На дату среза `HEALTH/main` = `3409791f1ffc5749020e7ff07139b0cec722f6fc`, то же значение в действующем приватном State как accepted Writer code SHA. `HEALTH/scheduler-code` = этот же базовый SHA; `HEALTH/scheduler` = `98f9c41ff9b1496dfc40d0da960971ae7bf58a42`. `SHEDULLER/main` = `8656a360c2b24c0f51e6e2b80edf78e6bd89ccc4` — текущий исполнитель backup. Подтвердить повторно непосредственно перед review/merge.
@@ -33,7 +34,7 @@ Product Owner выбрал временный **ручной эксплуата�
 3. Сверить собственный CI код с тем, что реально исполнялось; зелёный `health-scheduler-validation.yml` не независимый security issuer.
 4. Для #73 проверить тестовый run [38549825326](https://github.com/Alexio00/HEALTH/actions/runs/38549825326): synthetic success на `f8a4acc5...`, **не** реальный restore proof и не владелец GO.
 
-### B. Синтетика Scheduler Code (#73 и последующие исправления)
+### B. Синтетика итогового Scheduler Code (#90; предшественники #73/#81/#88 — только provenance)
 
 - `python3 -m compileall -q scripts/scheduler scripts/automation`;
 - `python3 scripts/validation/public_secret_guard.py`;
@@ -66,9 +67,9 @@ Product Owner выбрал временный **ручной эксплуата�
 
 | Gate | Статус на дату документа | Нужное доказательство | Кто принимает |
 |---|---|---|---|
-| #73 fixed SHA & diff | VERIFIED metadata | Статический независимый code/privacy/security review на этот SHA | Независимый reviewer |
-| #73 synthetic CI | CI PASS | Воспроизведённый независимый негативный набор, включая #82 | Reviewer, не GitHub CI |
-| #73 accepted merge | NO-GO | Reviewer PASS + отдельный owner GO + re-read Rulesets/HEAD | Owner |
+| #90 fixed SHA & diff | VERIFIED metadata | Полный составной diff от protected scheduler-code, независимый code/privacy/security review; не переносить FAIL/PASS с #88 | Независимый reviewer |
+| #90 synthetic CI | CI PASS: 38589627931 | Воспроизведённые отрицательные случаи ротации DONE, включая old SHA/Trash/ACL drift, и отдельное исправление #82 | Reviewer, не GitHub CI |
+| #90 accepted merge | NO-GO | Независимый PASS именно #90 или более нового HEAD + отдельный owner GO, re-read Rulesets/HEAD; #82 блокирует release | Owner |
 | #89 five workflows | VERIFIED metadata / SYNTHETIC CHECKS ONLY | Exact independent review `if/on`/secret/accepted-main/pause/rollback, cross-PR rclone SHA pin; #87 нельзя объявлять исправленным по локальному тесту | Reviewer |
 | #89 merge into Writer main | NO-GO | Выбор единственного launcher train (#89 vs #72), accepted Writer main SHA/broker/runtime reacceptance, owner GO | Owner + Writer coordinator |
 | HEALTH scheduler production activation | NO-GO | Установленные permission boundaries, private proof of complete restore, legacy paused & idle, cutover runbook, separate GO | Owner + architecture coordinator |
@@ -105,8 +106,8 @@ Release status: DRAFT / ACCEPTED_CODE / PRODUCTION_VERIFIED
 
 ## 5. Cutover — только после нового решения Owner
 
-1. Отдельно принять executable release SHA #73, без изменения `scheduler`; подтвердить отсутствие новых workflow в кодовой ветке.
-2. Исправить #82/#87, затем повторить exact-SHA review соответствующих изменённых кандидатов.
+1. После исправления открытого #82 и полного независимого security/recovery review принять **один** итоговый executable release SHA #90 (либо новый HEAD, прошедший повторную проверку), без изменения `scheduler`; подтвердить отсутствие production launchers в кодовой ветке. Не делать дополнительные merge исторических #73/#81/#88.
+2. Для #89 проверить устранение #87 и совместимость независимого rclone archive SHA из #90; повторить exact-SHA review каждого изменённого кандидата. Предыдущий independent FAIL #88 не переопределять.
 3. Согласовать единственного launcher-кандидата **#89 вместо #72** или другой отдельно утверждённый final head. До независимой приёмки обеспечить совместимость с итоговым `install_rclone.sh` из #81/#88: `HEALTH_RCLONE_ARCHIVE_SHA256` должен иметь независимо принятую контрольную сумму и передаваться трем workflow, которые его вызывают. Затем отдельное принятие `main` с новым Writer SHA и broker/runtime validation; **все новые расписания выключены**.
 4. Проверить restricted roles/Secrets/private Environments (только существование/доступ/полномочия, не выводить значения) и independent full recovery.
 5. Получить отдельное owner GO: остановить SHEDULLER schedules и дождаться завершения всех jobs **до первой новой записи в shared backup**; подтвердить отсутствие чужого CANDIDATE/UPLOADING.

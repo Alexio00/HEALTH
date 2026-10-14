@@ -199,6 +199,8 @@ class ScopeFixtures(unittest.TestCase):
             {'truncated': True, 'tree': [entry]},
             {'truncated': False, 'tree': [{**entry, 'mode': 'unknown'}]},
             {'truncated': False, 'tree': [{**entry, 'sha': None}]},
+            {'truncated': False, 'tree': [{**entry, 'path': 'frontend/nul\\0.js'}]},
+            {'truncated': False, 'tree': [{**entry, 'path': 'frontend/x%00.js'}]},
         )
         for response in responses:
             with self.subTest(response=response), patch('trusted_pr_scope.api',
@@ -242,6 +244,15 @@ class ScopeFixtures(unittest.TestCase):
                            ("writer-code", "scripts/writer/config.env.production")):
             with self.subTest(mode=mode, path=repr(path)), self.assertRaises(ScopeStop):
                 verify(path, mode, OWNER, "WRITER-CONTROL: " + HEAD)
+
+    def test_r2_nonrename_previous_filename_rejected(self):
+        path = "frontend/app.js"
+        blob = ("blob", "100644")
+        entry = {"filename": path, "status": "modified",
+                 "previous_filename": "frontend/old.js"}
+        with self.assertRaisesRegex(ScopeStop, "unexpected_previous_filename"):
+            check_scope([entry], "pwa", 22, "", HEAD,
+                        {path: blob}, {path: blob})
 
     def test_r2_boolean_size_rejected(self):
         doc = {"type": "file", "path": ".github/workflows/health-trusted-scope.yml",

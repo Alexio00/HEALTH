@@ -349,6 +349,48 @@ assert.equal(stagedByRecord.get("REC-20110105-115")?.stage,"—",
 assert.equal(stagedByRecord.get("REC-20110106-116")?.stage,"—",
   "two nonfuture stage claims in one fragment must remain ambiguous");
 
+// PWA80-M01 R2: postfix plans and textual doses are adversarial input too.
+// No future-only infection may appear as a performed multi-infection label.
+const reproInputs = [
+  ["REC-20110201-121","Вакцинация: корь (ЖКВ, Rv2 запланирована)"],
+  ["REC-20110202-122","Вакцинация: корь (ЖКВ, V1), ревакцинация Rv2 запланирована"],
+  ["REC-20110203-123","Вакцинация: корь (ЖКВ, V1; доза 2)"],
+  ["REC-20110204-124","Вакцинация: корь (ЖКВ, V1; вторая вакцинация)"],
+  ["REC-20110205-125","Вакцинация: корь (ЖКВ, V1), краснуха запланирована"],
+  ["REC-20110206-126","Вакцинация: корь (ЖКВ, V1), в будущем краснуха (Rv2)"],
+  ["REC-20110207-127","Вакцинация: краснуха запланирована"],
+  ["REC-20110208-128","Вакцинация: корь (ЖКВ, V1, Rv2 рекомендована)"],
+  ["REC-20110209-129","Вакцинация: корь (ЖКВ, Rv2) и краснуха запланирована"],
+  ["REC-20110210-130","Вакцинация: корь (ЖКВ, V1); ревакцинация Rv2 назначена"]
+];
+const reproRows = actualVaccinations(reproInputs.map(([record_id,summary]) => ({
+  record_id, summary, record_date:"2011-02-01", tags:["VACCINATION"]
+})));
+const repro = new Map(reproRows.map(row => [row.administrationRecordId,row]));
+for (const id of ["REC-20110201-121","REC-20110207-127"]) {
+  assert(!repro.has(id), id + ": future-only vaccination cannot be actual");
+}
+for (const id of ["REC-20110202-122","REC-20110205-125","REC-20110206-126",
+  "REC-20110208-128","REC-20110210-130"]) {
+  assert.equal(repro.get(id)?.stage,"V1",id + ": keep only performed V1");
+}
+for (const id of ["REC-20110203-123","REC-20110204-124"])
+  assert.equal(repro.get(id)?.stage,"—",id + ": conflicting textual dose is ambiguous");
+assert.equal(repro.get("REC-20110209-129")?.stage,"Rv2",
+  "future rubella cannot dilute a separately performed measles booster");
+for (const id of ["REC-20110205-125","REC-20110206-126","REC-20110209-129"]) {
+  assert.deepEqual(repro.get(id)?.keys,["measles"],
+    id + ": no future-only rubella antigen in actual row");
+}
+const bodyMixed = actualVaccinations([{
+  record_id:"REC-20110301-131",record_date:"2011-03-01",tags:["VACCINATION"],
+  summary:"Осмотр перед вакцинацией",
+  body_text:"## Вакцинация\n- Вакцинация против кори (ЖКВ, V1), краснуха запланирована\n## Рекомендации\n- Вакцинация против паротита"
+}]);
+assert.equal(bodyMixed.length,1,"performed body line retained even when plan follows");
+assert.deepEqual(bodyMixed[0].keys,["measles"],"body future infection excluded");
+console.log("PASS PWA80-M01 R2 postfix plans, mixed antigens, conflicting textual doses");
+
 const vaccineView=buildVaccinationView(vaccinationRecords,vaccinationPlans,"2026-10-13");
 assert.equal(vaccineView.planned.length,3,"cancelled plan does not appear among upcoming doses");
 assert.equal(vaccineView.history.length,doses.length+future.length);

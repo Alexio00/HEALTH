@@ -24,3 +24,10 @@
 Постоянные ветки: `main` (принятый Writer и trusted launchers), `writer-code` (изолированная разработка Writer), `pwa` (интерфейс), `scheduler-code` (исполняемый код Scheduler), `scheduler` (служебный heartbeat). В `writer-code` и `scheduler-code` ещё нет принятых production-релизов. Перенос Scheduler из приватного SHEDULLER в HEALTH рассматривается в [Issue #65](https://github.com/Alexio00/HEALTH/issues/65), [Draft #72](https://github.com/Alexio00/HEALTH/pull/72), [#73](https://github.com/Alexio00/HEALTH/pull/73); он пока не активирован. Реальные backup и keepalive остаются на принятом приватном контуре до отдельного эксплуатационного GO и независимой проверки полного восстановления. Расписания GitHub из `main` не равнозначны принятию Writer/Scheduler.
 
 Изменение общей схемы Supabase требует явной проверки совместимости с Writer/Verifier/Validation/PWA ([Issue #62](https://github.com/Alexio00/HEALTH/issues/62)). HIGH-риск подмены PWA scope-check [#50](https://github.com/Alexio00/HEALTH/issues/50) остаётся открытым; применима принятая владельцем ручная техническая приёмка по точному SHA, а не доверие только к CI.
+
+## Воспроизводимость и переносимость
+
+- `supabase/migrations/` — принятая timestamped история миграций; `db/migrations/` — сохранённые агрегированные исторические снимки, не альтернативный deployment-путь.
+- Проверки Auth и политики доступа исполняемы через `scripts/validation/`. Полная историческая миграция выполнялась ограниченным `scripts/migration/full_migration.py` и **не должна повторяться** как способ технического обновления.
+- PWA может размещаться на другом статическом хостинге без переноса медицинских идентификаторов. Source ID переживает смену физического провайдера; новую ссылку подтверждают по байтам и provenance.
+- При disaster recovery Auth владельца можно воссоздать и перепривязать через `app_readers`; медицинские идентификаторы от Auth UUID не зависят.

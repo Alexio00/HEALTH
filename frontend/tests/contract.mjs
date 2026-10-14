@@ -427,10 +427,10 @@ for (const [nnn,,expect] of r3) {
 const r3Body = actualVaccinations([
   {record_id:"REC-20110401-154",record_date:"2011-04-01",tags:["VACCINATION"],
     summary:"Осмотр перед вакцинацией",
-    body_text:"## Вакцинация\\n- Вакцинация против краснухи (Rv2, запланирована)"},
+    body_text:"## Вакцинация\n- Вакцинация против краснухи (Rv2, запланирована)"},
   {record_id:"REC-20110401-155",record_date:"2011-04-01",tags:["VACCINATION"],
     summary:"Осмотр перед вакцинацией",
-    body_text:"## Вакцинация\\n- Вакцинация против кори (ЖКВ, V1)\\n- Вакцинация против краснухи (Rv2, запланирована)\\n## Рекомендации\\n- Вакцинация против паротита"}
+    body_text:"## Вакцинация\n- Вакцинация против кори (ЖКВ, V1)\n- Вакцинация против краснухи (Rv2, запланирована)\n## Рекомендации\n- Вакцинация против паротита"}
 ]);
 assert.equal(r3Body.length,1,"future-only body must not create administered events");
 assert.equal(r3Body[0].administrationRecordId,"REC-20110401-155");

@@ -88,4 +88,4 @@ Decision: NO_ACTION|READ_ONLY_RECONCILIATION|OWNER_GO_REQUIRED
 
 Только после отдельного решения владельца с указанием ответственного за ручную проверку, желаемого эксплуатационного срока реакции/порогов и, при необходимости, будущего независимого мониторинга. Сейчас внешний watchdog = **NOT SELECTED**, никаких автоматизаций не создаётся.
 
-Связанные документы: [Scheduler runbook Draft #86](https://github.com/Alexio00/HEALTH/pull/86), [candidate #72](https://github.com/Alexio00/HEALTH/pull/72), [executable #73](https://github.com/Alexio00/HEALTH/pull/73), [#65](https://github.com/Alexio00/HEALTH/issues/65), [#82](https://github.com/Alexio00/HEALTH/issues/82), [#87](https://github.com/Alexio00/HEALTH/issues/87).
+Связанные документы: [Scheduler runbook Draft #86](https://github.com/Alexio00/HEALTH/pull/86), [main launchers #89](https://github.com/Alexio00/HEALTH/pull/89) (замена старого #72), [итоговый executable #90](https://github.com/Alexio00/HEALTH/pull/90) (замена исторических #73/#81/#88), [#65](https://github.com/Alexio00/HEALTH/issues/65), [#82](https://github.com/Alexio00/HEALTH/issues/82), [#87](https://github.com/Alexio00/HEALTH/issues/87).

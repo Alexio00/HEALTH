@@ -45,6 +45,37 @@ for (const section of ["latest", "planned", "history"]) {
   assert(cell.includes('title="Основание REC"'), section + " retains basis link context");
   assert(cell.includes('title="Запись о проведении"'), section + " retains administration link context");
 }
+// A multiple-infection REC displays its existing labels without inferring one
+// injection, an independently confirmed antigen stage, or a clinical link.
+const multiItem = {
+  kind:"actual", infection:"Корь, краснуха, паротит",
+  keys:["measles","rubella","mumps"], stage:"—",
+  administrationRecordId:administration, sourceStatus:"Проведена"
+};
+const multiRows = x.vaccinationRows([multiItem],"history");
+const multiHtml = multiRows[0].cells[0].html;
+assert(multiHtml.includes('<details class="vaccination-multi-infection">'));
+assert.equal((multiHtml.match(/class="vaccination-component-tag"/g)||[]).length,3);
+for (const name of ["Корь", "краснуха", "паротит"]) assert(multiHtml.includes(name));
+assert(!/комбинированная|инъекция|Rv[0-9]|V[0-9]/iu.test(multiHtml),
+  "UI must not invent a combined product or per-antigen stage");
+assert(!x.vaccinationRows([multiItem],"latest")[0].cells[0].html.includes("<details"),
+  "current latest projection is unchanged");
+assert(!x.vaccinationRows([{
+  kind:"plan", infection:"Корь, краснуха",keys:["measles","rubella"]
+}],"history")[0].cells[0].html.includes("<details"),
+  "a planned dose is not presented as administration");
+const hostileInfection = x.vaccinationRows([{
+  ...multiItem, infection:"Корь, <img src=x onerror=alert(1)>"
+}],"history")[0].cells[0].html;
+assert(!hostileInfection.includes("<img") && hostileInfection.includes("&lt;img"),
+  "both summary and expanded labels are HTML-escaped");
+assert.equal(multiRows[0].cells[0].filterValue,"Корь, краснуха, паротит");
+assert(multiRows[0].cells[5].html.includes(administration),
+  "historical REC link survives display-only grouping");
+assert(css.includes(".vaccination-multi-infection summary:focus-visible"),
+  "keyboard focus remains visible");
+
 assert(x.vaccinationRecCell({appointmentRecordId: appointment})
   .includes("Назн.:"), "separately requested labels are not silently changed");
 assert.equal((x.vaccinationRecCell({basisRecordId: basis, administrationRecordId: basis})

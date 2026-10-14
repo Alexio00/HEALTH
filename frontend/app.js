@@ -877,6 +877,22 @@ function vaccinationControl(item, section) {
   return esc(item.sourceStatus || "—");
 }
 
+// Presentation only: several infection labels in a REC do not establish
+// whether this was one injection or several administrations.
+function vaccinationInfectionCell(item, section) {
+  const label = '<strong>' + esc(item.infection) + '</strong>';
+  if (section !== "history" || item.kind !== "actual" ||
+      !Array.isArray(item.keys) || item.keys.length < 2) return label;
+  const names = String(item.infection || "").split(",")
+    .map(name => name.trim()).filter(Boolean);
+  if (names.length < 2) return label;
+  return '<details class="vaccination-multi-infection"><summary>' + label +
+    ' <span class="vaccination-multi-note">Инфекции в записи</span></summary>' +
+    '<ul class="vaccination-component-list" aria-label="Инфекции, указанные в записи">' +
+    names.map(name => '<li><span class="vaccination-component-tag">' + esc(name) +
+      '</span></li>').join("") + '</ul></details>';
+}
+
 function vaccinationRows(items, section) {
   return items.map(item => {
     const dateText = item.date ? fmtDate(item.date) : item.dateText || "—";
@@ -884,7 +900,7 @@ function vaccinationRows(items, section) {
     return {
       attrs: { "data-status": status },
       cells: [
-        tableCell('<strong>' + esc(item.infection) + '</strong>', item.infection),
+        tableCell(vaccinationInfectionCell(item, section), item.infection),
         tableCell(esc(item.stage), item.stage),
         tableCell(esc(dateText), item.date || dateText),
         tableCell(esc(item.vaccine || "—"), item.vaccine || ""),

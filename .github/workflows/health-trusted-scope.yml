@@ -1,0 +1,30 @@
+name: HEALTH trusted PR scope (draft pending main acceptance)
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+    branches: [pwa, scheduler-code, writer-code]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  trusted-code-scope:
+    name: trusted-code-scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout independently accepted main scope policy, never PR code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ vars.HEALTH_TRUSTED_POLICY_SHA }}
+          persist-credentials: false
+      - name: Check exact acceptance and review current PR diff as untrusted data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEALTH_TRUSTED_POLICY_SHA: ${{ vars.HEALTH_TRUSTED_POLICY_SHA }}
+          HEALTH_TRUSTED_WORKFLOW_BLOB_SHA: ${{ vars.HEALTH_TRUSTED_WORKFLOW_BLOB_SHA }}
+        run: |
+          set -euo pipefail
+          python3 scripts/validation/trusted_pr_scope.py

@@ -1,5 +1,30 @@
 # Актуальная документация и границы доказательств
 
+## Карта ответственности и статуса на 14.10.2026
+
+Это навигация по **действующим техническим текстам**, а не самостоятельный источник клинических полномочий. Приоритет: прямое решение владельца → живые приватные Project State/Manual → принятый Writer contract и фактический runtime. Технические предложения в Draft PR не переписывают принятые правила.
+
+| Раздел | Принято сейчас | В разработке, не выпуск |
+|---|---|---|
+| Writer | `main` с неизменяемым принятым кодовым SHA; отдельные bounded Writer/Verifier/Validation | `writer-code`, Gateway #84 и проект разделения релизов #76 |
+| PWA | защищённая `pwa`, read-only SQL, Pages, required `static` | UI #80/#85; #59 ждёт модель вакцинаций |
+| Scheduler | действующий приватный SHEDULLER с проверяемой ACTIVE-копией и restore | `scheduler-code` (#73/#81/#88), служебный `scheduler`, launchers #72/#89, operations #86 |
+| Схема | принятые `supabase/migrations` и ограниченный Writer allowlist | вакцинации #45 и проверка совместимости #62 |
+| Защита релизов | отдельный ручной независимый exact-SHA review и owner GO | trusted scope #78: R3 NO-GO, HIGH #50 остаётся открытым |
+
+**Пятиветочная схема:** `main`, `writer-code`, `pwa`, `scheduler-code`, `scheduler`. Новые `writer-code` / `scheduler-code` являются линиями разработки, а не новым принятым production. Дополнительного постоянного архитектурного branch нет. Четыре чата работают независимо и направляют общий schema/Auth/Writer/control-plane handoff архитектору согласно [техническому Draft #83](https://github.com/Alexio00/HEALTH/pull/83). Это организационный Draft, не прямое изменение приватного Manual.
+
+**Важно для документационных PR:** merge в `main` меняет принятый Writer SHA; требуется самостоятельная процедура нового code acceptance, включая проверку GitHub broker/runtime policy, а не только успешный Docs CI. Исторические материалы оставлять в первоначальном виде; не превращать старые формулировки вроде «Writer disabled» или «Drive canonical» в текущую операционную инструкцию. Никаких реальных REC, private Source IDs, прямых закрытых ссылок и секретов в публичном репозитории.
+
+## Что ещё не оформлено как действующее руководство
+
+- **Русские руководства** — [Issue #61](https://github.com/Alexio00/HEALTH/issues/61): переводить только рабочие инструкции. Исторические англоязычные аудиты оставлять как свидетельства; отдельный PWA-контур обновляет свой `frontend/README.md`.
+- **Установка для нового пациента** — [#53](https://github.com/Alexio00/HEALTH/issues/53), затем [#54](https://github.com/Alexio00/HEALTH/issues/54): отдельная среда, полная ручная схема и только затем безопасная автоматизация. Текущий README не заменяет установочную инструкцию.
+- **Надёжность PWA** — [#50](https://github.com/Alexio00/HEALTH/issues/50) и [#58](https://github.com/Alexio00/HEALTH/issues/58) открыты; зелёный PR-контролируемый `static` не доказывает неизменность trusted scope policy.
+- **Scheduler** — [#65](https://github.com/Alexio00/HEALTH/issues/65), [#82](https://github.com/Alexio00/HEALTH/issues/82), [#87](https://github.com/Alexio00/HEALTH/issues/87): нет согласованного cutover, trusted heartbeat и launcher-SHA release gate.
+- **Вакцинации и схема** — [#41](https://github.com/Alexio00/HEALTH/issues/41), [#42](https://github.com/Alexio00/HEALTH/issues/42), [#62](https://github.com/Alexio00/HEALTH/issues/62): новые SQL-таблицы нельзя вводить отдельно от Writer/Verifier/Validation.
+- **Финальная очистка** — [#57](https://github.com/Alexio00/HEALTH/issues/57): до завершения разработки не удалять старые ветки, истории, уникальные свидетельства и оригиналы.
+
 **Состояние 13.10.2026:** владелец разрешил переход на каноническую базу Supabase и активировал ограниченный Writer. GitHub-документация описывает реализацию; фактическое состояние и полномочия подтверждаются **живыми приватными** HealthDB Project State / Project Manual и относящимися к конкретной операции проверками.
 
 ## Действующая реализация

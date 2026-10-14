@@ -53,15 +53,16 @@ Product Owner выбрал временный **ручной эксплуата�
 
 Проверить отрицательные сценарии: неверный producer/issuer pin, unknown ACTIVE или foreign CANDIDATE, dropped upload response, incomplete orphan, lost marker PATCH, duplicate rotation, fail-held Writer lock, missing Auth/role/Source digest в восстановлении. Новая доработка #82 должна независимо доказать, что посторонний commit в `scheduler` **не** сбрасывает heartbeat freshness и что overdue remediation/email semantics определены. Отсутствие этих доказательств = NOT_VERIFIED/NO-GO, даже если исходные тесты зелёные.
 
-### C. Main launchers (#72)
+### C. Main launchers (#89 — current replacement; #72 — historical)
 
 1. Для каждого из пяти workflows проверить `on`, `if`, `concurrency`, `permissions`, `environment`, `secrets`, входные переменные, full pinned SHA и фактический trusted `main` trust source.
-2. Все secret-consuming/branch-write jobs должны fail closed на **непринятый launcher/main SHA**, а не только на правильный `scheduler-code` checkout. Актуальная [Issue #87](https://github.com/Alexio00/HEALTH/issues/87): этот gate отсутствует у daily backup, keepalive/heartbeat/preflight. Нельзя заявить PASS до исправления и негативных тестов.
+2. Все secret-consuming/branch-write jobs должны fail closed на **непринятый launcher/main SHA**, а не только на правильный `scheduler-code` checkout. В историческом #72 этого gate не хватало; в текущем #89 он добавлен. [Issue #87](https://github.com/Alexio00/HEALTH/issues/87) остаётся открытой до независимого review и проверки реальной конфигурации: локальные 6/6 job-predicate тесты — не production-доказательство.
 3. Daily backup обязан отказывать при возобновившемся legacy SHEDULLER; owner-set `HEALTH_LEGACY_BACKUP_PAUSED=true` не доказывает zero-in-flight и нужен независимый readback. `health-backup-release.yml` имеет больше gate, но не делает daily безопасным автоматически.
 4. Проверить, что checkout `refs/heads/scheduler-code` используется только для ancestry test принятого pin, а не для исполнения moving HEAD; GitHub token `contents:write` выдаётся на repository, не только на `scheduler`. `HEAD:refs/heads/scheduler` в JS — намерение, не достаточное permission boundary.
 5. Release `workflow_dispatch`: режимы `candidate`, `activate`, `quarantine-orphan`; correct actor, manual ACK, accepted main, producer SHA, private environment, exact archive SHA256, no unreviewed logs/artifacts/Drive IDs.
 6. Проверить реальные ограничения GitHub personal/public/free (Environment approval/secrets, Rulesets, status issuer). Не считать существование YAML доказательством настроенного Environment; ручная exact-SHA приёмка временно допустима, HIGH #50 остаётся OPEN.
 7. Назначить owner-approved rollback: если новый backup не подтверждён, никакой повторный Trash; reconcile CANDIDATE/UPLOADING/journal перед возвратом SHEDULLER. Writer после restore оставлять disabled до отдельного принятия.
+8. **Обязательная проверка областей Variables:** переменные, используемые на уровне `jobs.<job>.if` (`HEALTH_RELEASE_MAIN_ACCEPTED_SHA`, `HEALTH_LEGACY_BACKUP_PAUSED`, `HEALTH_INREPO_*_ENABLED`), должны разрешаться **до назначения runner**, то есть на уровне repository/organization, не только в Environment. Иначе job будет `skipped` без гарантированного failure-email. Переменная `HEALTH_RCLONE_ARCHIVE_SHA256` читается шагом установщика после назначения Environment; нужно подтвердить доступное scope, независимость approved digest для rclone v1.75.1 и отказ при пустом/ошибочном значении. Основание: [GitHub Actions contexts](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts) (environment-level vars доступны после объявления Environment на runner). API readback Variables/Environments в этом контуре **NOT_VERIFIED**.
 
 ## 3. Gate matrix
 
@@ -79,7 +80,7 @@ Product Owner выбрал временный **ручной эксплуата�
 
 ### Меняется HEAD = меняется review
 
-Каждый новый commit в #73/#81/#88 или #89 аннулирует прежний exact-SHA вердикт. Документационный #86 должен быть согласован по порядку merge с #73/#81/#88: изменение базовой `scheduler-code` ветки изменяет сравнение файлов и требует повторного readback, даже если конкретный старый кодовый HEAD не изменился. Изменение `main`, **включая документацию**, меняет принятый Writer SHA и требует отдельного согласования. Merge #73 в `scheduler-code` не равен активации backup. Merge #72 в `main` не равен production GO.
+Каждый новый commit в #90 (включая изменения после прежних #73/#81/#88) или #89 аннулирует прежний exact-SHA вердикт. Документационный #86 должен быть согласован по порядку merge с #73/#81/#88: изменение базовой `scheduler-code` ветки изменяет сравнение файлов и требует повторного readback, даже если конкретный старый кодовый HEAD не изменился. Изменение `main`, **включая документацию**, меняет принятый Writer SHA и требует отдельного согласования. Merge #90 в `scheduler-code` не равен активации backup. Merge #89 в `main` не равен production GO.
 
 ## 4. Форма отчёта независимой приёмки
 

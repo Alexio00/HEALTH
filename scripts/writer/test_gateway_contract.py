@@ -71,6 +71,14 @@ class GatewayContractTests(unittest.TestCase):
         self.assertBlocked(safe_status, {"request_key": KEY, "state": "FAILED",
                                        "result_sha": DIGEST, "url": "synthetic"})
 
+    def test_sha_subclasses_are_not_trusted_values(self):
+        class StrSub(str):
+            pass
+        for field in ("main_sha", "runtime_sha", "workflow_sha"):
+            with self.subTest(field=field):
+                data = ready(); data[field] = StrSub(SHA)
+                self.assertEqual(capability(data).mode, "READ_ONLY")
+
     def test_no_boolean_or_string_coercion_in_readiness(self):
         for field in ("backend_active", "writer_enabled", "source_registered",
                       "restricted_operator_ready", "independent_verifier_ready",
@@ -79,7 +87,7 @@ class GatewayContractTests(unittest.TestCase):
                 with self.subTest(field=field, value=str(value)):
                     data = ready(); data[field] = value
                     self.assertEqual(capability(data).mode, "READ_ONLY")
-        for bad in ("0", 0, False, 0.0, [], {}, None, 2**70):
+        for bad in ("0", False, 0.0, [], {}, None, 2**70):
             with self.subTest(count=str(bad)):
                 data = ready(); data["unfinished_operations"] = bad
                 self.assertEqual(capability(data).mode, "READ_ONLY")

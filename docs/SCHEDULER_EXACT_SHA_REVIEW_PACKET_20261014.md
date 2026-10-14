@@ -8,7 +8,9 @@ Product Owner выбрал временный **ручной эксплуата�
 | Компонент | Target | BASE_SHA (40) | HEAD_SHA (40) | Diff |
 |---|---|---|---|---|
 | [PR #73](https://github.com/Alexio00/HEALTH/pull/73): executable code + nonsecret tests | `scheduler-code` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | `f8a4acc582e94f665fb58e840db7769c8e936553` | 34 added files, 67 commits vs base |
-| [PR #72](https://github.com/Alexio00/HEALTH/pull/72): trusted default-main launchers | `main` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | `4d4659312cf89ad02b5e778b8c037db5c9e426e3` | 5 added `.github/workflows/health-*.yml` files, 18 commits |
+| [PR #72](https://github.com/Alexio00/HEALTH/pull/72): старый launcher candidate | `main` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | `4d4659312cf89ad02b5e778b8c037db5c9e426e3` | 5 новых workflow; **не выпускать совместно с #89** |
+| [PR #89](https://github.com/Alexio00/HEALTH/pull/89): исправленный кандидат trusted default-main launchers | `main` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | `82c6d75ee839ee766896fed817712459733680a1` | Те же 5 workflow + 4 точечных исправления относительно #72; отдельная приёмка обязательна |
+| [PR #81](https://github.com/Alexio00/HEALTH/pull/81) → [#88](https://github.com/Alexio00/HEALTH/pull/88): stacked Scheduler Code | `scheduler-code` через зависимые feature branches | `f8a4acc582e94f665fb58e840db7769c8e936553` → `35218a67af482820ee83373e3a3fff3c60f6c931` | `84b8c37cfe41d3425d2b125649a787566936ec17` | Исправления доверенного rclone-архива и повторной ротации; итоговый combined diff ещё требует независимого review |
 | [PR #86](https://github.com/Alexio00/HEALTH/pull/86): this documentation | `scheduler-code` | `3409791f1ffc5749020e7ff07139b0cec722f6fc` | **moving HEAD, fetch again** | documentation only, **не часть** frozen #73 code review |
 
 На дату среза `HEALTH/main` = `3409791f1ffc5749020e7ff07139b0cec722f6fc`, то же значение в действующем приватном State как accepted Writer code SHA. `HEALTH/scheduler-code` = этот же базовый SHA; `HEALTH/scheduler` = `98f9c41ff9b1496dfc40d0da960971ae7bf58a42`. `SHEDULLER/main` = `8656a360c2b24c0f51e6e2b80edf78e6bd89ccc4` — текущий исполнитель backup. Подтвердить повторно непосредственно перед review/merge.
@@ -67,8 +69,8 @@ Product Owner выбрал временный **ручной эксплуата�
 | #73 fixed SHA & diff | VERIFIED metadata | Статический независимый code/privacy/security review на этот SHA | Независимый reviewer |
 | #73 synthetic CI | CI PASS | Воспроизведённый независимый негативный набор, включая #82 | Reviewer, не GitHub CI |
 | #73 accepted merge | NO-GO | Reviewer PASS + отдельный owner GO + re-read Rulesets/HEAD | Owner |
-| #72 frozen five workflows | VERIFIED metadata | Независимая разборка `if/on`/secrets/pins и #87 remediation | Reviewer |
-| #72 merge into Writer main | NO-GO | Одобренный точный new main SHA, Writer/broker/runtime reacceptance + owner GO | Owner + Writer coordinator |
+| #89 five workflows | VERIFIED metadata / SYNTHETIC CHECKS ONLY | Exact independent review `if/on`/secret/accepted-main/pause/rollback, cross-PR rclone SHA pin; #87 нельзя объявлять исправленным по локальному тесту | Reviewer |
+| #89 merge into Writer main | NO-GO | Выбор единственного launcher train (#89 vs #72), accepted Writer main SHA/broker/runtime reacceptance, owner GO | Owner + Writer coordinator |
 | HEALTH scheduler production activation | NO-GO | Установленные permission boundaries, private proof of complete restore, legacy paused & idle, cutover runbook, separate GO | Owner + architecture coordinator |
 | Two observed new scheduled runs | NOT_PERFORMED | Реальные production runs после принятия + proof ACTIVE/restore | Operations |
 | Full silence notifications | NOT_AUTOMATED | Временный ручной контроль; внешнего watchdog нет | Operations |
@@ -76,7 +78,7 @@ Product Owner выбрал временный **ручной эксплуата�
 
 ### Меняется HEAD = меняется review
 
-Каждый новый commit в #72 или #73 аннулирует прежний exact-SHA вердикт. Изменение `main`, **включая документацию**, меняет принятый Writer SHA и требует отдельного согласования. Merge #73 в `scheduler-code` не равен активации backup. Merge #72 в `main` не равен production GO.
+Каждый новый commit в #73/#81/#88 или #89 аннулирует прежний exact-SHA вердикт. Документационный #86 должен быть согласован по порядку merge с #73/#81/#88: изменение базовой `scheduler-code` ветки изменяет сравнение файлов и требует повторного readback, даже если конкретный старый кодовый HEAD не изменился. Изменение `main`, **включая документацию**, меняет принятый Writer SHA и требует отдельного согласования. Merge #73 в `scheduler-code` не равен активации backup. Merge #72 в `main` не равен production GO.
 
 ## 4. Форма отчёта независимой приёмки
 
@@ -105,7 +107,7 @@ Release status: DRAFT / ACCEPTED_CODE / PRODUCTION_VERIFIED
 
 1. Отдельно принять executable release SHA #73, без изменения `scheduler`; подтвердить отсутствие новых workflow в кодовой ветке.
 2. Исправить #82/#87, затем повторить exact-SHA review соответствующих изменённых кандидатов.
-3. Отдельно принять #72 в `main` с новым Writer SHA и broker/runtime validation; **всё выключено**.
+3. Согласовать единственного launcher-кандидата **#89 вместо #72** или другой отдельно утверждённый final head. До независимой приёмки обеспечить совместимость с итоговым `install_rclone.sh` из #81/#88: `HEALTH_RCLONE_ARCHIVE_SHA256` должен иметь независимо принятую контрольную сумму и передаваться трем workflow, которые его вызывают. Затем отдельное принятие `main` с новым Writer SHA и broker/runtime validation; **все новые расписания выключены**.
 4. Проверить restricted roles/Secrets/private Environments (только существование/доступ/полномочия, не выводить значения) и independent full recovery.
 5. Получить отдельное owner GO: остановить SHEDULLER schedules и дождаться завершения всех jobs **до первой новой записи в shared backup**; подтвердить отсутствие чужого CANDIDATE/UPLOADING.
 6. Owner-only candidate/review/activate exact digest; после запуска HEALTH schedule подтвердить два подряд реальных scheduled backup с независимой проверкой. Не удалять SHEDULLER/старые архивы без отдельного решения владельца.

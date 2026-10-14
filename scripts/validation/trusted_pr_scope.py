@@ -231,15 +231,23 @@ def git_tree(token, commit):
 
 def check_event(event, token):
     """Read the current PR from GitHub; reject stale dispatch/event or changed HEAD."""
+    if not isinstance(event, dict):
+        raise ScopeStop("event_identity_invalid")
     event_pr = event.get("pull_request")
-    repo = event.get("repository", {})
-    if (repo.get("full_name") != REPO or not isinstance(event_pr, dict)
-            or not isinstance(event_pr.get("number"), int)
+    repo = event.get("repository")
+    if (not is_base_repo(repo) or not isinstance(event_pr, dict)
+            or type(event_pr.get("number")) is not int
+            or not isinstance(event_pr.get("base"), dict)
+            or not is_base_repo(event_pr["base"].get("repo"))
             or event_pr["number"] < 1):
         raise ScopeStop("event_identity_invalid")
     number = event_pr["number"]
     current = api("/repos/" + REPO + "/pulls/" + str(number), token)
-    if not isinstance(current, dict) or not isinstance(current.get("head"), dict) or not isinstance(current.get("base"), dict) or not isinstance(current.get("user"), dict):
+    if (not isinstance(current, dict)
+            or not isinstance(current.get("head"), dict)
+            or not isinstance(current.get("base"), dict)
+            or not is_base_repo(current["base"].get("repo"))
+            or not isinstance(current.get("user"), dict)):
         raise ScopeStop("current_pr_metadata_invalid")
     head = event_pr.get("head", {}).get("sha")
     mode = event_pr.get("base", {}).get("ref")
@@ -276,6 +284,7 @@ def check_event(event, token):
     if (not isinstance(final, dict)
             or not isinstance(final.get("head"), dict)
             or not isinstance(final.get("base"), dict)
+            or not is_base_repo(final["base"].get("repo"))
             or not isinstance(final.get("user"), dict)
             or final.get("state") != "open"
             or final["head"].get("sha") != head

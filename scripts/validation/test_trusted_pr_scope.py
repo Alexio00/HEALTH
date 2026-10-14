@@ -208,11 +208,14 @@ class ScopeFixtures(unittest.TestCase):
 
     def test_final_pr_snapshot_detects_head_swap_after_scan(self):
         BASE_SHA = 'b' * 40
-        event = {'repository': {'full_name': 'Alexio00/HEALTH'},
+        repo = {'full_name': 'Alexio00/HEALTH', 'id': 1408460030,
+                'owner': {'id': OWNER}}
+        event = {'repository': repo,
                  'pull_request': {'number': 9, 'head': {'sha': HEAD},
-                                  'base': {'ref': 'pwa', 'sha': BASE_SHA}}}
+                                  'base': {'ref': 'pwa', 'sha': BASE_SHA,
+                                           'repo': repo}}}
         initial = {'state': 'open', 'head': {'sha': HEAD},
-                   'base': {'ref': 'pwa', 'sha': BASE_SHA},
+                   'base': {'ref': 'pwa', 'sha': BASE_SHA, 'repo': repo},
                    'user': {'id': 22}, 'body': None, 'changed_files': 1}
         changed = {**initial, 'head': {'sha': 'c' * 40}}
         file_data = [{'status': 'modified', 'filename': 'frontend/app.js'}]

@@ -1,5 +1,6 @@
 """Синтетические негативные тесты строгого контракта ChatGPT → Writer."""
 import unittest
+from types import MappingProxyType
 from gateway_contract import GatewayBlocked, capability, safe_status, workflow_envelope
 
 KEY = "writer-" + "a"*32
@@ -57,6 +58,65 @@ class GatewayContractTests(unittest.TestCase):
             with self.subTest(field=field):
                 data = ready(); data[field] = value
                 self.assertEqual(capability(data).mode, "READ_ONLY")
+
+    def test_untrusted_json_root_must_be_plain_dict(self):
+        for input_value in (None, [], "{}", (), MappingProxyType(ready())):
+            with self.subTest(value=type(input_value).__name__):
+                self.assertBlocked(capability, input_value)
+        status = {"request_key": KEY, "state": "FAILED", "result_sha": DIGEST}
+        for input_value in (None, [], MappingProxyType(status)):
+            with self.subTest(value=type(input_value).__name__):
+                self.assertBlocked(safe_status, input_value)
+        self.assertBlocked(capability, {**ready(), "medical_data": "synthetic"})
+        self.assertBlocked(safe_status, {"request_key": KEY, "state": "FAILED",
+                                       "result_sha": DIGEST, "url": "synthetic"})
+
+    def test_no_boolean_or_string_coercion_in_readiness(self):
+        for field in ("backend_active", "writer_enabled", "source_registered",
+                      "restricted_operator_ready", "independent_verifier_ready",
+                      "oauth_owner_verified"):
+            for value in (1, "true", None, [], {}):
+                with self.subTest(field=field, value=str(value)):
+                    data = ready(); data[field] = value
+                    self.assertEqual(capability(data).mode, "READ_ONLY")
+        for bad in ("0", 0, False, 0.0, [], {}, None, 2**70):
+            with self.subTest(count=str(bad)):
+                data = ready(); data["unfinished_operations"] = bad
+                self.assertEqual(capability(data).mode, "READ_ONLY")
+        for bad in ("C"*40, "c"*39, "c"*41, None, True, [], {}):
+            with self.subTest(sha=str(bad)):
+                data = ready(); data["main_sha"] = bad
+                self.assertEqual(capability(data).mode, "READ_ONLY")
+
+    def test_workflow_rejects_non_str_and_ambiguous_values(self):
+        class StrSub(str):
+            pass
+        self.assertEqual(workflow_envelope(KEY, "candidate", DIGEST)["kind"], "candidate")
+        for bad in (None, 1, True, [], {}, StrSub("intent"), "INTENT", "intent ", "publish"):
+            with self.subTest(kind=str(bad)):
+                self.assertBlocked(workflow_envelope, KEY, bad, DIGEST)
+        for bad in (None, [], {}, True, StrSub(KEY), KEY + "0", "writer-" + "A"*32):
+            with self.subTest(request_key=str(bad)):
+                self.assertBlocked(workflow_envelope, bad, "intent", DIGEST)
+        for bad in (None, [], {}, True, StrSub(DIGEST), DIGEST.upper(), DIGEST + "\\n"):
+            with self.subTest(digest=str(bad)):
+                self.assertBlocked(workflow_envelope, KEY, "intent", bad)
+
+    def test_status_enum_is_strict_and_no_phi_fields(self):
+        class StrSub(str):
+            pass
+        for state in ("PREPARED", "COMMITTED_REGISTRY", "VALIDATED",
+                      "FINALIZED", "FAILED", "BLOCKED"):
+            row = {"request_key": KEY, "state": state, "result_sha": DIGEST}
+            self.assertEqual(safe_status(row), row)
+        for bad in (None, True, 1, [], {}, StrSub("FAILED"), "APPROVED", "finalized"):
+            with self.subTest(state=str(bad)):
+                self.assertBlocked(safe_status, {"request_key": KEY,
+                                   "state": bad, "result_sha": DIGEST})
+        for field in ("body_text", "owner_text", "source", "token", "original_file"):
+            self.assertBlocked(safe_status, {"request_key": KEY,
+                               "state": "FAILED", "result_sha": DIGEST,
+                               field: "synthetic-nonmedical"})
 
     def test_workflow_only_accepts_opaque_identity(self):
         self.assertEqual(set(workflow_envelope(KEY, "intent", DIGEST)),

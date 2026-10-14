@@ -177,16 +177,31 @@ def check_trusted_policy_release(accepted, checked, event_sha, expected_blob, to
 
 def git_tree(token, commit):
     if not sha40(commit):
-        raise ScopeStop("commit_sha_invalid")
-    c = api("/repos/" + REPO + "/git/commits/" + commit, token)
-    root = c.get("tree", {}).get("sha")
+        raise ScopeStop('commit_sha_invalid')
+    c = api('/repos/' + REPO + '/git/commits/' + commit, token)
+    if not isinstance(c, dict) or not isinstance(c.get('tree'), dict):
+        raise ScopeStop('commit_metadata_invalid')
+    root = c['tree'].get('sha')
     if not sha40(root):
-        raise ScopeStop("commit_tree_missing")
-    data = api("/repos/" + REPO + "/git/trees/" + root + "?recursive=1", token)
-    if data.get("truncated") is True or not isinstance(data.get("tree"), list):
-        raise ScopeStop("tree_incomplete")
-    return {e["path"]: (e.get("type"), e.get("mode")) for e in data["tree"]}
-
+        raise ScopeStop('commit_tree_missing')
+    data = api('/repos/' + REPO + '/git/trees/' + root + '?recursive=1', token)
+    if (not isinstance(data, dict) or data.get('truncated') is not False
+            or not isinstance(data.get('tree'), list)):
+        raise ScopeStop('tree_incomplete')
+    allowed = {('tree','040000'), ('blob','100644'), ('blob','100755'),
+               ('blob','120000'), ('commit','160000')}
+    result = {}
+    for entry in data['tree']:
+        if not isinstance(entry, dict):
+            raise ScopeStop('tree_entry_invalid')
+        path, mode, kind = entry.get('path'), entry.get('mode'), entry.get('type')
+        if (not isinstance(path, str) or not path or path.startswith('/')
+                or chr(92) in path or any(part in ('', '.', '..') for part in path.split('/'))
+                or (kind, mode) not in allowed or path in result
+                or not sha40(entry.get('sha'))):
+            raise ScopeStop('tree_entry_invalid_or_duplicate')
+        result[path] = (kind, mode)
+    return result
 
 def check_event(event, token):
     """Read the current PR from GitHub; reject stale dispatch/event or changed HEAD."""

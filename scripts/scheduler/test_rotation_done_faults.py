@@ -49,7 +49,15 @@ class CloudDoneReplayTests(unittest.TestCase):
         self.assertEqual(self.fake.objects[NEW]['appProperties']['health_recovery_state'],
                          'CANDIDATE')
         self.assertFalse(self.fake.objects[OLD]['trashed'])
-        self.assertEqual(self.fake.patches, [])
+        # Initial durable PLANNED write is mandatory; no ACTIVE/Trash or later
+        # journal transition is permitted after the ZIP ID changes.
+        self.assertEqual(len(self.fake.patches), 1)
+        self.assertEqual(self.fake.patches[0][0], PARENT)
+        self.assertEqual(
+            self.fake.patches[0][1]['appProperties']['health_r_state'],
+            'PLANNED'
+        )
+        self.assertEqual([i for i, _ in self.fake.patches if i in (NEW, OLD)], [])
 
     def test_done_retry_is_read_only_and_reverifies(self):
         self.complete()

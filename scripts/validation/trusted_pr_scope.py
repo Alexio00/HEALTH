@@ -179,7 +179,7 @@ def check_trusted_policy_release(accepted, checked, event_sha, expected_blob, to
             or metadata.get("type") != "file"
             or metadata.get("path") != TRUSTED_WORKFLOW_PATH
             or metadata.get("sha") != expected_blob
-            or not isinstance(metadata.get("size"), int)
+            or type(metadata.get("size")) is not int
             or metadata["size"] <= 0):
         raise ScopeStop("trusted_default_workflow_blob_changed")
     return True

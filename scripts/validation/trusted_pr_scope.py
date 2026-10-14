@@ -213,10 +213,15 @@ def check_event(event, token):
         raise ScopeStop("event_identity_invalid")
     number = event_pr["number"]
     current = api("/repos/" + REPO + "/pulls/" + str(number), token)
+    if not isinstance(current, dict) or not isinstance(current.get("head"), dict) or not isinstance(current.get("base"), dict) or not isinstance(current.get("user"), dict):
+        raise ScopeStop("current_pr_metadata_invalid")
     head = event_pr.get("head", {}).get("sha")
     mode = event_pr.get("base", {}).get("ref")
     if (mode not in ("pwa", "scheduler-code", "writer-code") or not sha40(head)
             or current.get("state") != "open"
+            or type(current.get("changed_files")) is not int
+            or not 0 < current["changed_files"] <= 3000
+            or type(current["user"].get("id")) is not int
             or current.get("head", {}).get("sha") != head
             or current.get("base", {}).get("ref") != mode
             or current.get("base", {}).get("sha") != event_pr.get("base", {}).get("sha")
@@ -235,9 +240,26 @@ def check_event(event, token):
         raise ScopeStop("pr_file_page_limit")
     if len(changes) != current.get("changed_files"):
         raise ScopeStop("incomplete_pr_file_list")
-    return check_scope(changes, mode, current.get("user", {}).get("id"),
-                       current.get("body") or "", head,
-                       git_tree(token, head), git_tree(token, current["base"]["sha"]))
+    body = current.get("body") or ""
+    if not isinstance(body, str):
+        raise ScopeStop("pr_body_invalid")
+    result = check_scope(changes, mode, current["user"]["id"],
+                         body, head, git_tree(token, head),
+                         git_tree(token, current["base"]["sha"]))
+    final = api("/repos/" + REPO + "/pulls/" + str(number), token)
+    if (not isinstance(final, dict)
+            or not isinstance(final.get("head"), dict)
+            or not isinstance(final.get("base"), dict)
+            or not isinstance(final.get("user"), dict)
+            or final.get("state") != "open"
+            or final["head"].get("sha") != head
+            or final["base"].get("sha") != current["base"]["sha"]
+            or final["base"].get("ref") != mode
+            or final["user"].get("id") != current["user"]["id"]
+            or final.get("body") != current.get("body")
+            or final.get("changed_files") != len(changes)):
+        raise ScopeStop("pr_changed_during_scan")
+    return result
 
 
 if __name__ == "__main__":

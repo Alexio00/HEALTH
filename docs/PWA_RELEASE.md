@@ -117,10 +117,16 @@ old branches without the owner's decision.
 
 ### Two kinds of acceptance
 
-A frontend PR succeeds after clean comparison with `pwa`, green required
-`static` CI before merge, a new successful `pwa` Pages workflow run
-with verified pre-deploy gate, and a browser smoke-test (or explicitly
-recorded NOT_VERIFIED).
+A frontend PR may be accepted only after full 40-character BASE_SHA and
+HEAD_SHA plus exact diff are frozen, independently reviewed for compatibility,
+security, negative tests and rollback, and explicitly approved by the owner
+for that exact SHA. Immediately before merge, recheck unchanged HEAD/BASE,
+the complete diff, unresolved threads, current Ruleset and green required
+`static`. Any candidate change voids the earlier acceptance. After an
+authorized merge, verify the exact `pwa` release SHA, a new successful
+Pages deployment with a verified pre-deploy gate and postcheck, then perform
+an authorized-session browser smoke-test (or explicitly record NOT_VERIFIED).
+A successful CI run is never independent review or owner GO.
 
 A Writer PR requires current, independently reviewed code, exact `main`
 SHA reacceptance in the GitHub owner policy, Edge broker and runtime,

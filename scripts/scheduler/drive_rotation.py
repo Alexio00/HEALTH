@@ -155,6 +155,7 @@ class DriveRotation:
                     # any journal PATCH or further Trash mutation.
                     for binding in old:
                         if binding['id'] in done:self.verify_retired(binding)
+                self.verify_mutation_preflight(target,sha,old,done)
                 if state=='CANDIDATE':
                     self.patch(target,{'appProperties':{'health_recovery_state':'ACTIVE'}})
                 if self.set(target,sha)['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('new_active_readback_failed')

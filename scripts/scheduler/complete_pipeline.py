@@ -140,11 +140,13 @@ def run(mode,root,producer_sha,*,serialized):
             # The callback proof was freshly generated locally from this exact
             # remote ZIP. It is never taken from an uploaded acceptance receipt.
             if executor_binding()!=(executor_sha,pins):raise SourceStop('rotation_executor_changed')
-            if not replay:
-                rotation=DriveRotation(cloud.t,cloud.parent,journal,verification='daily' if mode=='daily' else 'full',executor_sha=executor_sha)
-                aggregate['rotation']=rotation.promote(target,sha,lambda id:proof if id==target else {})
-            elif mode!='activate':
+            if replay and mode!='activate':
                 raise SourceStop('only_explicit_activation_can_reconcile_completed_rotation')
+            # A DONE retry must execute the same independent rotation verifier:
+            # the terminal journal alone does not verify old archive bindings,
+            # Trash, or unique ACTIVE. promote() is read-only on valid DONE.
+            rotation=DriveRotation(cloud.t,cloud.parent,journal,verification='daily' if mode=='daily' else 'full',executor_sha=executor_sha)
+            aggregate['rotation']=rotation.promote(target,sha,lambda id:proof if id==target else {})
             if mode=='activate':
                 complete_activation_marker(cloud,journal,target,sha,producer_sha,executor_sha,proof)
                 aggregate['activation_marker_reconciled']=replay

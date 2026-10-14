@@ -75,28 +75,73 @@ function vaccineName(fragment) {
 const FUTURE_CLAUSE = /(?:в\s+будущем|в\s+дальнейшем|следующ\p{L}*|предстоит|планир\p{L}*|запланир\p{L}*|рекоменд\p{L}*|назначен\p{L}*|будет\s+(?:сделан\p{L}*|выполнен\p{L}*|проведен\p{L}*|проведён\p{L}*))/iu;
 const EXPLICIT_STAGE = /\b(?:RV[1-9]\d*|R[1-9]\d*|V[1-9]\d*)\b|доз[аыуе]\s*№?\s*[1-9]\d*|[1-9]\d*[-‑]?(?:я|ая)\s+доз[аыуе]|(?:перв\p{L}*|втор\p{L}*)\s+вакцинац/iu;
 
-function performedAdministration(fragment) {
-  // Split administration clauses before extracting either infection or stage.
-  // A postfix "Rv2 запланирована" marks its entire clause as future.
-  const clauses = String(fragment || "").split(/\s*[,;]\s*|\s+и\s+/iu);
-  const performed = [];
-  let future = false;
-  for (const clause of clauses) {
-    if (FUTURE_CLAUSE.test(clause)) { future = true; break; }
-    if (clause.trim()) performed.push(clause.trim());
+// Split only at event boundaries OUTSIDE parentheses. A comma inside
+// "(Rv2, запланирована)" is part of the same, future-only vaccination.
+function logicalAdministrationClauses(source) {
+  const clauses = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    if (char === "(") depth++;
+    else if (char === ")") {
+      depth--;
+      if (depth < 0) return null;
+    }
+    if (depth !== 0) continue;
+    const conjunction = source.slice(i, i + 3).toLocaleLowerCase("ru") === " и ";
+    if (char === "," || char === ";" || conjunction) {
+      clauses.push(source.slice(start, i).trim());
+      if (conjunction) i += 2;
+      start = i + 1;
+    }
   }
-  if (!performed.length) return "";
-  const text = performed.join(", ");
-  if (future) {
-    // Do not turn an incomplete "(product, Rv2 planned)" into a confirmed
-    // administration merely because its product/infection appears first.
-    const opened = (text.match(/\(/g) || []).length;
-    const closed = (text.match(/\)/g) || []).length;
-    if (opened > closed && !EXPLICIT_STAGE.test(text)) return "";
-  }
-  return text;
+  if (depth !== 0) return null; // Malformed event evidence: fail closed.
+  clauses.push(source.slice(start).trim());
+  return clauses.filter(Boolean);
 }
 
+// A plan can follow an explicitly recorded stage INSIDE one parenthesis,
+// e.g. "(ЖКВ, V1, краснуха запланирована)". Retain the prior event only
+// when its own stage is explicit AND the suffix names a separate antigen
+// or future revaccination. "(Rv2, запланирована)" is never sufficient.
+function performedPrefixBeforeInlinePlan(clause) {
+  const future = FUTURE_CLAUSE.exec(clause);
+  if (!future) return null;
+  const before = clause.slice(0, future.index);
+  const split = Math.max(before.lastIndexOf(","), before.lastIndexOf(";"));
+  if (split < 0) return null;
+  const prefix = clause.slice(0, split).trim();
+  const futureTail = clause.slice(split + 1).trim();
+  const earlier = targets(prefix);
+  const later = targets(futureTail);
+  if (!EXPLICIT_STAGE.test(prefix) || !earlier) return null;
+  const separateAntigen = Boolean(later &&
+    later.keys.some(key => !earlier.keys.includes(key)));
+  const futureBooster = /\bRV[1-9]\d*\b|\bR[1-9]\d*\b|ревакцинац/iu.test(futureTail);
+  if (!separateAntigen && !futureBooster) return null;
+  const open = (prefix.match(/\(/g) || []).length - (prefix.match(/\)/g) || []).length;
+  if (open < 0) return null;
+  return prefix + ")".repeat(open);
+}
+
+function performedAdministration(fragment) {
+  const clauses = logicalAdministrationClauses(String(fragment || ""));
+  if (!clauses) return "";
+  const performed = [];
+  for (const clause of clauses) {
+    if (FUTURE_CLAUSE.test(clause)) {
+      // Standalone ", запланирована" is a postfix status for the
+      // immediately preceding event, not a new medical event.
+      if (/^(?:запланир\p{L}*|планир\p{L}*|назначен\p{L}*|рекоменд\p{L}*|предстоит)[.!]?$/iu.test(clause))
+        performed.pop();
+      const prefix = performedPrefixBeforeInlinePlan(clause);
+      if (prefix) performed.push(prefix);
+      break;
+    }
+    performed.push(clause);
+  }
+  return performed.join(", ").trim();
+}
 function stageForActual(fragment, keys) {
   const performed = performedAdministration(fragment);
   if (!performed) return "—";

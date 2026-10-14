@@ -38,14 +38,19 @@ def workflow_envelope(request_key: str, kind: str, digest: str) -> dict[str, str
 @dataclass(frozen=True)
 class Capability:
     mode: str
-    accepted_sha: str | None
+    matching_sha: str | None
     reasons: tuple[str, ...]
 
 def capability(readback: Mapping[str, Any]) -> Capability:
-    """Проверяет *наблюдаемую* конфигурацию; не воспринимать заявление модели как evidence.
+    """Сверяет форму наблюдений, но НЕ подтверждает право на запись.
 
-    Данные должны поступать из независимо подтверждённых Supabase/GitHub/
-    Writer-operator API. Пользовательский запрос не может задавать значения полей.
+    Положительный результат означает совпадение предъявленных технических
+    предусловий, а не подтверждённого владельца или принятого release SHA.
+    Даже если все значения True и все SHA совпали, этот результат нельзя
+    использовать как authorization/consent для любого mutating RPC.
+    Достоверность наблюдений, OAuth identity, exact owner intent/candidate,
+    nonce/expiry/replay и отдельные approval receipts проверяет только
+    будущий защищённый gateway. Данные модели и пользователя не являются evidence.
     """
     keys = frozenset({
         "backend_active", "writer_enabled", "main_sha", "runtime_sha",
@@ -70,7 +75,7 @@ def capability(readback: Mapping[str, Any]) -> Capability:
         reasons.append("unfinished_count_invalid")
     elif unfinished:
         reasons.append("another_operation_unfinished")
-    return Capability("WRITE_READY" if not reasons else "READ_ONLY",
+    return Capability("PRECONDITIONS_MATCH" if not reasons else "READ_ONLY",
                       versions[0] if not reasons else None, tuple(reasons))
 
 def safe_status(result: Mapping[str, Any]) -> dict[str, str]:

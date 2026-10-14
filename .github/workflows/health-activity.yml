@@ -1,0 +1,84 @@
+name: HEALTH scheduler branch heartbeat and overdue watchdog
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+    - cron: "43 8 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = no write; heartbeat = write only if 15 days elapsed"
+        type: choice
+        required: true
+        default: check
+        options: [check, heartbeat]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: health-inrepo-scheduler-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    name: Approved scheduler SHA - heartbeat
+    if: >-
+      github.repository == 'Alexio00/HEALTH' &&
+      github.ref == 'refs/heads/main' &&
+      vars.HEALTH_INREPO_HEARTBEAT_ENABLED == 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '17 5 * * *') ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'heartbeat' && github.actor_id == '308028794'))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout approved immutable scheduler code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ vars.HEALTH_HEARTBEAT_ACCEPTED_SHA }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Confirm immutable code pin and synthetic boundaries
+        env:
+          HEALTH_HEARTBEAT_ACCEPTED_SHA: ${{ vars.HEALTH_HEARTBEAT_ACCEPTED_SHA }}
+        run: |
+          set -euo pipefail
+          test -n "$HEALTH_HEARTBEAT_ACCEPTED_SHA"
+          test "$(git rev-parse HEAD)" = "$HEALTH_HEARTBEAT_ACCEPTED_SHA"
+          git fetch -q --no-tags origin 'refs/heads/scheduler-code:refs/remotes/origin/scheduler-code'
+          git merge-base --is-ancestor "$HEALTH_HEARTBEAT_ACCEPTED_SHA" refs/remotes/origin/scheduler-code
+          node --test scripts/automation/health_activity.test.mjs
+      - name: Emit heartbeat only into scheduler
+        run: node scripts/automation/health_activity.mjs heartbeat
+
+  watchdog:
+    name: Check scheduler age and fail at 18 days
+    if: >-
+      github.repository == 'Alexio00/HEALTH' &&
+      github.ref == 'refs/heads/main' &&
+      vars.HEALTH_INREPO_HEARTBEAT_ENABLED == 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '43 8 * * *') ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'check' && github.actor_id == '308028794'))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout approved immutable scheduler code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ vars.HEALTH_HEARTBEAT_ACCEPTED_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Confirm immutable code pin and synthetic boundaries
+        env:
+          HEALTH_HEARTBEAT_ACCEPTED_SHA: ${{ vars.HEALTH_HEARTBEAT_ACCEPTED_SHA }}
+        run: |
+          set -euo pipefail
+          test -n "$HEALTH_HEARTBEAT_ACCEPTED_SHA"
+          test "$(git rev-parse HEAD)" = "$HEALTH_HEARTBEAT_ACCEPTED_SHA"
+          git fetch -q --no-tags origin 'refs/heads/scheduler-code:refs/remotes/origin/scheduler-code'
+          git merge-base --is-ancestor "$HEALTH_HEARTBEAT_ACCEPTED_SHA" refs/remotes/origin/scheduler-code
+          node --test scripts/automation/health_activity.test.mjs
+      - name: Fail to trigger GitHub email when overdue
+        run: node scripts/automation/health_activity.mjs check

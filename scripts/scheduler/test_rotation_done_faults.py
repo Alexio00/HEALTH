@@ -99,6 +99,72 @@ class CloudDoneReplayTests(unittest.TestCase):
             self.rotation.promote(NEW, SHA, self.restore)
         self.assertEqual(self.fake.patches, patches)
 
+    def promoted_done(self):
+        self.j.plan(NEW, PARENT, SHA, [{'id': OLD, 'sha': 'b' * 64}])
+        self.fake.objects[NEW]['appProperties']['health_recovery_state'] = 'ACTIVE'
+        self.fake.objects[OLD]['trashed'] = True
+        self.j.state(NEW, 'PROMOTED', [OLD])
+        self.assertEqual(self.j.read()['state'], 'PROMOTED')
+
+    def test_promoted_done_replay_is_safe_and_idempotent(self):
+        self.promoted_done()
+        prior = list(self.fake.patches)
+        result = self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(result['previous_sets_trashed'], 1)
+        self.assertEqual(self.j.read()['state'], 'DONE')
+        self.assertEqual(
+            sum(id == OLD and 'trashed' in patch for id, patch in self.fake.patches),
+            0
+        )
+        self.assertEqual(self.recovery_count, 1)
+        self.assertGreater(len(self.fake.patches), len(prior))
+
+    def test_promoted_done_rejects_old_digest_drift_without_patch(self):
+        self.promoted_done()
+        self.fake.objects[OLD]['appProperties']['health_archive_sha256'] = 'c' * 64
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'complete_set_digest_binding_rejected'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'PROMOTED')
+        self.assertEqual(self.fake.patches, before)
+
+    def test_promoted_done_rejects_old_acl_drift_without_patch(self):
+        self.promoted_done()
+        self.fake.objects[OLD]['permissions'].append({'type':'anyone','role':'reader'})
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'private_backup_owner_acl_required'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'PROMOTED')
+        self.assertEqual(self.fake.patches, before)
+
+    def test_promoted_done_rejects_old_state_drift_without_patch(self):
+        self.promoted_done()
+        self.fake.objects[OLD]['appProperties']['health_recovery_state'] = 'CANDIDATE'
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'completed_rotation_old_state_changed'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'PROMOTED')
+        self.assertEqual(self.fake.patches, before)
+
+    def test_promoted_done_rejects_old_untrash_without_patch(self):
+        self.promoted_done()
+        self.fake.objects[OLD]['trashed'] = False
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'completed_rotation_old_not_trashed'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'PROMOTED')
+        self.assertEqual(self.fake.patches, before)
+
+    def test_promoted_done_rejects_target_downgrade_without_patch(self):
+        self.promoted_done()
+        self.fake.objects[NEW]['appProperties']['health_recovery_state'] = 'CANDIDATE'
+        before = list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop, 'promoted_rotation_target_not_active'):
+            self.rotation.promote(NEW, SHA, self.restore)
+        self.assertEqual(self.j.read()['state'], 'PROMOTED')
+        self.assertEqual(self.fake.patches, before)
+
+
 
 if __name__ == '__main__':
     unittest.main()

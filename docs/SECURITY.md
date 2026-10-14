@@ -21,3 +21,11 @@ GitHub Secrets не являются доступной чату конфигу�
 ## Граница технической приёмки 14.10.2026
 
 Временный утверждённый порядок технических релизов: exact BASE/HEAD SHA и diff; независимая security/compatibility/negative-test проверка; отдельный owner GO; повторная проверка неизменённого кандидата непосредственно перед merge; фактический postrelease и rollback. Проверки PR-controlled CI не являются независимой гарантией. HIGH [Issue #50](https://github.com/Alexio00/HEALTH/issues/50) остаётся OPEN, автоматический Draft #78 получил R3 NO-GO. Ни одна эта процедура не заменяет отдельную подписанную клиническую авторизацию Writer.
+
+## Точные проверки PostgreSQL и публичного исключения
+
+По умолчанию новые таблицы и последовательности, создаваемые `postgres`, **не получают** прав `anon`/`authenticated`. Новые функции не должны автоматически получать `EXECUTE` от `anon`, `authenticated` или `PUBLIC`. Исторический SQL-снимок: `db/migrations/0003_default_privileges.sql`; актуальная каноническая история — `supabase/migrations/`. `service_role` остаётся только серверной ролью, а не браузерным доступом.
+
+После schema/permissions изменений `scripts/validation/security_invariants.sql` проверяет RLS всех публичных таблиц, отсутствие прав `anon`, SELECT-only явного списка для `authenticated`, безопасные default privileges, отсутствие неожиданных elevated public functions и изменение approved bridge. `scripts/validation/auth_invariants.sql` проверяет SQL-состояние Auth/reader, но **не** настройки регистрации новых пользователей в Supabase Dashboard: их требуется проверять отдельно.
+
+Рассмотренный `public.health_writer_authorize_v1` имеет фиксированный приватный адресат, версионированное тело, владельца `postgres` и `search_path=pg_catalog,pg_temp`. Вызывать его может только разрешённый серверный `service_role` с проверкой JWT claims; контроль сверяет точное тело и ACL, отклоняет изменения. Наличие этой функции не даёт прямых SQL-прав Writer/Verifier или браузеру.

@@ -91,6 +91,15 @@ class DriveRotation:
             if len(files)!=1 or files[0].get('name')!='complete-recovery.zip' or files[0].get('sha256Checksum')!=sha or int(files[0].get('size','0'))<=0:raise RotationStop('complete_set_current_archive_rejected')
         return meta
     def patch(self,id,payload):return self.t.request('/drive/v3/files/'+identity(id)+'?fields=id,trashed,appProperties',method='PATCH',body=json.dumps(payload).encode(),content_type='application/json')
+    def verify_retired(self,binding):
+        # A recorded Trash acknowledgement is not proof that the old folder
+        # still matches the immutable journal binding on a later retry.
+        previous=self.set(binding['id'],binding['sha'],allow_trashed=True)
+        if previous['appProperties'].get('health_recovery_state')!='ACTIVE':
+            raise RotationStop('completed_rotation_old_state_changed')
+        if previous.get('trashed') is not True:
+            raise RotationStop('completed_rotation_old_not_trashed')
+
     def promote(self,target,sha,restore):
         target=identity(target)
         with self.j.lock():
@@ -104,6 +113,8 @@ class DriveRotation:
             bindings=[{'id':id,'sha':self.set(id)['appProperties']['health_archive_sha256']} for id in active] if row is None else []
             row=self.j.plan(target,self.parent,sha,bindings)
             old=json.loads(row['old']);done=json.loads(row['done'])
+            if len(done)!=len(set(done)) or set(done)-{b['id'] for b in old}:
+                raise RotationStop('rotation_done_binding_invalid')
             if set(active)-{b['id'] for b in old}:raise RotationStop('concurrent_active_set_change')
             # Always re-read the complete new archive through the trusted executor,
             # including retry after a lost provider reply. Never inherit old PASS.
@@ -119,12 +130,14 @@ class DriveRotation:
                 if state!='ACTIVE' or len(old)!=len(done) or set(done)!={x['id'] for x in old}:
                     raise RotationStop('completed_rotation_binding_rejected')
                 for binding in old:
-                    previous=self.set(binding['id'],binding['sha'],allow_trashed=True)
-                    if previous['appProperties'].get('health_recovery_state')!='ACTIVE':
-                        raise RotationStop('completed_rotation_old_state_changed')
-                    if previous.get('trashed') is not True:
-                        raise RotationStop('completed_rotation_old_not_trashed')
+                    self.verify_retired(binding)
             else:
+                if row['state']=='PROMOTED':
+                    if state!='ACTIVE':raise RotationStop('promoted_rotation_target_not_active')
+                    # Already recorded done entries must be reverified before
+                    # any journal PATCH or further Trash mutation.
+                    for binding in old:
+                        if binding['id'] in done:self.verify_retired(binding)
                 if state=='CANDIDATE':
                     self.patch(target,{'appProperties':{'health_recovery_state':'ACTIVE'}})
                 if self.set(target,sha)['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('new_active_readback_failed')

@@ -24,6 +24,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEALTH_TRUSTED_POLICY_SHA: ${{ vars.HEALTH_TRUSTED_POLICY_SHA }}
+          HEALTH_TRUSTED_WORKFLOW_BLOB_SHA: ${{ vars.HEALTH_TRUSTED_WORKFLOW_BLOB_SHA }}
         run: |
           set -euo pipefail
           python3 scripts/validation/trusted_pr_scope.py

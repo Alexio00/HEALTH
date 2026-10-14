@@ -180,8 +180,15 @@ class ScopeFixtures(unittest.TestCase):
         with self.assertRaisesRegex(ScopeStop, "tree_state_invalid"):
             verify("scripts/writer/gateway_contract.py", "writer-code", OWNER,
                    "WRITER-CONTROL: " + HEAD, reg="120000")
+        # A deletion must be absent in HEAD and present only in the base tree.
+        entry = {"filename": "scripts/writer/removed.py", "status": "removed"}
+        base = {entry["filename"]: ("blob", "100644")}
         with self.assertRaisesRegex(ScopeStop, "control_changes_require_owner_exact_head"):
-            verify("scripts/writer/removed.py", "writer-code", status="removed")
+            check_scope([entry], "writer-code", OWNER, "", HEAD, {}, base)
+        self.assertEqual(
+            check_scope([entry], "writer-code", OWNER,
+                        "WRITER-CONTROL: " + HEAD, HEAD, {}, base)["scope"],
+            "writer-code")
 
     def test_git_tree_rejects_duplicate_and_malformed_metadata(self):
         base = {'tree': {'sha': HEAD}}

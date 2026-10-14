@@ -113,20 +113,32 @@ class DriveRotation:
             required=('all_members_verified','database_restore_pass','auth_http_pass','source_rebind_pass') if self.verification=='full' else ('all_members_verified','database_restore_pass','auth_http_pass','source_corpus_bytes_verified','source_graph_binding_verified')
             if not self.test and not all(proof.get(k) is True for k in required):raise RotationStop('complete_new_restore_scope_incomplete')
             self.set(target,sha)
-            if state=='CANDIDATE':
-                self.patch(target,{'appProperties':{'health_recovery_state':'ACTIVE'}})
-            if self.set(target,sha)['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('new_active_readback_failed')
-            self.j.state(target,'PROMOTED',done)
-            for binding in old:
-                id=binding['id']
-                if id in done:continue
-                # Recheck the new archive before each trash operation.
-                self.set(target,sha)
-                previous=self.set(id,binding['sha'],allow_trashed=True)
-                if previous['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('previous_active_set_changed')
-                if previous.get('trashed') is not True:self.patch(id,{'trashed':True})
-                if self.set(id,allow_trashed=True).get('trashed') is not True:raise RotationStop('previous_set_trash_readback_failed')
-                done.append(id);self.j.state(target,'PROMOTED',done)
-            self.j.state(target,'DONE',done)
+            if row['state']=='DONE':
+                # Remote DONE may have committed even if the runner lost the
+                # response. Never downgrade it or issue another PATCH/Trash.
+                if state!='ACTIVE' or len(old)!=len(done) or set(done)!={x['id'] for x in old}:
+                    raise RotationStop('completed_rotation_binding_rejected')
+                for binding in old:
+                    previous=self.set(binding['id'],binding['sha'],allow_trashed=True)
+                    if previous['appProperties'].get('health_recovery_state')!='ACTIVE':
+                        raise RotationStop('completed_rotation_old_state_changed')
+                    if previous.get('trashed') is not True:
+                        raise RotationStop('completed_rotation_old_not_trashed')
+            else:
+                if state=='CANDIDATE':
+                    self.patch(target,{'appProperties':{'health_recovery_state':'ACTIVE'}})
+                if self.set(target,sha)['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('new_active_readback_failed')
+                self.j.state(target,'PROMOTED',done)
+                for binding in old:
+                    id=binding['id']
+                    if id in done:continue
+                    # Recheck the new archive before each trash operation.
+                    self.set(target,sha)
+                    previous=self.set(id,binding['sha'],allow_trashed=True)
+                    if previous['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('previous_active_set_changed')
+                    if previous.get('trashed') is not True:self.patch(id,{'trashed':True})
+                    if self.set(id,allow_trashed=True).get('trashed') is not True:raise RotationStop('previous_set_trash_readback_failed')
+                    done.append(id);self.j.state(target,'PROMOTED',done)
+                self.j.state(target,'DONE',done)
             if [m['id'] for m in self.children(self.parent) if m.get('appProperties',{}).get('health_complete_set')=='v1' and m.get('appProperties',{}).get('health_recovery_state')=='ACTIVE']!=[target]:raise RotationStop('one_active_set_readback_failed')
             return {'status':'ONE_VERIFIED_ACTIVE_COMPLETE_SET_ROTATION_PASS','previous_sets_trashed':len(done),'permanent_deletes':0,'test_only':self.test}

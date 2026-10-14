@@ -91,7 +91,7 @@ def safe_status(result: Mapping[str, Any]) -> dict[str, str]:
     digest = result["result_sha"]
     if not isinstance(key, str) or not _KEY.fullmatch(key):
         raise GatewayBlocked("status_key_invalid")
-    if type(state) is not str or state not in ("PREPARED", "VALIDATED", "FINALIZED", "FAILED", "BLOCKED"):
+    if type(state) is not str or state not in ("PREPARED", "COMMITTED_REGISTRY", "VALIDATED", "FINALIZED", "FAILED", "BLOCKED"):
         raise GatewayBlocked("status_state_invalid")
     if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
         raise GatewayBlocked("status_digest_invalid")

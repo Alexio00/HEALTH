@@ -22,14 +22,19 @@ class GatewayBlocked(ValueError):
         self.code = code
 
 def _exact(data: Mapping[str, Any], keys: frozenset[str], error: str) -> None:
-    if not isinstance(data, Mapping) or frozenset(data.keys()) != keys:
+    """Only a plain decoded JSON object with an exact key set is accepted.
+
+    No arbitrary Mapping implementations, coercion or extra metadata from an
+    untrusted caller can influence the protocol boundary.
+    """
+    if type(data) is not dict or data.keys() != keys:
         raise GatewayBlocked(error)
 
 def workflow_envelope(request_key: str, kind: str, digest: str) -> dict[str, str]:
     """Только три непрозрачных параметра GitHub OIDC; никаких медицинских данных."""
     if not isinstance(request_key, str) or not _KEY.fullmatch(request_key):
         raise GatewayBlocked("invalid_request_key")
-    if kind not in ("intent", "candidate"):
+    if type(kind) is not str or kind not in ("intent", "candidate"):
         raise GatewayBlocked("invalid_approval_kind")
     if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
         raise GatewayBlocked("invalid_digest")
@@ -86,7 +91,7 @@ def safe_status(result: Mapping[str, Any]) -> dict[str, str]:
     digest = result["result_sha"]
     if not isinstance(key, str) or not _KEY.fullmatch(key):
         raise GatewayBlocked("status_key_invalid")
-    if state not in ("PREPARED", "VALIDATED", "FINALIZED", "FAILED", "BLOCKED"):
+    if type(state) is not str or state not in ("PREPARED", "VALIDATED", "FINALIZED", "FAILED", "BLOCKED"):
         raise GatewayBlocked("status_state_invalid")
     if not isinstance(digest, str) or not _DIGEST.fullmatch(digest):
         raise GatewayBlocked("status_digest_invalid")

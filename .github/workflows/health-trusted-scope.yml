@@ -3,7 +3,7 @@ name: HEALTH trusted PR scope (draft pending main acceptance)
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, edited, ready_for_review]
-    branches: [pwa, scheduler-code]
+    branches: [pwa, scheduler-code, writer-code]
 
 permissions:
   contents: read

@@ -159,6 +159,7 @@ class DriveRotation:
                 if state=='CANDIDATE':
                     self.patch(target,{'appProperties':{'health_recovery_state':'ACTIVE'}})
                 if self.set(target,sha)['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('new_active_readback_failed')
+                self.verify_mutation_preflight(target,sha,old,done)
                 self.j.state(target,'PROMOTED',done)
                 for binding in old:
                     id=binding['id']

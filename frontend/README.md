@@ -1,160 +1,107 @@
-# Frontend
+# HEALTH PWA — руководство по интерфейсу
 
-The frontend is a static, read-only PWA deployed through GitHub Pages.
+HEALTH — статическое PWA для **чтения** персональной медицинской карты из Supabase. Приложение публикуется на GitHub Pages; публичные HTML/JS/CSS-файлы не содержат медицинских записей. Доступ к данным требует авторизованной сессии и разрешения на стороне базы.
 
-**Branch / release rule:** UI contributions target `pwa`, not `main`.
-Base new frontend work on the current `pwa` HEAD. See
-[repository agent instructions](../AGENTS.md) and
-[PWA release procedure](../docs/PWA_RELEASE.md). A frontend-only merge into
-`pwa` must never change the accepted production Writer SHA.
-Do not simply retarget PRs developed from `main` without reconciling the
-current `pwa` code, tests, assets and service worker first.
+**Правило веток и релиза:** изменения интерфейса направляются в `pwa`, не в `main`. Новую работу начинать от актуального HEAD `pwa`. Обязательные правила — [AGENTS.md](../AGENTS.md) и [процедура выпуска PWA](../docs/PWA_RELEASE.md). Merge frontend-only PR в `pwa` не изменяет принятый production Writer SHA. Нельзя просто поменять base у PR, подготовленного от `main`: сначала согласовать с живым `pwa` код, тесты, ресурсы и service worker.
 
-## Navigation
+## Открытие и вход
 
-The mobile menu is collapsed by default (hamburger button); the desktop header
-keeps a wrapping horizontal navigation. Routing opens the requested page,
-not a menu. Current State is a composite view; other pages reuse the same live
-rows without copying or synchronizing duplicate medical entities.
+Опубликованное приложение: https://alexio00.github.io/HEALTH/.
 
-1. Текущее состояние — questions about chart conflicts or chart actions, chronic conditions,
-   open episodes, medications, visit preparation, future plan.
-2. Хронические состояния
-3. Открытые случаи
-4. Принимаемые препараты
-5. Подготовка к визиту
-6. Будущий план
-7. Закрытые случаи
-8. Записи
-9. Вакцинация — три таблицы: последние проведённые, запланированные, все вакцинации (REC).
+1. Откройте адрес по HTTPS в браузере. При поддержке браузером можно установить сайт как приложение через его команду установки PWA. Установка не предоставляет отдельного доступа к медицинским данным и не заменяет вход.
+2. В форме HEALTH введите email и пароль разрешённой учётной записи Supabase Auth, нажмите **«Войти»**. После аутентификации приложение дополнительно проверяет право чтения; успешный ввод пароля сам по себе не гарантирует доступ к данным.
+3. Для завершения сессии используйте **«Выйти»**. При ошибке входа проверьте доступность сети, реквизиты и разрешения учётной записи. В текущем интерфейсе нет самостоятельной формы восстановления пароля: не используйте для этой цели публичные тестовые OAuth-страницы.
+4. Для актуальных медицинских данных нужна сеть. Offline-режим относится только к заранее проверенной статической оболочке PWA, а не к карте.
 
-Visit preparation groups plan items explicitly marked as visits/consultations and
-open specialist questions. Specialties are determined only by explicit source
-wording (normally the prefix before the colon); questions may be shown for
-multiple explicitly named specialists. No matching planned appointment is
-invented when a question has no corresponding plan item. Data lives in the
-existing plan_items/questions tables, not copied UI state.
+Браузерный клиент использует email/password Auth, краткоживущий access token и обновление сессии по refresh token. Сессия сохраняется в `localStorage` текущего браузера; не входите с общего или недоверенного устройства. Запросы к PostgREST выполняются методом `GET` с `cache: "no-store"`. Право на данные проверяется сервером (Auth/RLS), а не наличием публичного `SUPABASE_PUBLISHABLE_KEY`. **Не помещайте в frontend service-role key, пароли БД или другие секреты.**
 
-Questions marked metadata.category=medical_card (or
-metadata.purpose=medical_card) remain in Questions on Current State.
-The pre-existing MVP specialist questions are displayed only under Visit
-Preparation by default.
+## Навигация и данные
 
-The UI deliberately mirrors the useful reading patterns of the legacy HealthDB files while reading live structured data from Supabase.
+На телефоне меню по умолчанию свёрнуто и раскрывается кнопкой ☰. На компьютере горизонтальное меню переносится по ширине. Переход открывает выбранную страницу, а не выпадающий список. **«Текущее состояние»** — сводное представление; другие страницы читают те же актуальные строки Supabase и не создают дубликаты медицинских сущностей.
 
-## Vaccination page
+1. **Текущее состояние** — вопросы к карте и действиям, хронические состояния, открытые случаи, препараты, подготовка к визиту и будущий план.
+2. **Хронические состояния** — текущие хронические случаи.
+3. **Открытые случаи** — незавершённые эпизоды.
+4. **Принимаемые препараты** — данные о препаратах.
+5. **Подготовка к визиту** — запланированные визиты/консультации и открытые вопросы специалистам.
+6. **Будущий план** — плановые действия.
+7. **Закрытые случаи** — закрытые эпизоды.
+8. **Записи** — индекс REC и просмотр текста записей.
+9. **Вакцинация** — три таблицы: последние проведённые, запланированные и вся история вакцинаций (REC и Plan).
 
-The page derives its read-only view from live `records` summaries and
-`plan_items`; no vaccination events, patient identifiers, or source texts are
-baked into public assets. The implicit category constraint on `plan_items`
-(`metadata.kind=вакцинация`) is always applied and is not user-editable.
-Relevant confirmed REC administrations (even those absent from Plan) are also
-included in the chronology. Consultations, antibody testing and cancelled REC
-must not become completed vaccine doses.
+Раздел подготовки к визиту собирает элементы `plan_items`, **явно** помеченные как визиты или консультации, и открытые вопросы специалистам. Специальность определяется только прямой формулировкой источника (обычно текстом до двоеточия); вопрос может относиться к нескольким явно названным специалистам. Если для вопроса нет соответствующего элемента Plan, интерфейс не выдумывает приём. Сведения остаются в `plan_items` и `questions`, без отдельной копии в UI.
 
-The first table contains only the most recent confirmed administration covering
-each infection, including combination vaccines. The second includes active
-planned doses, even overdue or undated ones. The third is a union of completed
-administrations and vaccination Plan items, including cancelled historical Plan
-items, with an optional status filter. Columns: infection(s), stage (V1..Vn or
-Rv, Rv1, Rv2 when explicitly supported), date, vaccine brand, next-stage/status control, and REC links.
+Вопросы с `metadata.category=medical_card` либо `metadata.purpose=medical_card` остаются в разделе вопросов **«Текущего состояния»**. Существующие вопросы MVP, адресованные специалистам, по умолчанию отображаются только в **«Подготовке к визиту»**.
 
-The REC cell keeps links to explicit appointments (`Назн.`), supporting
-basis RECs and administration RECs. Supporting and administration links have
-no visible `Осн.:` or `Пров.:` prefix; the role is retained as a hover title.
-A basis REC is
-**not** automatically asserted to be a medical prescription. Current schema
-does not store new appointment/administration relations; the page reads optional
-existing metadata for explicit links and leaves unsupported links empty. A
-future canonical relationship model and comprehensive reconciliation are separate
-clinical-data work and are not silently performed by a frontend deploy.
-In the history table, multiple already-visible infection labels can be
-expanded as tags. This is display-only: a multi-infection REC is not proof
-of one combined injection or per-antigen stage, and latest/plan grouping,
-REC evidence links, sorting, and Supabase SELECT remain unchanged.
-Unknown dates, stages and vaccines are not inferred. Overdue is a display-only
-comparison against the current Moscow calendar date, never a database mutation.
+Интерфейс сохраняет привычные способы чтения прежней HealthDB, но получает структурированные данные из действующего Supabase. Старые Google Drive Registry/REC не служат вторым источником записи.
 
-## Security boundary
+## Вакцинация: границы отображения
 
-- Browser access is SELECT-only.
-- Anonymous users cannot read medical tables.
-- Medical data is never embedded into the public repository or static Pages assets.
-- Google Drive object IDs are returned only after authenticated database access.
+Страница строит **производное представление только для чтения** из `records.body_text`, `records.summary` и `plan_items`. Для поиска проведённых введений интерфейс сначала использует распознанные фрагменты раздела вакцинации в `body_text`; если таких фрагментов нет, анализирует `summary`. Это эвристическое отображение REC, а не самостоятельное клиническое подтверждение доз. Реестр введённых доз здесь **не является каноническим**: подтверждение медицинского факта зависит от исходной REC/Source и принятой модели данных, а не от того, как экран сгруппировал строки. В публичных ресурсах нет встроенных событий вакцинации, идентификаторов пациента или текстов медицинских источников.
 
+Для Plan обязательная фильтрация `metadata.kind=вакцинация` выполняется **в клиентской read-only проекции** функцией `plannedVaccinations()` после чтения доступных по Auth/RLS строк `plan_items`: PostgREST-запрос сам не содержит этого фильтра, и он не является ограничением серверного RLS. Пользователь не может отключить фильтрацию в интерфейсе. В хронологию также попадают релевантные явно подтверждённые введения из REC, даже если их нет в Plan. Консультации, исследования антител и отменённые REC **не** считаются выполненными дозами.
 
-## Table sorting and filtering
+Три таблицы:
 
-All data tables use sortable column headers. Click a header to toggle ascending/descending order; there is no separate row of per-column text filters.
+- **Последние проведённые** — только последнее подтверждённое введение для каждой инфекции, включая явно поддерживаемые комбинированные вакцины.
+- **Запланированные** — действующие плановые дозы, в том числе просроченные и без установленной даты.
+- **Все вакцинации** — объединение проведённых введений и плановых элементов, включая отменённые исторические элементы Plan; доступен фильтр по статусу.
 
-Table header display contract (REC markdown tables and top-level pages alike):
-- Center header text horizontally and vertically.
-- Word wrapping is allowed only between complete words; never split single
-  words letter-by-letter just to fit the viewport. A horizontally scrollable
-  table is preferred over breaking "Результат", "Референс" or "Параметр".
-- Vertical padding above and below is half of one line height each, and
-  remains unchanged when a header wraps to additional lines.
-- The visible word "Количество" (standalone or in a multiword header) is
-  abbreviated as `К-во`; source text and the accessible sorting label remain
-  unchanged.
+Колонки показывают инфекции, этап (`V1`…`Vn`, `Rv`, `Rv1`, `Rv2` только при наличии явного основания), дату, название вакцины, следующий этап/статус и ссылки на REC.
 
+Ячейка REC сохраняет ссылки на явные назначения (`Назн.`), подтверждающие REC-основания и REC о введении. Для ссылок-оснований и ссылок-введений видимые префиксы `Осн.:` и `Пров.:` не выводятся; роль доступна в подсказке при наведении. REC-основание **не** объявляется автоматически медицинским назначением. Текущая схема не создаёт новые отношения «назначение — введение»: интерфейс читает необязательные явно заданные metadata-ссылки и оставляет неподтверждённые связи пустыми.
 
-Compact filter bars appear only when they add value:
-- date ranges where relevant;
-- repeated categorical values as live select controls;
-- Records: date range, Tag, Record Type and Confirmation when available;
-- Future Plan: repeated Kind and Status values;
-- Closed Cases: no filters (the list is read directly).
+В таблице истории несколько уже отображаемых названий инфекций можно раскрыть как отдельные теги. Это **только отображение**: одна REC с несколькими инфекциями не доказывает одну комбинированную инъекцию либо отдельно подтверждённые этапы для каждого антигена. Группировка последних/плановых доз, ссылки REC, сортировка и запросы Supabase `SELECT` не меняются.
 
-Record tags are clickable. A tag click immediately opens the Records index with that tag active. Filters default to All/empty, so no rows are hidden by default.
+Неизвестные даты, этапы и препараты не восстанавливаются предположениями. Метка просрочки — сравнение с текущей календарной датой по Москве, без изменения БД. Новые канонические связи, статусы и полная медицинская сверка вакцинаций относятся к отдельной работе с Writer/Verifier/Validation (Issue [#62](https://github.com/Alexio00/HEALTH/issues/62)), а не к релизу PWA.
 
-## Scrolling / sticky chrome
+## Безопасность чтения
 
-All page titles are sticky directly beneath the site header. The title's
-initial top margin is reduced to give more reading space. No page-introduction
-paragraphs or duplicated standalone section titles appear; Current State
-retains its multiple named sections.
+- Браузерный контур — только `SELECT`; медицинских `INSERT`, `UPDATE` и `DELETE` из PWA нет.
+- Анонимная сессия не предоставляет чтения медицинских таблиц; фактические права должны обеспечиваться Auth/RLS в Supabase.
+- Публичный GitHub и GitHub Pages содержат только код и разрешённые статические ресурсы, **не** медицинские данные.
+- Идентификаторы объектов Google Drive возвращаются лишь после аутентифицированного обращения к БД; само получение ссылки не отменяет разрешений Google Drive.
+- `localStorage` содержит сессию на устройстве. Offline-кэш не должен содержать ответы Supabase, OAuth-согласия или другие приватные данные.
 
-On single-table pages (Records and Future Plan), the existing filter bar
-remains pinned between the page title and the table header. The Closed Cases
-list no longer has date/category filters.
+## Сортировка и фильтры
 
-Table headings remain visible during vertical scrolling. Native CSS sticky
-headings cannot stick to the viewport inside the horizontally scrollable
-table wrapper, so a position-fixed, width-aligned header mirror is used while
-the real table header has scrolled off. Horizontal table scroll positions and
-sorting buttons are synchronized to the original table; the mirror is hidden
-outside its owning table. Global header height and sticky title height are
-measured dynamically to accommodate desktop wrapping and the mobile menu.
-This is presentation-only and does not change row contents or filtering.
+Во всех таблицах заголовки колонок служат кнопками сортировки: последовательные нажатия переключают направление. Отдельных текстовых фильтров под каждой колонкой нет.
 
+Правила отображения заголовков (включая Markdown-таблицы REC):
 
-REC presentation is owner-facing rather than migration-facing: legacy YAML/frontmatter is hidden, technical source roles/hashes are not shown, Sources open the primary Google Drive original directly, and source page numbers remain visible because they locate the evidence inside multi-page originals.
+- Текст центрирован горизонтально и вертикально.
+- Переносить можно только между словами, не разрывая буквы в словах «Результат», «Референс», «Параметр» ради ширины. Горизонтальная прокрутка предпочтительнее.
+- Вертикальные отступы сверху и снизу равны половине высоты строки и не изменяются при переносе заголовка.
+- Видимое «Количество» (самостоятельное или в составном заголовке) сокращается до `К-во`; текст источника и доступная метка сортировки не меняются.
 
+Компактные панели фильтров есть там, где они полезны: диапазон дат по необходимости, повторяющиеся категории — в списках; **«Записи»** — период, Tag, Record Type и Confirmation при наличии; **«Будущий план»** — Kind и Status с повторяющимися значениями; **«Закрытые случаи»** — без фильтров. Значения по умолчанию — «Все»/пусто, строки не скрываются без действия пользователя. Нажатие тега REC сразу открывает индекс «Записей» с активным фильтром по этому тегу.
 
-## Prose alignment
+## Прокрутка и закрепление элементов
 
-Long prose paragraphs in expanded case/question/visit cards, case summaries and
-REC bodies use justified alignment. A last (or only) line remains left-aligned.
-Headings, disclosure labels, lists, compact REC links, tables and individual
-row values remain left-aligned. Source text and paragraph boundaries are not
-modified in the database.
+Заголовок каждой страницы закреплён непосредственно под шапкой; верхний отступ уменьшен. Лишние вводные абзацы и дублирующие самостоятельные заголовки не выводятся. «Текущее состояние» сохраняет собственные именованные секции.
 
-## REC body cleanup
+На одностраничных табличных разделах «Записи» и «Будущий план» панель фильтров закреплена между заголовком страницы и заголовком таблицы. У «Закрытых случаев» фильтров дат/категорий нет.
 
-REC pages show owner-facing medical content, not migration wrappers:
-- legacy BEGIN/END FILE and REC wrapper lines are hidden;
-- duplicated legacy metadata/frontmatter is hidden when the same values are already shown in the REC header;
-- the first H1 is used to derive the page title and is not repeated inside the Text Record section;
-- internal record headings have spacing before the heading and no extra spacing after it;
-- raw medical body_text remains unchanged in the database.
+Заголовки таблиц остаются видимы при вертикальной прокрутке. Поскольку обычный CSS `position: sticky` ограничен контейнером горизонтальной прокрутки, используется фиксированная копия заголовка с выравниванием ширин. Горизонтальная прокрутка и кнопки сортировки синхронизированы с оригиналом; копия скрывается за пределами своей таблицы. Высоты общей шапки и заголовка страницы измеряются динамически с учётом переноса desktop-меню и мобильного раскрытия. Содержимое строк и фильтрация от этого не меняются.
 
-## Release and offline shell
+## Отображение REC и длинных текстов
 
-A small footer shows the build SHA. Actions creates release.json from the exact
-pwa commit and checks all published file hashes after deployment. The worker
-cache is automatically SHA-bound; it validates a complete static shell before
-activation and serves coherent bytes for hash routes. A controlled page reloads
-once when the new worker takes over. Only public shell assets are cached;
-medical responses, arbitrary queries and OAuth test consent remain network-only.
-See docs/PWA_RELEASE.md for scope policy, limitations and protected-PR rollback.
+REC представлены для чтения владельцем, а не как миграционный дамп: прежний YAML/frontmatter и технические роли/хеши Sources не показываются. Для Source-ссылки интерфейс предпочитает Google Drive locator с ролью `PRIMARY`; если его нет, использует другой доступный Google Drive locator. Если подходящего locator нет или права Google Drive не позволяют чтение, открытие оригинала не гарантируется. Номера страниц источника сохраняются для поиска подтверждения в многостраничном документе.
+
+Длинные абзацы в раскрытых карточках случаев, вопросов и визитов, в сводках и текстах REC выравниваются по ширине; последняя (или единственная) строка остаётся слева. Заголовки, подписи раскрытия, списки, компактные REC-ссылки, таблицы и отдельные значения строк сохраняют выравнивание по левому краю. Текст источника и границы абзацев в БД не меняются.
+
+При выводе тела REC:
+
+- скрываются старые строки-обёртки `BEGIN/END FILE` и `REC`;
+- повторяющиеся legacy metadata/frontmatter скрываются, если эти данные уже есть в шапке REC;
+- первый `H1` используется как заголовок страницы и не повторяется в разделе текста;
+- внутренние заголовки получают отступ перед собой без лишнего отступа после;
+- исходный `body_text` в базе остаётся неизменным.
+
+## Версия и работа без сети
+
+Внизу страницы отображается короткий SHA сборки. GitHub Actions формирует `release.json` из точного коммита `pwa` и после публикации сверяет SHA и хеши всех опубликованных файлов. Service worker привязывает кэш оболочки к полному SHA, проверяет целостность ресурсов перед активацией и обеспечивает согласованную версию на hash-маршрутах. После смены активного worker управляемая страница один раз перезагружается.
+
+Кэшируются только восемь разрешённых публичных ресурсов оболочки. Ответы с медицинскими данными, произвольные запросы и OAuth test consent требуют сети и не кэшируются. Если установка новой оболочки не завершилась, ранее установленный worker продолжает работу; это **не** гарантия доступности карты offline.
+
+Полные правила выпуска, ограничения `static`, проверка Pages и откат: [docs/PWA_RELEASE.md](../docs/PWA_RELEASE.md).

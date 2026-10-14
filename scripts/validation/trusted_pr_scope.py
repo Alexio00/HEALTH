@@ -96,6 +96,8 @@ def check_scope(changes, mode, author_id, body, head, tree_head, tree_base):
         old = entry.get("previous_filename") if entry["status"] == "renamed" else None
         if entry["status"] == "renamed" and not old:
             raise ScopeStop("rename_missing_previous_path")
+        if entry["status"] != "renamed" and entry.get("previous_filename") is not None:
+            raise ScopeStop("unexpected_previous_filename")
         if new in seen or (old is not None and old in seen):
             raise ScopeStop("duplicate_file_entry")
         seen.add(new)
@@ -222,7 +224,9 @@ def git_tree(token, commit):
             raise ScopeStop('tree_entry_invalid')
         path, mode, kind = entry.get('path'), entry.get('mode'), entry.get('type')
         if (not isinstance(path, str) or not path or path.startswith('/')
-                or chr(92) in path or any(part in ('', '.', '..') for part in path.split('/'))
+                or chr(92) in path or "%00" in path.casefold()
+                or any(ord(char) < 32 or ord(char) == 127 for char in path)
+                or any(part in ('', '.', '..') for part in path.split('/'))
                 or (kind, mode) not in allowed or path in result
                 or not sha40(entry.get('sha'))):
             raise ScopeStop('tree_entry_invalid_or_duplicate')

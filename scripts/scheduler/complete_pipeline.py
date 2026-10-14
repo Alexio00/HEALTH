@@ -38,11 +38,17 @@ def choose_existing(mode,cloud,journal,producer_sha,approved_sha):
         raise SourceStop('multiple_or_conflicting_candidates_require_owner_reconciliation')
     if pending and pending['state']!='DONE':
         if mode=='candidate' or uploads:raise SourceStop('pending_rotation_requires_owner_reconciliation')
+        if any(x['id']!=pending['target'] for x in candidates):
+            raise SourceStop('pending_rotation_foreign_candidate_requires_owner_reconciliation')
         target,sha=pending['target'],pending['sha'];replay=False
+    elif mode=='activate' and pending and pending['state']=='DONE':
+        # A digest is not a folder identity. A fresh CANDIDATE (even with the
+        # same digest) cannot displace the exact journal replay target.
+        if candidates or uploads:
+            raise SourceStop('completed_rotation_conflicting_candidate_requires_owner_reconciliation')
+        target,sha=pending['target'],pending['sha'];replay=True
     elif candidates:
         target=candidates[0]['id'];sha=candidates[0]['appProperties'].get('health_archive_sha256');replay=False
-    elif mode=='activate' and pending and pending['state']=='DONE' and pending['sha']==approved_sha and not uploads:
-        target,sha=pending['target'],pending['sha'];replay=True
     elif uploads:
         if mode not in ('candidate','daily'):raise SourceStop('unfinished_upload_requires_candidate_reconciliation_first')
         target,sha=cloud.finish_upload(uploads[0],producer_sha);replay=False

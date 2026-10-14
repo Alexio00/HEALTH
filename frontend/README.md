@@ -57,7 +57,7 @@ each infection, including combination vaccines. The second includes active
 planned doses, even overdue or undated ones. The third is a union of completed
 administrations and vaccination Plan items, including cancelled historical Plan
 items, with an optional status filter. Columns: infection(s), stage (V1..Vn or
-RV when supported), date, vaccine brand, next-stage/status control, and REC links.
+Rv, Rv1, Rv2 when explicitly supported), date, vaccine brand, next-stage/status control, and REC links.
 
 The REC cell keeps links to explicit appointments (`Назн.`), supporting
 basis RECs and administration RECs. Supporting and administration links have

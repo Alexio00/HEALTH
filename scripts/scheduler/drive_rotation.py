@@ -170,7 +170,10 @@ class DriveRotation:
                     if previous['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('previous_active_set_changed')
                     if previous.get('trashed') is not True:self.patch(id,{'trashed':True})
                     if self.set(id,allow_trashed=True).get('trashed') is not True:raise RotationStop('previous_set_trash_readback_failed')
-                    done.append(id);self.j.state(target,'PROMOTED',done)
+                    done.append(id)
+                    self.verify_mutation_preflight(target,sha,old,done)
+                    self.j.state(target,'PROMOTED',done)
+                self.verify_mutation_preflight(target,sha,old,done)
                 self.j.state(target,'DONE',done)
             if [m['id'] for m in self.children(self.parent) if m.get('appProperties',{}).get('health_complete_set')=='v1' and m.get('appProperties',{}).get('health_recovery_state')=='ACTIVE']!=[target]:raise RotationStop('one_active_set_readback_failed')
             return {'status':'ONE_VERIFIED_ACTIVE_COMPLETE_SET_ROTATION_PASS','previous_sets_trashed':len(done),'permanent_deletes':0,'test_only':self.test}

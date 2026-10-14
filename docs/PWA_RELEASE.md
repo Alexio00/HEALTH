@@ -1,257 +1,129 @@
-# PWA release isolation
+# HEALTH PWA — эксплуатация, выпуск и откат
 
-See [AGENTS.md](../AGENTS.md) for mandatory branch routing, cross-PR
-conflict resolution, safety boundaries and Writer acceptance rules. Read
-live branches and open PRs at the start of each new development task.
+Это **действующее руководство PWA**. Обязательная маршрутизация веток, разделение пересекающихся PR и ограничения Writer описаны также в [AGENTS.md](../AGENTS.md). Перед новой задачей проверяйте живые ветки и открытые PR; приведённые ниже исторические снимки не являются разрешением на merge.
 
+**Production Writer:** принят только из `HEALTH/main`, с точной подписанной авторизацией владельца, принятым SHA в переменной GitHub Actions, политикой Supabase Edge broker и `health_writer.runtime_policy.code_sha`. Ни одна инструкция PWA не ослабляет этих требований.
 
-**Production Writer:** accepted from `HEALTH/main`, with exact signed owner
-authorization, accepted commit SHA in GitHub Actions variable, Supabase Edge
-broker policy and `health_writer.runtime_policy.code_sha`. Nothing in this
-document relaxes those checks.
+**Публикация frontend:** `HEALTH/pwa` — самостоятельный источник `Deploy HEALTH PWA`. Frontend PR направляются в `pwa`, **не** в `main`. Merge в `pwa` не изменяет принятый Writer SHA. Запрещено запускать workflow клинической авторизации из `pwa`.
 
-**Frontend release:** `HEALTH/pwa` is a separate deployment source for
-`Deploy HEALTH PWA`. Frontend PRs target `pwa`, not `main`. Merge
-to `pwa` does **not** change the accepted Writer commit SHA. Do not dispatch
-the clinical authorization workflow from `pwa`.
+## Компоненты и ограничения
 
-## Release procedure
+- **GitHub Pages** раздаёт **публичные** статические файлы. Доступ к странице не означает доступ к медицинским данным. GitHub Pages нельзя рассматривать как приватное хранилище или backend.
+- **Supabase Auth + RLS** обеспечивают доступ к данным: браузер выполняет только аутентифицированные `GET`/`SELECT` в PostgREST. Само наличие публичного `SUPABASE_PUBLISHABLE_KEY` не предоставляет привилегий. Service-role key, секреты, реальные Sources и медицинские строки не помещаются в репозиторий или Pages.
+- **PWA** кэширует только проверенную публичную оболочку, а не ответы Supabase; наличие offline-страницы не означает работу медицинской карты без сети.
+- **Writer** — отдельный ограниченный и независимо проверяемый контур клинической записи. GitHub merge, статический сайт, зелёный CI или успешный вход в Auth не предоставляют ему прав.
+- **Scheduler** не запускается через PWA. Отдельные `scheduler-code`/`scheduler` и main launchers имеют собственную приёмку; PWA PR не должен запускать backup, GitHub dispatch или выдавать clinical credentials.
 
-1. Prepare and review only frontend UI/assets changes against `pwa`.
-   Check that no Writer scripts, SQL schemas, Edge broker, or authorization
-   workflows changed in the PR.
-2. Obtain a green `HEALTH code validation` on the PR and exact merged `pwa`
-   commit. The workflow covers both `pull_request` and `push` on `pwa`.
-3. The `pwa` copy of `.github/workflows/deploy-pages.yml` automatically
-   runs on a `pwa` push affecting `frontend/**` or the workflow. It uses
-   concurrency group `pages-pwa` (independent from the legacy `main` group).
-   A **Verify PWA before release** job checks frontend syntax, synthetic
-   contracts, and the public secret-pattern guard, and uploads the exact
-   checked Pages artifact. **Publish verified PWA** runs only after that job
-   succeeds and can deploy only from `refs/heads/pwa`. This is a
-   mandatory pre-deploy frontend gate, NOT a replacement for the full
-   `HEALTH code validation` workflow run on a pull request.
-   On a failed deployment, either re-run only the deploy job while its single
-   valid artifact remains, or start a new workflow run from `pwa`.
-   Do not re-run the artifact-uploading job or the entire workflow under the
-   same run ID after an upload, because duplicate `github-pages` artifacts
-   can make the deploy action fail.
-4. Check the final postcheck job, exact release SHA and artifact file hashes.
-   Then check browser-visible behavior under an authorized session. GitHub Pages
-   deployment success is not itself a UI or clinical Writer smoke-test.
-5. Recheck that `main` SHA and Supabase Writer accepted SHA have not moved.
-   Do not use direct SQL updates to bypass Writer's accepted-code boundary.
+Актуальное руководство интерфейса: [frontend/README.md](../frontend/README.md).
 
-The legacy Pages workflow still exists in `main`. The owner-restricted
-Pages environment allows only `pwa`; do not relax this restriction. Removal
-of the legacy workflow belongs to the separately accepted Writer update in PR #39. If it happens, start a **new** `pwa` workflow_dispatch deployment to
-restore the exact approved `pwa` revision.
-Never merge a Writer branch's frontend files into `main` on the assumption
-that the Pages site will stay unchanged.
+## Процедура выпуска PWA
 
-## Branch protection for `pwa` (repository setting)
+1. Создайте отдельную ветку от **текущего `pwa` HEAD**. Меняйте только допустимые UI/assets либо PWA-документацию. Проверьте отсутствие изменений Writer scripts, SQL schemas, Edge broker и authorization workflows. Для изменения release controls действует более строгий порядок ниже.
+2. Зафиксируйте полные 40-символьные `BASE_SHA` и `HEAD_SHA`, целевую `pwa` и **полный diff**. Добейтесь успешного `HEALTH code validation` для PR; обязательный job — `static`. Независимое review точного SHA и отдельный явный `OWNER_GO` обязательны **до merge**. Непосредственно перед merge заново проверьте HEAD/BASE, diff, обсуждения, текущий Ruleset и CI. Изменение SHA аннулирует предыдущее принятие.
+3. После **разрешённого merge**, если push затронул `frontend/**` или `.github/workflows/deploy-pages.yml`, из `pwa` автоматически стартует `Deploy HEALTH PWA`. Workflow использует concurrency group `pages-pwa` (отдельную от legacy group `pages` в `main`). Job **Verify PWA before release** проверяет синтаксис frontend, синтетические контракты и public secret-pattern guard, собирает и загружает точно проверенный Pages artifact. Job **Publish verified PWA** зависит от первого job и допускает deploy только из `refs/heads/pwa`. Это обязательный pre-deploy gate, **не** замена полного `HEALTH code validation` на PR.
+4. Проверьте job **Verify published release bytes** (`postcheck`), точный SHA релиза, `release.json`, все хеши ресурсов, затем поведение в браузере под **разрешённой** сессией. Успех Pages deploy сам по себе не является UI smoke-test или проверкой Writer. Для чисто документационного merge (только `frontend/README.md` и `docs/PWA_RELEASE.md`) `push` запускает `HEALTH code validation` по `docs/**`/`frontend/**`, но триггер Pages имеет собственные фильтры: изменение `frontend/README.md` находится под `frontend/**` и **поэтому тоже может инициировать Pages workflow**, даже если опубликованные runtime-файлы не меняются. Не считайте docs-only PR гарантией отсутствия Pages run после merge.
+5. Проверьте, что SHA `main` и принятый Supabase Writer SHA не изменились. Нельзя обходить accepted-code boundary Writer прямым SQL.
 
-The live branch reports `protected: true` on 2026-10-13.
-Active Ruleset 25010980 requires PR, up-to-date base, and Actions `static`;
-deletion and force-push are blocked and no bypass actors are configured.
+При неудаче deploy можно повторить **только** deploy job, пока в run остаётся единственный действительный artifact, либо начать новый `pwa` workflow run. Не перезапускайте загрузивший artifact job или весь workflow с тем же run ID: повторный `github-pages` artifact может сломать `actions/deploy-pages`. При сомнении безопаснее новый run.
 
-The repository is publicly visible, so GitHub Free supports Rulesets/branch
-protection without upgrading. The connected GitHub integration cannot modify
-administration settings (the protection read API returned 403). The owner configured this in GitHub **Settings → Rules → Rulesets** (or **Branches →
-Add branch protection rule**):
+Legacy Pages workflow остаётся в `main`, но environment `github-pages` ограничен владельцем веткой `pwa`; не ослабляйте ограничение. Удаление legacy workflow предусмотрено отдельно принимаемым Writer-изменением PR [#39](https://github.com/Alexio00/HEALTH/pull/39). Если это изменение когда-либо будет принято, нужен **новый** `workflow_dispatch` деплой из `pwa` для восстановления точно одобренной редакции. Нельзя переносить frontend-файлы Writer PR в `main` исходя из предположения, что Pages останется неизменным.
 
-- Target only branch `pwa`, set ruleset to **Active**, do not include
-  `main` or Writer's other refs.
-- **Require a pull request before merging**, **Require status checks to pass**,
-  selecting exactly the `static` job from `HEALTH code validation`, and
-  **Require branches to be up to date before merging**.
-- Block force pushes and deletions; disallow bypasses where available.
-- With a sole maintainer, do not require another human approval until a
-  second reviewer exists. A required self-review could deadlock all UI PRs.
-- Do **not** require the `github-pages` deployment as a *pre-merge* check:
-  publishing must happen after merge, or PRs deadlock.
+## Защищённая ветка `pwa` — проверенная настройка GitHub
 
-The `pwa` code-validation workflow now runs for **every** PR targeting
-`pwa`, including workflow-only and root-level instruction changes, so
-the mandatory `static` status is available. Verify `pwa` reports
-`protected: true` after saving the rules. A clean PR CI and an actual
-merged `pwa` release are separate checks.
+На момент проверки 14.10.2026 GitHub branch API возвращает `protected: true`. Ruleset [Protect PWA, ID 25010980](https://github.com/Alexio00/HEALTH/rules/25010980) имеет `enforcement: active`, адресован **только** `refs/heads/pwa` и требует:
 
-The owner has limited the `github-pages` deployment environment to
-`pwa`, so `main` cannot publish even though its old workflow still exists.
-The `pwa` workflow additionally refuses non-`pwa` refs.
+- merge через PR (`pull_request`), без обязательного отдельного человеческого approval при единственном владельце;
+- обязательный Actions status `static` из `HEALTH code validation`, `strict_required_status_checks_policy: true` — обновлённая база;
+- запрет удаления и non-fast-forward/force-push;
+- отсутствие разрешённых bypass actors (`bypass_actors: []`).
 
-## Working with other open branches (inventory dated 2026-10-13)
+GitHub Free поддерживает Rulesets в **публичном** репозитории; платный тариф для этого не требуется. Проверять настройку следует в GitHub **Settings → Rules → Rulesets**. Не расширяйте Ruleset на `main` или ветки Writer. Не делайте pre-merge обязательным job публикации `github-pages`: он запускается после merge, и такое правило заблокирует PR. Если появится независимый reviewer, требования к согласованию можно отдельно пересмотреть.
 
-**Re-check live PR state before acting; this is a coordination snapshot,
-not standing permission to merge, rewrite or delete any branch.**
+Workflow `HEALTH code validation` запускается для **каждого** `pull_request`, направленного в `pwa`, даже при изменении только workflows/инструкций, поэтому `static` должен появляться в PR. `push`-триггер CI имеет фильтры путей, что не равно PR-триггеру. Чистый CI и реально опубликованный `pwa` — разные проверки.
 
-- PR #38 (Vaccination) was merged into `pwa` on 2026-10-13. Future
-  frontend changes must preserve vaccination module and automatic SHA-bound shell cache, plus previously merged UI changes.
-- PR #36, `feature/supabase-test-consent-ui-20261013`: its four
-  `frontend/oauth-test/*` files are **already present** in `pwa`, preserved
-  from an earlier static Pages deployment. Do not merge the same assets
-  into `main` merely to publish them. Any genuinely new consent/auth flow
-  requires separate review of its threat model.
-- PR #35, `feature/chat-writer-contract-20261013`: Writer/backend and
-  `code-validation.yml`, so its final acceptance belongs in `main`
-  under the existing exact-SHA protocol. Do not accidentally remove
-  `pwa` CI triggers when syncing workflows.
-- PR #33, `maintenance/ru-governance-legacy-independence-20261013`:
-  touches Writer, governance and `frontend/README.md`; split or explicitly
-  reconcile the cross-branch scope before acceptance. Do not overwrite
-  this `pwa` release policy with a stale README.
-- PR #27, `migration/planned-medication-status`: SQL migration plus old
-  migration tooling; requires fresh applicability and security review
-  against the **live** Supabase canonical system before any use.
-  Never treat old migration code as an implicit production fix.
-- PR #22, `test/nonmutating-probe-handoff`: docs-only; still changes
-  Writer's accepted `main` SHA if merged there. Batch with a separately
-  authorized main acceptance or defer.
+Ограничение `github-pages` environment на `pwa` было установлено владельцем; сам `deploy-pages.yml` дополнительно отказывает refs, отличным от `pwa`. Перед реальным релизом перепроверяйте environment в настройках GitHub: строка в документации сама по себе не обеспечивает эту защиту.
 
-Orphaned/historical branches include `maintenance/pwa-ui-refine-20261007`,
-`maintenance/frontend-accordion-medrec-visits-20261013`, and
-`release/pages-ui-20261013-preserve-oauth-test`. New work starts from
-the **live** `pwa` or `main`, not an old release branch. Do not delete
-old branches without the owner's decision.
+## Правила scope и доверенная проверка PR
 
-### Two kinds of acceptance
+Обычный PWA PR может менять обычные файлы внутри `frontend/`, а за его пределами — только `AGENTS.md` либо `docs/PWA_RELEASE.md`. Backend, SQL, приватные пути и symlinks запрещены. Права и разрешённость каждого кандидата проверяет `frontend/release/scope.mjs`, запущенный из объектов **защищённой base**, а не из проверяемой ветки.
 
-A frontend PR may be accepted only after full 40-character BASE_SHA and
-HEAD_SHA plus exact diff are frozen, independently reviewed for compatibility,
-security, negative tests and rollback, and explicitly approved by the owner
-for that exact SHA. Immediately before merge, recheck unchanged HEAD/BASE,
-the complete diff, unresolved threads, current Ruleset and green required
-`static`. Any candidate change voids the earlier acceptance. After an
-authorized merge, verify the exact `pwa` release SHA, a new successful
-Pages deployment with a verified pre-deploy gate and postcheck, then perform
-an authorized-session browser smoke-test (or explicitly record NOT_VERIFIED).
-A successful CI run is never independent review or owner GO.
+К изменениям release controls относятся `frontend/release/` и перечисленные PWA workflow-файлы. Такой PR должен быть создан владельцем с GitHub user ID `308028794` и иметь **отдельную точную строку** в теле PR:
 
-A Writer PR requires current, independently reviewed code, exact `main`
-SHA reacceptance in the GitHub owner policy, Edge broker and runtime,
-and a verified restricted-role behavior check. A `pwa` merge does not
-authorize a clinical operation. Never silently replace a missing private
-Writer operator with administrative Supabase SQL.
+```text
+PWA-RELEASE-CONTROL: <40-character head SHA>
+```
 
-## Scope / future
+Изменение HEAD требует новой строки и нового review. **Не** добавляйте её к неизвестному PR только ради PASS. Изменения `.github/workflows/code-validation.yml` вне ограниченного frontend-check блока запрещены даже при авторизации release-control: Writer/OIDC-части должны оставаться побайтово прежними.
 
-- `pwa` retains the already deployed `frontend/oauth-test/*` assets; merging
-  UI changes must not silently remove them.
-- Parallel Writer work stays on its original branches, and `main` remains
-  its exact signed authorization ref.
-- Long-term complete isolation needs a separately accepted, immutable Writer
-  ref/repository and removal of the `main` frontend auto-deploy path.
-  That transition changes the trust contract and needs an independent audit,
-  a one-time coordinated reaccept and explicit owner approval.
-- This `pwa` solution avoids that Writer migration for normal UI-only PRs.
+Ранее предложенный отдельный `pull_request_target` workflow не запускался: GitHub загружает его из default branch `main`. Его убрали из `pwa`, и считать его действующей защитой нельзя. Рабочий `static` использует base-sourced scope и проверяет Git objects кандидата.
 
-## Trusted PR scope and release-control review
+**Ограничение безопасности (HIGH [#50](https://github.com/Alexio00/HEALTH/issues/50) — OPEN):** текущий Ruleset привязан к имени `static` и GitHub Actions, **не** к неизменяемой идентичности конкретного workflow. Вредоносный PR может попытаться объявить другой Actions job с таким же названием. Нет независимого технически enforced `pwa` scope-check; текущая защита — defense-in-depth и обязательная процедура ручной независимой приёмки. Не объявляйте её неуязвимым барьером для hostile contributor. Для строгой защиты потребуется отдельный проверенный issuer/status либо подходящее правило GitHub. Не ослабляйте текущий Ruleset и не добавляйте несуществующий required check: это заблокирует PR. Начальная scope-политика проверялась относительно baseline `93964e3524171d789f03608958a6b0740bae23ee`.
 
-Ordinary PRs may change regular files in frontend/ and only AGENTS.md or
-docs/PWA_RELEASE.md outside it. Backend, SQL, private paths and symlinks fail.
-Release controls (frontend/release/ and the named PWA workflow files)
-require a PR authored by owner ID 308028794 and the exact standalone body line
-`PWA-RELEASE-CONTROL: <40-character head SHA>`. A new head invalidates it.
-This is explicit review of an authorized technical release; never add the line
-to an unknown PR merely to obtain PASS.
+## Точная сборка Pages artifact
 
-The static job loads scope logic from protected base objects, not PR code.
-The attempted standalone pull_request_target workflow did not run: GitHub now
-loads it from the default branch, which is main and remains pinned. It is
-removed from pwa rather than represented as active protection.
-The static step executes base scope code and reads candidate Git objects.
-Changes to code-validation.yml outside its frontend-check block are forbidden,
-even in a release-control PR. Writer/OIDC checks must remain byte-for-byte.
+Сборка разрешена только при `GITHUB_REF=refs/heads/pwa` и совпадении `GITHUB_SHA` с checkout `git HEAD`. Скрипт `frontend/release/build.mjs` копирует **15 перечисленных** runtime-файлов во временную директорию runner, вставляет SHA в `index.html` и `sw.js`, генерирует `release.json` (schema 1, точный SHA, SHA-256 всех runtime-файлов). Исходные README, тесты и release tooling не публикуются как часть artifact.
 
-**Limit:** the current required Ruleset binds the name static to GitHub Actions,
-not an immutable workflow identity. A malicious PR could invent another Actions
-job with that name. There is no independently enforced pwa-scope check. This is defense in
-depth and a release-review gate, not an unbypassable hostile-contributor boundary.
-Strict protection needs an independently enforced required workflow/status
-issuer or an additional suitable repository rule, reviewed by the owner.
-Do not weaken Rulesets to bootstrap this. Initial policy PR is independently
-reviewed against baseline 93964e3524171d789f03608958a6b0740bae23ee.
+Индикатор версии в footer показывает короткий SHA **этого HTML artifact**, а не якобы уже вышедшего более нового релиза.
 
-## Static-only offline boundary
+Service worker использует кэш `health-shell-<full SHA>`. Установка получает восемь разрешённых ресурсов с `redirect: "error"` и проверяет MIME, cache policy и SHA-256 байтов **до** помещения их в кэш и `skipWaiting`. Каждая активная версия обслуживает согласованный набор статических ресурсов. При активации удаляются старые `health-shell-*` кэши, но не посторонние. `clients.claim` и однократная перезагрузка по `controllerchange` переводят управляемую страницу на новую версию. `updateViaCache: "none"` исключает зависимость обновления worker от HTTP cache браузера. При устаревшем CDN-файле новая установка отвергается, прежний worker продолжает работу. Hash-маршруты используют тот же `index.html`.
 
-The worker caches only eight enumerated public shell resources. Every query
-string, OAuth test page, API, arbitrary path, authorization/range request,
-redirect, non-200, wrong MIME and private/no-store/no-cache response is excluded.
-Old health-shell caches are purged on activation; unrelated caches are retained.
-Offline shell availability never means offline medical data: Supabase responses
-are not stored in CacheStorage. OAuth test consent requires network access.
+В offline-кэш **не** попадают query URL, OAuth test pages, API, произвольные пути, Authorization/Range requests, redirects, ответы с не-200, неверным MIME, `private`/`no-store`/`no-cache`. Supabase responses не сохраняются в CacheStorage; тестовое OAuth-согласие требует сети.
 
-## Exact artifact and post-deploy acceptance
+## Постпроверка опубликованных файлов
 
-The build runs only with GitHub Actions GITHUB_REF=refs/heads/pwa and
-GITHUB_SHA equal to the checked-out Git HEAD. It copies fifteen enumerated
-runtime files into a new runner-temp artifact, stamps index.html and sw.js,
-then generates release.json (schema 1, exact sha, SHA-256 for every runtime file).
-Tests, release tooling, READMEs and RELEASE_CHECK.md are not published.
-The footer shows the short SHA of that HTML artifact, not the live marker of
-a newer release.
+Job `Verify published release bytes` запускается **после** `Publish verified PWA` в том же workflow. Скрипт `frontend/release/smoke.mjs` обращается к опубликованному корню, `release.json` и всем 15 файлам с `cache: "no-store"`; сверяет HTTP status, MIME, точный SHA и SHA-256 полных байтов.
 
-The worker uses health-shell-<full SHA>. Installation fetches all eight shell
-files with redirect:error and validates MIME/cache policy and generated byte
-hashes before storing any of them or calling skipWaiting. Existing cached
-shell responses stay within one release. Activation removes old health-shell
-caches and claims clients; a controlled page reloads once on controllerchange.
-updateViaCache:none avoids relying on the browser HTTP cache for worker updates.
-A stale CDN file fails installation; the previously installed worker continues.
-Hash routes use the same index.html. OAuth/API/query requests remain uncached.
+Повторные попытки ограничены **12** (по **10 секунд** между попытками); timeout одного запроса — **10 секунд**, timeout job — **5 минут**. `continue-on-error` нет. Если postcheck FAIL, весь release workflow FAIL, даже когда `Publish verified PWA` уже выполнился. Это обнаружение несовпадений, **не атомарный rollback**: неверная версия может уже быть доступна на Pages. Источник сигналов — статус GitHub Actions и уведомления, без платного сервиса.
 
-Verify published release bytes runs after deployment in the same workflow.
-It requests root, release.json and all fifteen runtime files using no-store,
-checks status/MIME/exact SHA/byte hashes, and retries at most twelve times
-(10 seconds between attempts, 10-second request timeout, 5-minute job timeout).
-It never has continue-on-error. A FAIL makes the whole release workflow FAIL
-even if Publish verified PWA succeeded. GitHub Pages may already show the bad
-release: the postcheck detects it, but is not an atomic deployment rollback.
-Actions failure notifications/run status are the signal; no paid service.
-A matching old marker without matching files is a failure.
-HTTP PASS does not verify authenticated clinical UI or an installed device.
+Совпавший прежний marker без побайтового совпадения файлов — FAIL. HTTP PASS не доказывает корректность интерфейса в авторизованной сессии и поведение установленного PWA на устройстве.
 
-## Rollback through a protected PR
+## Откат через защищённый PR
 
-1. Select a previously verified pwa commit and inspect its release/evidence.
-2. Fetch current pwa and create a fresh rollback branch from it. Never reset
-   the remote ref or force-push. Preserve release controls and current tooling.
-3. Revert only the faulty frontend change (for a merge: git revert -m 1 <SHA>),
-   resolving conflicts against current routing, OAuth assets and release policy.
-   If reverting would remove the safe worker/build pipeline, restore only
-   affected UI files from the known-good tree instead. Rebuild with current
-   tooling; do not copy the old release.json or generated worker.
-4. Review the complete diff; create PR to pwa. Any release-control edits need
-   owner PR with the exact-head PWA-RELEASE-CONTROL line. Mandatory static
-   with its base-sourced scope step must pass with current base. No rules bypass.
-5. Merge normally. New merge SHA is a new release identity, including cache.
-6. Wait for Verify/Publish/postcheck, compare actual marker SHA and all bytes.
-   Inspect unauthenticated interface first; authorized clinical checks only
-   in separately permitted sessions. Preserve synthetic offline route tests.
-7. A failed install retains the old worker. A successful rollback install
-   switches cache and reloads controlled pages; if needed close/reopen the PWA
-   to trigger update. Do not clear medical browser storage indiscriminately.
-8. If postcheck or rollback fails, keep its evidence, stop further unrelated
-   releases, identify CDN/asset/build failure and make another normal repair
-   PR from live pwa. Re-run only deploy/postcheck when appropriate; never
-   re-upload duplicate github-pages artifacts under the same run ID.
+1. Выберите ранее проверенный `pwa` commit и его release/evidence.
+2. Получите текущий `pwa`, создайте **новую** rollback-ветку от него. Никакого reset удалённого ref, force-push или обхода Ruleset.
+3. Отмените только ошибочное frontend-изменение, разрешая конфликты с действующими маршрутизацией, OAuth assets и правилами релиза. Для merge-коммита пример: `git revert -m 1 <SHA>`. Если такой revert удалит безопасный worker/build pipeline, восстановите только затронутые UI-файлы из known-good tree. Пересоберите с **текущими** инструментами; не копируйте старые `release.json` или сгенерированный worker.
+4. Сверьте полный diff, откройте PR в `pwa`. Для release-control изменения нужен PR владельца с точной строкой `PWA-RELEASE-CONTROL: <40-character head SHA>`. Дождитесь текущего обязательного `static` с base-sourced scope, независимой проверки и отдельного `OWNER_GO`. Без bypass.
+5. Выполните обычный разрешённый merge. Его SHA — **новая** идентичность релиза и кэша.
+6. Проверьте Verify/Publish/postcheck, фактический marker SHA и все байты. Сначала просмотрите публичную оболочку без входа; клинические страницы проверяйте только в отдельно разрешённой сессии. Сохраните результаты синтетических offline-тестов.
+7. Неудачная установка оставляет прежний worker. Успешная установка исправленной версии переключает кэш и перезагружает контролируемые страницы. При необходимости закройте/повторно откройте PWA для проверки обновления. **Не** очищайте без разбора медицинское браузерное хранилище.
+8. Если postcheck либо rollback неудачен, сохраните evidence, остановите несвязанные релизы, найдите ошибку CDN/asset/build и подготовьте отдельный repair PR от актуального `pwa`. При необходимости повторяйте только deploy/postcheck, но не создавайте дубликат `github-pages` artifact под тем же run ID.
 
-The release regression suite builds two synthetic SHA releases, verifies that
-the worker/index identities change, simulates stale files and failed installation
-(no partial cache activation), retries with a finite bound and confirms recovery
-to a complete shell. No production rollback is performed by this task.
+Синтетический регрессионный набор собирает два релиза с разными SHA, проверяет смену идентичности worker/index, имитирует устаревшие файлы и неудачную установку без частичной активации кэша, ограниченные retry и восстановление целой оболочки. Он не выполняет production rollback.
 
-Standalone trusted workflow activation would require an independently authorized
-default-branch change/Writer acceptance, or a separately controlled external
-check issuer. The current task performs neither. Do not add a non-existent check
-to the Ruleset: that would deadlock PRs. GitHub reference:
-https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target
+Независимый `pull_request_target`-механизм потребовал бы отдельно принятого изменения default branch/Writer SHA либо внешнего issuer. Эта документация не внедряет такой механизм. [GitHub: securely using pull_request_target](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target).
 
-## Независимость от большого обновления Writer — контроль на 14.10.2026
+## Совместимость с текущим экраном вакцинации
 
-PWA-only функциональность на **существующем** read-only контракте можно продолжать и выпускать через `pwa` независимо от нового Writer. При этом безопасность не выводится из места размещения файла: изменения OAuth/consent, Supabase-client, service worker, релизного скрипта и GitHub Actions требуют отдельного threat-review, а issue [#50](https://github.com/Alexio00/HEALTH/issues/50) остаётся незакрытым HIGH. Новая медицинская запись, новая writable схема или статусы вакцинации относятся к `WRITER_IMPACT` ([#62](https://github.com/Alexio00/HEALTH/issues/62)) и **не должны** активироваться на PWA до соответствующего принятия bounded Writer/Verifier/Validation и независимого readback. PR [#51](https://github.com/Alexio00/HEALTH/pull/51) и [#59](https://github.com/Alexio00/HEALTH/pull/59) требуют выделения отдельно выпускаемой визуальной части, если зависимости новых медицинских сущностей нельзя исключить.
+В `pwa` уже приняты интерфейсные изменения PR [#80](https://github.com/Alexio00/HEALTH/pull/80) и [#85](https://github.com/Alexio00/HEALTH/pull/85). В истории вакцинаций поддержано раскрытие нескольких **уже присутствующих** инфекций в тегах: это лишь визуальное представление и **не** доказательство одного комбинированного введения или числа антигенных доз. Текущие views основаны на существующих REC summaries и `plan_items`, без новой схемы и без клинической записи. Консультации/антитела/отменённые REC не должны превращаться в подтверждённые введения, а неизвестные связи не угадываются.
 
-Имеется staging ветка `writer-code` для будущего независимого релиза Writer, но она **не исполняется и не принимается** автоматически. Производственный Writer по-прежнему привязан к exact `main` SHA до security-acceptance новой модели. Исполняемый Scheduler отдельно готовится в `scheduler-code` (#73), а launchers в default main (#72) требуют отдельного окна. PWA CI/release не должны триггерить Writer authorizer, GitHub dispatch или backup, и не получают клинических credentials.
+PWA-only UI можно развивать по существующему read-only контракту независимо от новой модели Writer, но изменения OAuth/consent, Supabase-client, service worker, release tooling и Actions требуют отдельного security/threat review. HIGH Issue [#50](https://github.com/Alexio00/HEALTH/issues/50) остаётся OPEN. Новые медицинские сущности, writable schema и статусы вакцинации — `WRITER_IMPACT` (Issue [#62](https://github.com/Alexio00/HEALTH/issues/62)): не выпускать их без принятых bounded Writer, Verifier, Validation и независимого readback. PR [#51](https://github.com/Alexio00/HEALTH/pull/51) и [#59](https://github.com/Alexio00/HEALTH/pull/59) требуют отделять безопасный визуальный объём от новых медицинских зависимостей.
 
-Подробный дизайн — [Draft PR #76](https://github.com/Alexio00/HEALTH/pull/76). Этот раздел применим только как инструкция PWA-разработки, не как разрешение на Writer/main merge или смену авторизации.
+Staging `writer-code` предназначена для будущей разработки Writer и **не** является production ref. До отдельной security/operational acceptance Writer связан с exact `main` SHA. `scheduler-code` — разработка Scheduler, `scheduler` — отдельный служебный heartbeat, main launchers требуют принятия. PWA CI/release не должны запускать Writer authorizer, backup, GitHub dispatch или получать clinical credentials. Подробнее — [Draft PR #76](https://github.com/Alexio00/HEALTH/pull/76); проектные документы из Draft PR не являются действующим runtime.
+
+## Другие ветки и PR: исторический снимок, не действующее распоряжение
+
+Снимок координации от **13.10.2026**: перед новой работой **обязательно** перечитайте актуальные PR и ветки. Этот список не даёт права merge, переписывания или удаления.
+
+- PR #38 (Vaccination) был объединён в `pwa` 13.10.2026. Сохраняйте модуль вакцинации и автоматический SHA-bound shell cache, как и остальные ранее принятые изменения.
+- PR [#36](https://github.com/Alexio00/HEALTH/pull/36), `feature/supabase-test-consent-ui-20261013`: четыре файла `frontend/oauth-test/*` уже есть в `pwa` благодаря прежнему Pages deploy. Нельзя переносить их в `main` только ради публикации; новые consent/auth flows требуют отдельной threat model.
+- PR [#35](https://github.com/Alexio00/HEALTH/pull/35), `feature/chat-writer-contract-20261013`: Writer/backend и `code-validation.yml` относятся к принятию `main` по точному SHA. При синхронизации не удаляйте `pwa` CI-триггеры.
+- PR [#33](https://github.com/Alexio00/HEALTH/pull/33), `maintenance/ru-governance-legacy-independence-20261013`: затрагивает Writer, governance и `frontend/README.md`. Разделите или явно согласуйте scope, чтобы не перезаписать актуальные PWA-инструкции устаревшим README.
+- PR [#27](https://github.com/Alexio00/HEALTH/pull/27), `migration/planned-medication-status`: SQL migration и старые инструменты требуют новой проверки применимости к каноническому Supabase и безопасности. Старый migration-код не является автоматическим production fix.
+- PR [#22](https://github.com/Alexio00/HEALTH/pull/22), `test/nonmutating-probe-handoff`: docs-only в `main` всё равно меняет принятый SHA Writer; нужна отдельная авторизация либо отложенное принятие.
+
+Исторические/осиротевшие ветки: `maintenance/pwa-ui-refine-20261007`, `maintenance/frontend-accordion-medrec-visits-20261013`, `release/pages-ui-20261013-preserve-oauth-test`. Новая работа начинается от **живого** `pwa` или `main`, не от старой release-ветки. Удаление — только по отдельному решению владельца.
+
+## Две независимые процедуры принятия
+
+**PWA:** полный BASE/HEAD SHA + точный diff → независимая проверка совместимости, безопасности, негативных тестов и отката → отдельный GO владельца на **этот** SHA → немедленная перепроверка HEAD/BASE, Ruleset, незавершённых обсуждений и `static` → разрешённый merge → фактический Pages release SHA, Verify/Publish/postcheck и браузерный smoke-test в авторизованной сессии (либо явное `NOT_VERIFIED`). CI PASS не равен независимому review или GO.
+
+**Writer:** отдельная независимая рецензия кода, повторное принятие **точного `main` SHA** в GitHub owner policy, Edge broker и runtime, проверка ограниченной роли. Merge в `pwa` не разрешает медицинскую операцию. Нельзя заменять отсутствующий приватный Writer operator административным Supabase SQL.
+
+## Дальнейшее развитие и ссылки
+
+- `pwa` сохраняет уже опубликованные `frontend/oauth-test/*`; UI merge не должен удалять их.
+- Параллельный Writer остаётся в отдельных ветках, `main` — текущий ref подписанной авторизации. Полная долговременная изоляция потребует отдельно принятого immutable Writer ref/repository и удаления пути frontend auto-deploy из `main`, с новым независимым аудитом, координированным повторным принятием и разрешением владельца. Обычный `pwa` UI PR этой миграции не требует.
+- Руководство описывает **текущую** эксплуатацию; английские исторические отчёты аудитов, прошлые migrations и решения не переписываются. Draft PR [#92](https://github.com/Alexio00/HEALTH/pull/92) — отдельная документационная работа; данный документ не меняет её scope.
+- [GitHub Pages: configuring a publishing source](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site); [GitHub: about rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets).
+
+**Проверка публичной приватности:** `scripts/validation/public_secret_guard.py` исключает файлы с расширением `.md`. Поэтому на каждый docs-only PR нужны отдельный просмотр полного Markdown-diff, проверка всех новых ссылок, ручная/дополнительная проверка медицинских строк, приватных IDs, credentials, токенов и секретов. Зелёный public secret-pattern guard **не подтверждает** чистоту Markdown.

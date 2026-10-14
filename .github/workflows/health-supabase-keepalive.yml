@@ -19,6 +19,7 @@ jobs:
       github.repository == 'Alexio00/HEALTH' &&
       github.ref == 'refs/heads/main' &&
       vars.HEALTH_INREPO_KEEPALIVE_ENABLED == 'true' &&
+      github.sha == vars.HEALTH_RELEASE_MAIN_ACCEPTED_SHA &&
       (github.event_name == 'schedule' ||
        (github.event_name == 'workflow_dispatch' && github.actor_id == '308028794'))
     runs-on: ubuntu-24.04

@@ -84,6 +84,7 @@ class ActivationEntrypointDoneTests(unittest.TestCase):
     def execute(self):
         with patch.dict('os.environ', {
             'RCLONE_CONFIG_CONTENT': 'synthetic-only',
+            'HEALTH_COMPLETE_RECOVERY_RCLONE': 'synthetic-independent-reader',
             'HEALTH_RELEASE_CANDIDATE_SHA256': SHA,
         }), patch.object(pipeline, 'require_release_context'), patch.object(
             pipeline, 'private', side_effect=lambda path, fresh=False: Path(path)

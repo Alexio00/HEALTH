@@ -56,7 +56,8 @@ def safe_path(path, controls, writer_sql=False):
         raise ScopeStop("hidden_or_unsafe_path")
     if any(part.casefold() in DENIED_SEGMENTS for part in parts):
         raise ScopeStop("private_path_forbidden")
-    if parts[0] == "frontend" and not writer_sql and any(term in parts[-1].casefold() for term in SENSITIVE_NAMES):
+    if parts[0] == "frontend" and not writer_sql and any(
+            term in part.casefold() for part in parts[1:] for term in SENSITIVE_NAMES):
         raise ScopeStop("sensitive_frontend_file_forbidden")
     if path.casefold().endswith(DENIED_SUFFIXES):
         if not (writer_sql and path.endswith(".sql") and path.startswith(WRITER_SQL_PREFIXES)):
@@ -103,6 +104,11 @@ def check_scope(changes, mode, author_id, body, head, tree_head, tree_base):
                 # All Writer changes are privileged candidates: owner acknowledgement
                 # here is *not* clinical acceptance or an independent review.
                 control = permitted
+            if mode == "writer-code" and path in (
+                    "scripts/validation/trusted_pr_scope.py",
+                    "scripts/validation/test_trusted_pr_scope.py",
+                    "scripts/validation/public_secret_guard.py"):
+                raise ScopeStop("trusted_policy_file_forbidden_in_writer_train")
             if not permitted:
                 raise ScopeStop("forbidden_" + mode.replace("-", "_") + "_path")
             if control:

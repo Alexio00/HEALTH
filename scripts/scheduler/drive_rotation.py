@@ -86,7 +86,7 @@ class DriveRotation:
         if result.get('nextPageToken') or not isinstance(result.get('files'),list):
             raise RotationStop('rotation_inventory_incomplete')
         return [self.meta(x['id']) for x in result['files']]
-    def set(self,id,expected_sha=None,allow_trashed=False):
+    def set(self,id,expected_sha=None,allow_trashed=False,expected_zip_id=None,with_archive=False):
         meta=self.meta(id);p=meta.get('appProperties',{})
         if meta.get('parents')!=[self.parent] or meta.get('mimeType')!='application/vnd.google-apps.folder' or (meta.get('trashed') is not False and not allow_trashed) or p.get('health_complete_set')!='v1' or not re.fullmatch('complete-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}',meta.get('name','')):raise RotationStop('managed_complete_set_identity_rejected')
         sha=p.get('health_archive_sha256','')
@@ -107,16 +107,23 @@ class DriveRotation:
                 archive.get('name')!='complete-recovery.zip' or
                 archive.get('mimeType')!='application/zip'):
             raise RotationStop('complete_set_physical_archive_identity_rejected')
+        if expected_zip_id is not None and archive['id']!=identity(expected_zip_id):
+            raise RotationStop('complete_set_physical_archive_id_binding_rejected')
         if archive.get('sha256Checksum')!=sha:
             raise RotationStop('complete_set_physical_archive_checksum_rejected')
         if str(archive.get('size',''))!=size:
             raise RotationStop('complete_set_physical_archive_size_rejected')
-        return meta
+        return (meta,archive) if with_archive else meta
+    def retired_binding(self,id):
+        folder,archive=self.set(id,with_archive=True)
+        return {'id':id,'sha':folder['appProperties']['health_archive_sha256'],
+                'zip_id':archive['id']}
     def patch(self,id,payload):return self.t.request('/drive/v3/files/'+identity(id)+'?fields=id,trashed,appProperties',method='PATCH',body=json.dumps(payload).encode(),content_type='application/json')
     def verify_retired(self,binding):
         # A recorded Trash acknowledgement is not proof that the old folder
         # still matches the immutable journal binding on a later retry.
-        previous=self.set(binding['id'],binding['sha'],allow_trashed=True)
+        previous=self.set(binding['id'],binding['sha'],allow_trashed=True,
+                          expected_zip_id=identity(binding['zip_id']))
         if previous['appProperties'].get('health_recovery_state')!='ACTIVE':
             raise RotationStop('completed_rotation_old_state_changed')
         if previous.get('trashed') is not True:
@@ -132,9 +139,17 @@ class DriveRotation:
             if state not in ('CANDIDATE','ACTIVE'):raise RotationStop('candidate_state_rejected')
             active=[m['id'] for m in self.children(self.parent) if m['id']!=target and m.get('appProperties',{}).get('health_complete_set')=='v1' and m.get('appProperties',{}).get('health_recovery_state')=='ACTIVE']
             if row is None and len(active)>1:raise RotationStop('ambiguous_active_complete_sets')
-            bindings=[{'id':id,'sha':self.set(id)['appProperties']['health_archive_sha256']} for id in active] if row is None else []
+            bindings=[self.retired_binding(id) for id in active] if row is None else []
             row=self.j.plan(target,self.parent,sha,bindings)
             old=json.loads(row['old']);done=json.loads(row['done'])
+            # A legacy journal cannot establish original ZIP identity after Trash.
+            # Never synthesize a missing binding from current Drive state.
+            for binding in old:
+                if (not isinstance(binding,dict) or set(binding)!={'id','sha','zip_id'}
+                        or identity(binding['id'])==identity(binding['zip_id'])
+                        or not isinstance(binding['sha'],str)
+                        or not re.fullmatch('[a-f0-9]{64}',binding['sha'])):
+                    raise RotationStop('rotation_old_zip_id_binding_required')
             if len(done)!=len(set(done)) or set(done)-{b['id'] for b in old}:
                 raise RotationStop('rotation_done_binding_invalid')
             if set(active)-{b['id'] for b in old}:raise RotationStop('concurrent_active_set_change')
@@ -169,10 +184,13 @@ class DriveRotation:
                     if id in done:continue
                     # Recheck the new archive before each trash operation.
                     self.set(target,sha)
-                    previous=self.set(id,binding['sha'],allow_trashed=True)
+                    previous=self.set(id,binding['sha'],allow_trashed=True,
+                                      expected_zip_id=identity(binding['zip_id']))
                     if previous['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('previous_active_set_changed')
                     if previous.get('trashed') is not True:self.patch(id,{'trashed':True})
-                    if self.set(id,allow_trashed=True).get('trashed') is not True:raise RotationStop('previous_set_trash_readback_failed')
+                    if self.set(id,binding['sha'],allow_trashed=True,
+                                expected_zip_id=identity(binding['zip_id'])).get('trashed') is not True:
+                        raise RotationStop('previous_set_trash_readback_failed')
                     done.append(id);self.j.state(target,'PROMOTED',done)
                 self.j.state(target,'DONE',done)
             if [m['id'] for m in self.children(self.parent) if m.get('appProperties',{}).get('health_complete_set')=='v1' and m.get('appProperties',{}).get('health_recovery_state')=='ACTIVE']!=[target]:raise RotationStop('one_active_set_readback_failed')

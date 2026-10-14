@@ -18,6 +18,7 @@ jobs:
     if: >-
       github.repository == 'Alexio00/HEALTH' &&
       github.ref == 'refs/heads/main' &&
+      github.run_attempt == '1' &&
       vars.HEALTH_INREPO_KEEPALIVE_ENABLED == 'true' &&
       github.sha == vars.HEALTH_RELEASE_MAIN_ACCEPTED_SHA &&
       (github.event_name == 'schedule' ||

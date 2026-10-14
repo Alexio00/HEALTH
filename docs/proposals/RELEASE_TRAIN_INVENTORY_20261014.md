@@ -123,3 +123,7 @@ All **19 open PRs** are represented in this snapshot. "Superseded" is a recommen
 **Public-repository privacy finding requiring owner/component handling:** Draft #45 `docs/proposals/VACCINATION_WRITER_HANDOFF.md` currently contains a direct locator to a restricted pending clinical-corrections Drive document. Do not echo that link in public coordination. The Draft author should remove the pointer from current files; the Product Owner should assess whether Git-history remediation is necessary. A private document permission boundary may prevent reading its bytes, but its locator should not be exposed.
 
 No other branch, accepted Git `main`, production Writer, Supabase, private governance or medical Source changed by this note.
+
+## Issue #62 — formal architecture contract, proposal (14.10.2026)
+
+The versioned compatibility matrix and 14 synthetic negative/positive acceptance scenarios are documented in [SCHEMA_WRITER_COMPATIBILITY_CONTRACT_20261014.md](SCHEMA_WRITER_COMPATIBILITY_CONTRACT_20261014.md). This is **DRAFT / NOT IMPLEMENTED**. Current Writer allowlist/checkpoint do not cover vaccination. Draft #45 schema cannot be deployed in isolation and #59 must not be activated as a structured clinical reader. The new contract is a technical cross-chat handoff, **not** a new production authorization or closure of Issue #62.

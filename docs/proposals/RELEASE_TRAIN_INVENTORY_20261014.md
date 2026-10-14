@@ -1,5 +1,31 @@
 # HEALTH — release-train inventory and cross-PR disposition (14.10.2026)
 
+
+## Update: coordination of four parallel development chats (14.10.2026)
+
+**PROPOSAL only.** The earlier 19-PR section is a point-in-time snapshot; live readback now finds **23 open PRs**, including #80 (new PWA Rv display, supersedes #51 candidate), #81 (stacked Scheduler rclone SHA pin on #73), #84 (new Writer gateway candidate, supersedes #35), and this #83. Re-read exact SHA before any approval.
+
+**Shared lightweight routing, not a new governance system:**
+
+| Development chat | Isolated target | May proceed independently | Stop and request architectural handoff |
+|---|---|---|---|
+| Writer | `writer-code` | Gateway contracts and synthetic negative tests; #84 | New writable schema, accepted SHA, OIDC/owner auth, production publish |
+| PWA | `pwa` | Existing read-only UI; #80 and local docs #77 | New clinical data semantics/reader contract/Auth/RLS, e.g. #59/#45 |
+| Scheduler Code | `scheduler-code` | Executor, restore code and fault tests; #73 + #81 | Shared backup control, Secrets, protected launcher, live rotation |
+| Scheduler Operations | `main` launchers proposal; `scheduler` heartbeat | Schedule logic and launcher candidate #72 | Change to accepted `main`, live SHEDULLER, restore/cutover |
+
+Architecture chat handles **cross-component contract and dependency decisions**; Product Owner alone approves shared contracts and each exact technical release. A component developer need not ask for review of every local edit.
+
+**Classify each change:** PWA_ONLY (existing reader), READ_SCHEMA_ONLY (SQL read/RLS compatibility check), WRITER_IMPACT (writable schema/candidate/Verifier/Validation contract, requires #62), CONTROL_PLANE (main/CI/identity/trust), OPERATIONS (backup/restore/cutover), or UNDETERMINED (block dependent integration pending analysis). A read-only SQL migration is not automatically a frontend-only release. No direct clinical SQL.
+
+**One six-field cross-chat handoff:** (1) task/owner/PR; (2) class and reason; (3) target branch + full BASE/HEAD SHA and changed paths; (4) contract and impacted consumers; (5) tests/evidence/unknowns/rollback; (6) requested dependency or owner decision. Keep clinical data, private document locators, Source identifiers and Secrets out of public evidence.
+
+**Already-governing release procedure:** full exact BASE/HEAD/diff freeze → independent security/compatibility/negative-case review → separate Product Owner GO for exact component+SHA → reread head/base/Rulesets/CI/threads immediately before merge → postrelease functional and rollback check. No auto-merge; no new mandatory trusted issuer is claimed. PWA retains required `static`. HIGH #50 remains OPEN and #78 PAUSED/NO-GO. Technical GO is distinct from signed clinical intent. Any change to accepted `main` Writer SHA requires its full coordinated reacceptance.
+
+**Tech-debt order:** First de-duplicate #84 vs #35, #80 vs #51, #81 on #73 without merging superseded PRs. Next resolve vaccination #45/#62 before Writer/PWA shared schema. Correct stale branch-protection text in #76 (live `writer-code` Ruleset 25071720), historical branch decision in #69 and routing in #39 through their respective owners. Close old Scheduler #64/#67/#70/#71 only after exact diff check and separate owner approval. No component's working branch is modified by this proposal.
+
+**Safety:** This is a proposal within the existing Draft, not an operative change to private governance, `main`, accepted Writer runtime, branch protections, backup, Secrets or clinical data.
+
 > **POINT-IN-TIME TECHNICAL INVENTORY / DRAFT ONLY.** Not a governing policy, production release, security gate, approval, or clinical authorization. Live private Project State / Project Manual override this snapshot. Re-read all SHA, PR heads, review threads, CI, GitHub rulesets and runtime before decisions. No patient data or credentials included.
 >
 > This document is a short-lived coordination input for [PR #76](https://github.com/Alexio00/HEALTH/pull/76), [Issue #69](https://github.com/Alexio00/HEALTH/issues/69), [Issue #62](https://github.com/Alexio00/HEALTH/issues/62), [Issue #65](https://github.com/Alexio00/HEALTH/issues/65), and [HIGH #50](https://github.com/Alexio00/HEALTH/issues/50). Close/archive this snapshot after incorporating accepted conclusions into governing technical docs; do not create a second permanent policy.

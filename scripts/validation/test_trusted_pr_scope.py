@@ -234,6 +234,53 @@ class ScopeFixtures(unittest.TestCase):
             check_scope([{'status': 'removed', 'filename': path}], 'pwa', 22, '',
                         HEAD, {path: ('blob','100644')}, {path: ('blob','100644')})
 
+    def test_r2_config_env_variants_and_nul_path_denied(self):
+        for mode, path in (("pwa", "frontend/config.env.production"),
+                           ("pwa", "frontend/file\\0.js"),
+                           ("pwa", "frontend/file%00.js"),
+                           ("scheduler-code", "scripts/scheduler/config.env.production"),
+                           ("writer-code", "scripts/writer/config.env.production")):
+            with self.subTest(mode=mode, path=repr(path)), self.assertRaises(ScopeStop):
+                verify(path, mode, OWNER, "WRITER-CONTROL: " + HEAD)
+
+    def test_r2_boolean_size_rejected(self):
+        doc = {"type": "file", "path": ".github/workflows/health-trusted-scope.yml",
+               "sha": HEAD, "size": True}
+        with patch("trusted_pr_scope.api", return_value=doc):
+            with self.assertRaisesRegex(ScopeStop, "trusted_default_workflow_blob_changed"):
+                check_trusted_policy_release(HEAD, HEAD, HEAD, HEAD, "synthetic")
+
+    def test_r2_rename_must_not_leave_old_or_replace_existing(self):
+        old, new = "frontend/old.js", "frontend/new.js"
+        entry = {"filename": new, "previous_filename": old, "status": "renamed"}
+        blob = ("blob", "100644")
+        with self.assertRaisesRegex(ScopeStop, "renamed_tree_state_invalid"):
+            check_scope([entry], "pwa", 22, "", HEAD,
+                        {old: blob, new: blob}, {old: blob})
+        with self.assertRaisesRegex(ScopeStop, "renamed_tree_state_invalid"):
+            check_scope([entry], "pwa", 22, "", HEAD,
+                        {new: blob}, {old: blob, new: blob})
+
+    def test_r2_event_base_identity_fails_before_network(self):
+        repo = {"full_name": "Alexio00/HEALTH", "id": 1408460030,
+                "owner": {"id": OWNER}}
+        event = {"repository": repo,
+                 "pull_request": {"number": 9, "head": {"sha": HEAD},
+                                  "base": {"ref": "pwa", "sha": "b" * 40,
+                                           "repo": repo}}}
+        with patch("trusted_pr_scope.api") as network:
+            for bad in ({**repo, "id": 42},
+                        {**repo, "owner": {"id": 42}},
+                        {**repo, "full_name": "other/repo"}):
+                with self.subTest(bad=bad), self.assertRaises(ScopeStop):
+                    check_event({**event, "repository": bad}, "synthetic")
+                with self.subTest(bad_base=bad), self.assertRaises(ScopeStop):
+                    check_event({**event, "pull_request": {
+                        **event["pull_request"],
+                        "base": {**event["pull_request"]["base"], "repo": bad}}},
+                        "synthetic")
+            network.assert_not_called()
+
     def test_duplicate_and_unsafe_segments(self):
         items, ht, bt = scenario("frontend/app.js")
         with self.assertRaises(ScopeStop):

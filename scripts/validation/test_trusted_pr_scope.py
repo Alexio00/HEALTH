@@ -86,6 +86,45 @@ class ScopeFixtures(unittest.TestCase):
         with self.assertRaises(ScopeStop):
             verify(".github/workflows/health-trusted-scope.yml", "scheduler-code")
 
+    def test_writer_branch_bounded_code_requires_owner_exact_sha(self):
+        candidates = ("scripts/writer/gateway_contract.py",
+                      "scripts/writer/standby_runtime.sql",
+                      "scripts/validation/security_invariants.sql",
+                      "db/migrations/core.sql",
+                      "supabase/migrations/20261014_view.sql",
+                      "docs/WRITER_RELEASE.md",
+                      ".github/workflows/code-validation.yml")
+        for path in candidates:
+            with self.subTest(path=path):
+                with self.assertRaisesRegex(ScopeStop, "control_changes_require_owner_exact_head"):
+                    verify(path, "writer-code")
+                with self.assertRaisesRegex(ScopeStop, "control_changes_require_owner_exact_head"):
+                    verify(path, "writer-code", OWNER, "WRITER-CONTROL: " + "b" * 40)
+                self.assertEqual(
+                    verify(path, "writer-code", OWNER,
+                           "WRITER-CONTROL: " + HEAD)["scope"], "writer-code")
+
+    def test_writer_branch_cannot_modify_trusted_issuer_or_other_trains(self):
+        for path in (".github/workflows/writer-authorization.yml",
+                     ".github/workflows/health-trusted-scope.yml",
+                     ".github/workflows/deploy-pages.yml", "frontend/app.js",
+                     "scripts/scheduler/complete_archive.py", "AGENTS.md",
+                     "docs/PROJECT_STATE.md", "secrets/file.pem",
+                     "scripts/writer/.env", "scripts/writer/pin.key"):
+            with self.subTest(path=path), self.assertRaises(ScopeStop):
+                verify(path, "writer-code", OWNER, "WRITER-CONTROL: " + HEAD)
+
+    def test_writer_branch_renames_symlinks_and_deleted_head_fail_closed(self):
+        with self.assertRaises(ScopeStop):
+            verify("scripts/writer/x.py", "writer-code", OWNER,
+                   "WRITER-CONTROL: " + HEAD, status="renamed",
+                   previous=".github/workflows/writer-authorization.yml")
+        with self.assertRaisesRegex(ScopeStop, "nonregular"):
+            verify("scripts/writer/gateway_contract.py", "writer-code", OWNER,
+                   "WRITER-CONTROL: " + HEAD, reg="120000")
+        with self.assertRaisesRegex(ScopeStop, "control_changes_require_owner_exact_head"):
+            verify("scripts/writer/removed.py", "writer-code", status="removed")
+
     def test_duplicate_and_unsafe_segments(self):
         items, ht, bt = scenario("frontend/app.js")
         with self.assertRaises(ScopeStop):

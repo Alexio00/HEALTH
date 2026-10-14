@@ -5,7 +5,8 @@ from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from trusted_pr_scope import check_scope, check_trusted_policy_release, ScopeStop
+from trusted_pr_scope import (check_scope, check_trusted_policy_release,
+                              check_event, git_tree, ScopeStop)
 
 HEAD = "a" * 40
 OWNER = 308028794
@@ -45,22 +46,33 @@ class ScopeFixtures(unittest.TestCase):
                 with self.subTest(mode=mode, path=path), self.assertRaises(ScopeStop):
                     verify(path, mode)
 
-    def test_control_requires_owner_and_current_head(self):
-        for path, mode, prefix in (
-            (".github/workflows/code-validation.yml", "pwa", "PWA-RELEASE-CONTROL: "),
-            ("frontend/release/scope.mjs", "pwa", "PWA-RELEASE-CONTROL: "),
-            (".github/workflows/health-scheduler-validation.yml", "scheduler-code", "SCHEDULER-CONTROL: "),
-        ):
-            with self.subTest(path=path):
-                with self.assertRaises(ScopeStop):
-                    verify(path, mode, OWNER, prefix + "b"*40)
-                with self.assertRaises(ScopeStop):
-                    verify(path, mode, 21, prefix + HEAD)
-                self.assertEqual(verify(path, mode, OWNER, prefix + HEAD)["control_paths"], 1)
+    def test_component_pr_cannot_modify_ci_workflows_even_with_owner_marker(self):
+        for mode, path, marker in (
+            ('pwa', '.github/workflows/code-validation.yml', 'PWA-RELEASE-CONTROL: '),
+            ('pwa', '.github/workflows/deploy-pages.yml', 'PWA-RELEASE-CONTROL: '),
+            ('scheduler-code', '.github/workflows/health-scheduler-validation.yml', 'SCHEDULER-CONTROL: '),
+            ('writer-code', '.github/workflows/code-validation.yml', 'WRITER-CONTROL: '),
+            ('pwa', 'frontend/release/check.mjs', 'PWA-RELEASE-CONTROL: ')):
+            with self.subTest(mode=mode, path=path), self.assertRaises(ScopeStop):
+                verify(path, mode, OWNER, marker + HEAD)
+
+    def test_nested_sensitive_auth_paths_rejected(self):
+        for path in ('frontend/oauth-test/consent.mjs', 'frontend/credentials/reader.js',
+                     'frontend/config/auth-bridge.js', 'frontend/tokens/preview.json',
+                     'frontend/supabase-client.js', 'frontend/secret-list.json'):
+            with self.subTest(path=path), self.assertRaises(ScopeStop):
+                verify(path, 'pwa', OWNER, 'PWA-RELEASE-CONTROL: ' + HEAD)
+
+    def test_writer_cannot_modify_trusted_security_policy(self):
+        for path in ('scripts/validation/trusted_pr_scope.py',
+                     'scripts/validation/test_trusted_pr_scope.py',
+                     'scripts/validation/public_secret_guard.py'):
+            with self.subTest(path=path), self.assertRaises(ScopeStop):
+                verify(path, 'writer-code', OWNER, 'WRITER-CONTROL: ' + HEAD)
 
     def test_head_symlink_and_mode_fail_closed(self):
         for mode, path in (("pwa", "frontend/app.js"), ("scheduler-code", "scripts/scheduler/x.py")):
-            with self.assertRaisesRegex(ScopeStop, "nonregular"):
+            with self.assertRaisesRegex(ScopeStop, "tree_state_invalid"):
                 verify(path, mode, reg="120000")
 
     def test_renames_check_old_and_new_paths(self):
@@ -138,8 +150,7 @@ class ScopeFixtures(unittest.TestCase):
                       "scripts/validation/security_invariants.sql",
                       "db/migrations/core.sql",
                       "supabase/migrations/20261014_view.sql",
-                      "docs/WRITER_RELEASE.md",
-                      ".github/workflows/code-validation.yml")
+                      "docs/WRITER_RELEASE.md")
         for path in candidates:
             with self.subTest(path=path):
                 with self.assertRaisesRegex(ScopeStop, "control_changes_require_owner_exact_head"):
@@ -151,7 +162,8 @@ class ScopeFixtures(unittest.TestCase):
                            "WRITER-CONTROL: " + HEAD)["scope"], "writer-code")
 
     def test_writer_branch_cannot_modify_trusted_issuer_or_other_trains(self):
-        for path in (".github/workflows/writer-authorization.yml",
+        for path in (".github/workflows/code-validation.yml",
+                     ".github/workflows/writer-authorization.yml",
                      ".github/workflows/health-trusted-scope.yml",
                      ".github/workflows/deploy-pages.yml", "frontend/app.js",
                      "scripts/scheduler/complete_archive.py", "AGENTS.md",
@@ -170,6 +182,47 @@ class ScopeFixtures(unittest.TestCase):
                    "WRITER-CONTROL: " + HEAD, reg="120000")
         with self.assertRaisesRegex(ScopeStop, "control_changes_require_owner_exact_head"):
             verify("scripts/writer/removed.py", "writer-code", status="removed")
+
+    def test_git_tree_rejects_duplicate_and_malformed_metadata(self):
+        base = {'tree': {'sha': HEAD}}
+        entry = {'path': 'frontend/app.js', 'type': 'blob', 'mode': '100644', 'sha': HEAD}
+        responses = (
+            {'truncated': False, 'tree': [entry, dict(entry)]},
+            {'tree': [entry]},
+            {'truncated': True, 'tree': [entry]},
+            {'truncated': False, 'tree': [{**entry, 'mode': 'unknown'}]},
+            {'truncated': False, 'tree': [{**entry, 'sha': None}]},
+        )
+        for response in responses:
+            with self.subTest(response=response), patch('trusted_pr_scope.api',
+                side_effect=[base, response]):
+                with self.assertRaises(ScopeStop):
+                    git_tree('synthetic-readonly-token', HEAD)
+
+    def test_final_pr_snapshot_detects_head_swap_after_scan(self):
+        BASE_SHA = 'b' * 40
+        event = {'repository': {'full_name': 'Alexio00/HEALTH'},
+                 'pull_request': {'number': 9, 'head': {'sha': HEAD},
+                                  'base': {'ref': 'pwa', 'sha': BASE_SHA}}}
+        initial = {'state': 'open', 'head': {'sha': HEAD},
+                   'base': {'ref': 'pwa', 'sha': BASE_SHA},
+                   'user': {'id': 22}, 'body': None, 'changed_files': 1}
+        changed = {**initial, 'head': {'sha': 'c' * 40}}
+        file_data = [{'status': 'modified', 'filename': 'frontend/app.js'}]
+        tree = {'frontend/app.js': ('blob', '100644')}
+        with patch('trusted_pr_scope.api', side_effect=[initial, file_data, changed]) as network:
+            with patch('trusted_pr_scope.git_tree', return_value=tree):
+                with self.assertRaisesRegex(ScopeStop, 'pr_changed_during_scan'):
+                    check_event(event, 'synthetic-readonly-token')
+
+    def test_git_change_modes_fail_closed(self):
+        path = 'frontend/app.js'
+        with self.assertRaises(ScopeStop):
+            check_scope([{'status': 'added', 'filename': path}], 'pwa', 22, '',
+                        HEAD, {path: ('blob','100644')}, {path: ('blob','100644')})
+        with self.assertRaises(ScopeStop):
+            check_scope([{'status': 'removed', 'filename': path}], 'pwa', 22, '',
+                        HEAD, {path: ('blob','100644')}, {path: ('blob','100644')})
 
     def test_duplicate_and_unsafe_segments(self):
         items, ht, bt = scenario("frontend/app.js")

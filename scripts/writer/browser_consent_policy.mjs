@@ -27,17 +27,28 @@ export class ConsentPolicyBlocked extends Error {
 const fail = code => { throw new ConsentPolicyBlocked(code); };
 
 function exactPlainObject(value, keys, code) {
+  // structuredClone is a synchronous, fail-closed Proxy guard. Merely checking
+  // prototype/keys/descriptors is insufficient: Proxy traps can lie about them.
+  // This module is intended for runtimes that provide structuredClone (Node/Deno).
   if (value === null || typeof value !== 'object' || Array.isArray(value) ||
-      Object.getPrototypeOf(value) !== Object.prototype ||
+      typeof structuredClone !== 'function') fail(code);
+  if (Object.getPrototypeOf(value) !== Object.prototype ||
       Reflect.ownKeys(value).length !== keys.length ||
       keys.some(k => !Object.hasOwn(value, k))) fail(code);
+  const entries = [];
   for (const key of keys) {
     const d = Object.getOwnPropertyDescriptor(value, key);
     if (!d || !Object.hasOwn(d, 'value') || d.value === undefined ||
         typeof d.value === 'function' || typeof d.value === 'symbol' ||
         typeof d.value === 'bigint' ||
         (typeof d.value === 'number' && !Number.isFinite(d.value))) fail(code);
+    // Capture exactly the checked data descriptor; never later re-read inputs.
+    entries.push([key, d.value]);
   }
+  // Probe cloneability only after rejecting accessors, so an ordinary getter
+  // is not executed merely because an invalid input reached this policy.
+  try { structuredClone(value); } catch { fail(code); }
+  return Object.freeze(Object.fromEntries(entries));
 }
 function stringLike(value, regex, code) {
   if (typeof value !== 'string' || !regex.test(value)) fail(code);
@@ -82,10 +93,12 @@ const ANSWER = ['challenge_id','nonce','displayed_review_sha','decision'];
  * MUST NOT be reused as a Writer approval receipt.
  */
 export async function evaluateBrowserConsent({challenge, verified, observed, answer, nowMs}) {
-  exactPlainObject(challenge, CHALLENGE, 'challenge_shape');
-  exactPlainObject(verified, VERIFIED, 'trusted_context_shape');
-  exactPlainObject(observed, OBSERVED, 'writer_readback_shape');
-  exactPlainObject(answer, ANSWER, 'browser_answer_shape');
+  // Snapshot all verified scalar fields synchronously before the nonceHash await.
+  // Untrusted references can be mutated while the promise is pending.
+  challenge = exactPlainObject(challenge, CHALLENGE, 'challenge_shape');
+  verified = exactPlainObject(verified, VERIFIED, 'trusted_context_shape');
+  observed = exactPlainObject(observed, OBSERVED, 'writer_readback_shape');
+  answer = exactPlainObject(answer, ANSWER, 'browser_answer_shape');
   clockValue(nowMs, 'trusted_clock_invalid');
 
   stringLike(challenge.challenge_id, UUID, 'challenge_id_invalid');

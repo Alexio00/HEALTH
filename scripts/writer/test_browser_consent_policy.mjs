@@ -208,3 +208,73 @@ test('deterministic 4096 synthetic adversarial mutations fail closed', async () 
   }
   assert.equal(denied, 4096);
 });
+
+// Independent audit B-01 / R-02: negative regressions, fixed outcome only.
+test('B-01: concurrent answer mutation cannot alter captured decision', async () => {
+  const x = await fixture();
+  x.answer.decision = 'decline';
+  const pending = evaluateBrowserConsent(x);
+  x.answer.decision = 'confirm';
+  const result = await pending;
+  assert.equal(result.decision, 'decline');
+});
+
+test('B-01: invalid writer readback cannot become valid while digest is pending', async () => {
+  const x = await fixture();
+  x.observed.candidate_sha = '9'.repeat(64);
+  const pending = evaluateBrowserConsent(x);
+  x.observed.candidate_sha = DIGEST;
+  await assert.rejects(pending, e => e instanceof ConsentPolicyBlocked && e.code === 'stale_or_changed_candidate');
+});
+
+test('B-01: shared candidate/owner mutation cannot modify snapshot or returned digest', async () => {
+  const x = await fixture();
+  const pending = evaluateBrowserConsent(x);
+  x.challenge.candidate_sha = '9'.repeat(64);
+  x.observed.candidate_sha = '9'.repeat(64);
+  x.challenge.owner_uid = U2;
+  x.verified.owner_uid = U2;
+  x.challenge.request_key = 'writer-' + '9'.repeat(32);
+  x.observed.request_key = x.challenge.request_key;
+  const result = await pending;
+  assert.equal(result.candidate_sha, DIGEST);
+  assert.equal(result.request_key, KEY);
+});
+
+test('R-02: Proxy with inconsistent descriptor/get nonce is rejected', async () => {
+  const x = await fixture();
+  const target = x.answer;
+  x.answer = new Proxy(target, {
+    get(t, key, receiver) {
+      if (key === 'nonce') return NONCE;
+      return Reflect.get(t, key, receiver);
+    },
+    getOwnPropertyDescriptor(t, key) {
+      if (key === 'nonce') return { configurable: true, enumerable: true, writable: true, value: 'f'.repeat(64) };
+      return Reflect.getOwnPropertyDescriptor(t, key);
+    },
+  });
+  await assert.rejects(() => evaluateBrowserConsent(x), e =>
+    e instanceof ConsentPolicyBlocked && e.code === 'browser_answer_shape');
+});
+
+test('R-02: even transparent proxies on trusted contexts are rejected', async () => {
+  for (const field of ['answer', 'challenge', 'verified', 'observed']) {
+    const x = await fixture();
+    x[field] = new Proxy(x[field], {});
+    await assert.rejects(() => evaluateBrowserConsent(x), e => e instanceof ConsentPolicyBlocked);
+  }
+});
+
+
+test('R-02: rejected plain-object getter must not execute during Proxy guard', async () => {
+  const x = await fixture();
+  let calls = 0;
+  Object.defineProperty(x.answer, 'nonce', {
+    configurable: true, enumerable: true,
+    get() { calls++; return NONCE; },
+  });
+  await assert.rejects(() => evaluateBrowserConsent(x), e =>
+    e instanceof ConsentPolicyBlocked && e.code === 'browser_answer_shape');
+  assert.equal(calls, 0);
+});

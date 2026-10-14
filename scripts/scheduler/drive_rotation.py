@@ -44,6 +44,12 @@ class RotationJournal:
         row=self.db.execute('SELECT * FROM rotations WHERE target=?',(target,)).fetchone()
         return dict(row) if row else None
     def plan(self,target,parent,sha,old):
+        for binding in old:
+            if (not isinstance(binding,dict) or set(binding)!={'id','sha','zip_id'}
+                    or identity(binding['id'])==identity(binding['zip_id'])
+                    or not isinstance(binding['sha'],str)
+                    or not re.fullmatch('[a-f0-9]{64}',binding['sha'])):
+                raise RotationStop('rotation_old_zip_id_binding_required')
         row=self.get(target)
         if row:
             if (row['parent'],row['sha'])!=(parent,sha):raise RotationStop('rotation_replay_binding_changed')

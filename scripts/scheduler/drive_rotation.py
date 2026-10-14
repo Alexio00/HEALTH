@@ -164,8 +164,8 @@ class DriveRotation:
                 for binding in old:
                     id=binding['id']
                     if id in done:continue
-                    # Recheck the new archive before each trash operation.
-                    self.set(target,sha)
+                    # Re-read every binding and the ACTIVE inventory before Trash.
+                    self.verify_mutation_preflight(target,sha,old,done)
                     previous=self.set(id,binding['sha'],allow_trashed=True)
                     if previous['appProperties'].get('health_recovery_state')!='ACTIVE':raise RotationStop('previous_active_set_changed')
                     if previous.get('trashed') is not True:self.patch(id,{'trashed':True})

@@ -95,3 +95,31 @@ All **19 open PRs** are represented in this snapshot. "Superseded" is a recommen
 - This snapshot is an inventory, not a replacement for [Project State](private governing Google Doc (not linked publicly)) or [Project Manual](private governing Google Doc (not linked publicly)).
 
 **No cross-component writes, Secrets, production SQL, backup rotation, deployments, merges or approvals were performed for this proposal.**
+
+
+## Read-only architecture review — Issue #62: Writer/schema/PWA compatibility (14.10.2026)
+
+**Status: preliminary code review, proposal, NOT an accepted migration or production validation.** Investigated accepted Git `main` `3409791f1ffc5749020e7ff07139b0cec722f6fc`, Issue #62 and proposed Draft #45. No live Supabase catalog/permissions read, no disposable PostgreSQL integration test performed.
+
+**Confirmed incompatibility in accepted source:** `scripts/writer/standby_runtime.sql` / `health_writer.check_changes` has an explicit twelve-table writable allowlist, excluding all proposed vaccination tables; `INSERT` requires every physical column to be represented even when nullable. `health_writer.propose` explicitly locks existing public medical tables and snapshots an allowlisted checkpoint; `scripts/writer/fixture_runtime.sql` shows that `checkpoint()` and delta's primary-key dispatch are explicit lists and also exclude vaccination. The fixture is test-only: its SQL does not alone establish live runtime code contents. Actual publication and semantic-validation extensions, catalog/test schema regeneration, grants/RLS and recorder/verifier roles must be independently checked before claiming compatibility.
+
+**Conceptual domain contract already owner-approved in Draft #45:** one physical administration, N antigen links with **per-antigen** independent stage and course identity, optional original event-level stage literal, separately attributed event-wide/per-antigen REC/Source evidence, antigen-specific plan fulfilment, unknown stages left null. One event in history; one latest row per infection sharing event ID. This is **not** permission to import clinical data.
+
+**Versioned implementation acceptance checklist for a future integrated candidate:**
+
+| Changed aspect | Writer and independent review impact | Required synthetic negative evidence |
+|---|---|---|
+| Six proposed writable tables and antigen-specific constraints | Explicit table/key/action dispatch, deterministic inserts, immutable fields, canonical catalog/fixture/schema | Unsupported table rejected before new Writer; no unknown keys, extra attributes or unauthorized writes after |
+| New nullable field on existing `plan_items` (illustrative drift case) | Existing explicit-insert shape changes; do not assume backward compatibility | Old INSERT rejected and updated candidate with complete deterministic columns accepted in disposable PG |
+| Antigen-specific evidence + plan link | Composite FK/unique constraint, provenance verifier, per-antigen plan status | Product targeting antigen A never fulfills unrelated B; event-wide evidence does not silently prove B-specific stage |
+| New rows in checkpoint | Include them in pre/post hashes, locks, rollback, replay and semantic receipt binding | Candidate change invalidates prior receipts, stale before-state rejected, published after-state matches |
+| RLS/browser read | Existing `app_readers` gating; no browser DML, least-privilege RPC | unauthenticated/non-reader cannot SELECT or mutate; reader SELECT only; no privilege bypass |
+| Validation | Fresh candidate-bound independent checks for date, actual administered evidence, event/antigen relations, retractions and plan fulfillment | no verified dose inferred from recommendation, missed plan date, or related antigen |
+| Read projection | Explicit versioned SELECT contract with PWA and rollback plan | N infections from 1 product produce 1 administered event; no guessed stage, count or status |
+| Production release | One reviewed **v2 final migration**, not sequential v1+draft ALTER releases; strict accepted Writer code SHA gate | frozen exact SHA, independent review, owner technical GO, replay/restore and postrelease readback |
+
+**Immediate architecture handoff:** Writer owner to estimate complete delta/checkpoint/verifier/Validation integration **after** resolving current independent #84 Gateway work; PWA owner to keep #80 independent and #59 blocked pending final versioned read contract; Scheduler owners continue isolated work, no dependency introduced. Architect to review effective migration, role grants, negative tests and coordinated release plan. Issue #62 remains OPEN until an independently tested end-to-end example, not merely this document.
+
+**Public-repository privacy finding requiring owner/component handling:** Draft #45 `docs/proposals/VACCINATION_WRITER_HANDOFF.md` currently contains a direct locator to a restricted pending clinical-corrections Drive document. Do not echo that link in public coordination. The Draft author should remove the pointer from current files; the Product Owner should assess whether Git-history remediation is necessary. A private document permission boundary may prevent reading its bytes, but its locator should not be exposed.
+
+No other branch, accepted Git `main`, production Writer, Supabase, private governance or medical Source changed by this note.

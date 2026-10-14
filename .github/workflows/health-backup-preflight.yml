@@ -17,7 +17,8 @@ jobs:
       github.repository == 'Alexio00/HEALTH' &&
       github.ref == 'refs/heads/main' &&
       github.actor_id == '308028794' &&
-      vars.HEALTH_INREPO_PREFLIGHT_ENABLED == 'true'
+      vars.HEALTH_INREPO_PREFLIGHT_ENABLED == 'true' &&
+      github.sha == vars.HEALTH_RELEASE_MAIN_ACCEPTED_SHA
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: health-private-backup

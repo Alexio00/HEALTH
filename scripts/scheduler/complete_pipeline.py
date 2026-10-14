@@ -44,7 +44,8 @@ def choose_existing(mode,cloud,journal,producer_sha,approved_sha):
     elif mode=='activate' and pending and pending['state']=='DONE':
         # A digest is not a folder identity. A fresh CANDIDATE (even with the
         # same digest) cannot displace the exact journal replay target.
-        if candidates or uploads:
+        if uploads:raise SourceStop('unfinished_upload_requires_candidate_reconciliation_first')
+        if candidates:
             raise SourceStop('completed_rotation_conflicting_candidate_requires_owner_reconciliation')
         target,sha=pending['target'],pending['sha'];replay=True
     elif candidates:

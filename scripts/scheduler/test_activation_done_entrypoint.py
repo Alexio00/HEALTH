@@ -120,6 +120,23 @@ class ActivationEntrypointDoneTests(unittest.TestCase):
         self.assertEqual(self.transport.objects[OLD]['appProperties']['health_archive_sha256'], 'b' * 64)
         self.assertNotIn('health_full_restore_archive', self.transport.objects[PARENT]['appProperties'])
 
+    def replace_retired_zip_with_same_digest_and_size(self):
+        original = self.transport.objects.pop(OLD + 'file')
+        replacement = dict(original, id='syntheticreplacementzip123')
+        self.transport.objects[replacement['id']] = replacement
+        self.assertEqual(replacement['sha256Checksum'], 'b' * 64)
+        self.assertEqual(replacement['size'], '20')
+
+    def test_done_rejects_same_digest_zip_id_replacement_on_activate(self):
+        self.replace_retired_zip_with_same_digest_and_size()
+        before = copy.deepcopy(self.transport.objects[PARENT]['appProperties'])
+        with self.assertRaisesRegex(RotationStop, 'complete_set_physical_archive_id_binding_rejected'):
+            self.execute()
+        self.assertEqual(self.transport.patches, self.patches_before)
+        self.assertEqual(self.transport.objects[PARENT]['appProperties'], before)
+        self.assertTrue(self.transport.objects[OLD]['trashed'])
+        self.assertNotIn('health_full_restore_archive', before)
+
     def test_old_archive_returns_from_trash_must_refuse_activation(self):
         self.transport.objects[OLD]['trashed'] = False
         with self.assertRaisesRegex(RotationStop, 'completed_rotation_old_not_trashed'):
@@ -160,6 +177,17 @@ class ActivationEntrypointDoneTests(unittest.TestCase):
         self.assertEqual(self.transport.patches, self.patches_before)
         self.assertEqual(self.transport.objects[PARENT]['appProperties']['health_r_state'], 'PROMOTED')
         self.assertNotIn('health_full_restore_archive', self.transport.objects[PARENT]['appProperties'])
+
+    def test_promoted_done_rejects_same_digest_zip_id_replacement_on_activate(self):
+        self.transport.objects[PARENT]['appProperties']['health_r_state'] = 'PROMOTED'
+        self.replace_retired_zip_with_same_digest_and_size()
+        before = copy.deepcopy(self.transport.objects[PARENT]['appProperties'])
+        with self.assertRaisesRegex(RotationStop, 'complete_set_physical_archive_id_binding_rejected'):
+            self.execute()
+        self.assertEqual(self.transport.patches, self.patches_before)
+        self.assertEqual(self.transport.objects[PARENT]['appProperties'], before)
+        self.assertEqual(before['health_r_state'], 'PROMOTED')
+        self.assertTrue(self.transport.objects[OLD]['trashed'])
 
     def test_promoted_done_old_state_changed_rejects_before_marker(self):
         self.transport.objects[PARENT]['appProperties']['health_r_state'] = 'PROMOTED'

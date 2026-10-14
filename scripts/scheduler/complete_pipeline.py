@@ -46,8 +46,15 @@ def choose_existing(mode,cloud,journal,producer_sha,approved_sha):
         # same digest) cannot displace the exact journal replay target.
         if uploads:raise SourceStop('unfinished_upload_requires_candidate_reconciliation_first')
         if candidates:
-            raise SourceStop('completed_rotation_conflicting_candidate_requires_owner_reconciliation')
-        target,sha=pending['target'],pending['sha'];replay=True
+            selected=candidates[0]
+            candidate_sha=selected['appProperties'].get('health_archive_sha256')
+            if approved_sha==pending['sha'] or candidate_sha!=approved_sha:
+                raise SourceStop('completed_rotation_conflicting_candidate_requires_owner_reconciliation')
+            # A prior DONE may be followed by a separately approved B.
+            # Its distinct digest selects B; the old DONE target is not replayed.
+            target,sha=selected['id'],candidate_sha;replay=False
+        else:
+            target,sha=pending['target'],pending['sha'];replay=True
     elif candidates:
         target=candidates[0]['id'];sha=candidates[0]['appProperties'].get('health_archive_sha256');replay=False
     elif uploads:

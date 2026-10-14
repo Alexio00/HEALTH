@@ -70,7 +70,7 @@ const hostileInfection = x.vaccinationRows([{
 }],"history")[0].cells[0].html;
 assert(!hostileInfection.includes("<img") && hostileInfection.includes("&lt;img"),
   "both summary and expanded labels are HTML-escaped");
-assert.equal(multiRows[0].cells[0].sortValue,"Корь, краснуха, паротит");
+assert.equal(multiRows[0].cells[0].filterValue,"Корь, краснуха, паротит");
 assert(multiRows[0].cells[5].html.includes(administration),
   "historical REC link survives display-only grouping");
 assert(css.includes(".vaccination-multi-infection summary:focus-visible"),

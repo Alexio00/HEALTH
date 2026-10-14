@@ -71,20 +71,28 @@ function vaccineName(fragment) {
 }
 
 function stageForActual(fragment, keys) {
-  // Preserve only explicitly numbered boosters; leave other revaccinations unnumbered.
-  const booster = fragment.match(/\bRv([1-9]\d*)\b/iu);
-  if (booster) return "Rv" + booster[1];
+  // A trailing plan or recommendation is not evidence about the performed stage.
+  const text = String(fragment || "");
+  const future = text.search(/в\s+будущем|в\s+дальнейшем|следующ(?:ая|ий|ую|его|ей)|предстоит|планир|запланир|рекоменд/iu);
+  const performed = future < 0 ? text : text.slice(0, future);
+  // Conflicting stage labels in one evidence fragment cannot describe one stage.
+  const explicit = [...performed.matchAll(/\b(?:RV[1-9]\d*|RV|R[1-9]\d*|V[1-9]\d*)\b/giu)]
+    .map(match => match[0].toUpperCase());
+  if (new Set(explicit).size > 1) return "—";
+  // A multi-infection row does not prove the numbered booster for every target.
+  const booster = performed.match(/\bRV([1-9]\d*)\b/iu);
+  if (booster) return keys.length === 1 ? "Rv" + booster[1] : "—";
   if (keys.includes("flu")) return "Rv";
-  if (has(fragment, /\bR\d+\b|\bRV\b|ревакцинац/iu)) return "Rv";
-  if (has(fragment, /первая вакцинация основного курса/iu)) return "V1";
-  if (has(fragment, /\b1[-‑]й этап/iu)) return "V1";
-  const dose = fragment.match(/\bV([1-9]\d*)\b/iu)
-    || fragment.match(/(?:доз[аыуе]|доза\s*№)\s*([1-9]\d*)/iu)
-    || fragment.match(/([1-9]\d*)[-‑]?(?:я|ая)\s+доз[аыуе]/iu);
+  if (has(performed, /\bR\d+\b|\bRV\b|ревакцинац/iu)) return "Rv";
+  if (has(performed, /первая вакцинация основного курса/iu)) return "V1";
+  if (has(performed, /\b1[-‑]й этап/iu)) return "V1";
+  const dose = performed.match(/\bV([1-9]\d*)\b/iu)
+    || performed.match(/(?:доз[аыуе]|доза\s*№)\s*([1-9]\d*)/iu)
+    || performed.match(/([1-9]\d*)[-‑]?(?:я|ая)\s+доз[аыуе]/iu);
   if (dose) return "V" + dose[1];
-  if (has(fragment, /вторая вакцинация/iu)) return "V2";
-  if (has(fragment, /компонент\s*II\b/iu)) return "V2";
-  if (has(fragment, /компонент\s*I\b/iu)) return "V1";
+  if (has(performed, /вторая вакцинация/iu)) return "V2";
+  if (has(performed, /компонент\s*II\b/iu)) return "V2";
+  if (has(performed, /компонент\s*I\b/iu)) return "V1";
   return "—";
 }
 

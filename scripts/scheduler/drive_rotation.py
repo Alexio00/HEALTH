@@ -76,19 +76,41 @@ class DriveRotation:
         permissions=m.get('permissions')
         if m.get('owners')!=[{'emailAddress':OWNER}] or not isinstance(permissions,list) or len(permissions)!=1 or permissions[0].get('type')!='user' or permissions[0].get('role')!='owner' or permissions[0].get('emailAddress')!=OWNER:raise RotationStop('private_backup_owner_acl_required')
         return m
-    def children(self,parent):
-        q=urllib.parse.urlencode({'q':"'"+identity(parent)+"' in parents and trashed=false",'fields':'files(id),nextPageToken','pageSize':1000})
+    def children(self,parent,include_trashed=False):
+        # A retired folder is itself in Trash. An inventory filtered by
+        # `trashed=false` cannot prove the identity of its physical ZIP.
+        query="'"+identity(parent)+"' in parents"
+        if not include_trashed:query+=' and trashed=false'
+        q=urllib.parse.urlencode({'q':query,'fields':'files(id),nextPageToken','pageSize':1000})
         result=self.t.request('/drive/v3/files?'+q)
-        if result.get('nextPageToken'):raise RotationStop('rotation_inventory_overflow')
-        return [self.meta(x['id']) for x in result.get('files',[])]
+        if result.get('nextPageToken') or not isinstance(result.get('files'),list):
+            raise RotationStop('rotation_inventory_incomplete')
+        return [self.meta(x['id']) for x in result['files']]
     def set(self,id,expected_sha=None,allow_trashed=False):
         meta=self.meta(id);p=meta.get('appProperties',{})
         if meta.get('parents')!=[self.parent] or meta.get('mimeType')!='application/vnd.google-apps.folder' or (meta.get('trashed') is not False and not allow_trashed) or p.get('health_complete_set')!='v1' or not re.fullmatch('complete-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}',meta.get('name','')):raise RotationStop('managed_complete_set_identity_rejected')
         sha=p.get('health_archive_sha256','')
         if not re.fullmatch('[a-f0-9]{64}',sha) or expected_sha is not None and expected_sha!=sha:raise RotationStop('complete_set_digest_binding_rejected')
-        if not meta.get('trashed'):
-            files=self.children(id)
-            if len(files)!=1 or files[0].get('name')!='complete-recovery.zip' or files[0].get('sha256Checksum')!=sha or int(files[0].get('size','0'))<=0:raise RotationStop('complete_set_current_archive_rejected')
+        # Also inspect the physical ZIP inside a trashed retired set. The
+        # journal binds the folder SHA, while Drive independently reports the
+        # stored binary's SHA-256 and size. Missing metadata is never PASS.
+        files=self.children(id,include_trashed=allow_trashed)
+        size=p.get('health_archive_bytes')
+        if (not isinstance(size,str) or not re.fullmatch('[1-9][0-9]*',size)):
+            raise RotationStop('complete_set_archive_size_binding_rejected')
+        if len(files)!=1:
+            raise RotationStop('complete_set_physical_archive_identity_rejected')
+        archive=files[0]
+        if (not isinstance(archive.get('id'),str) or
+                not re.fullmatch('[A-Za-z0-9_-]{8,128}',archive['id']) or
+                archive.get('parents')!=[id] or
+                archive.get('name')!='complete-recovery.zip' or
+                archive.get('mimeType')!='application/zip'):
+            raise RotationStop('complete_set_physical_archive_identity_rejected')
+        if archive.get('sha256Checksum')!=sha:
+            raise RotationStop('complete_set_physical_archive_checksum_rejected')
+        if str(archive.get('size',''))!=size:
+            raise RotationStop('complete_set_physical_archive_size_rejected')
         return meta
     def patch(self,id,payload):return self.t.request('/drive/v3/files/'+identity(id)+'?fields=id,trashed,appProperties',method='PATCH',body=json.dumps(payload).encode(),content_type='application/json')
     def verify_retired(self,binding):

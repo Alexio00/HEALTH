@@ -1,85 +1,31 @@
-# Security
+# Безопасность HEALTH
 
-## Public repository
+## Что запрещено в публичном GitHub
+Нельзя публиковать реальные REC, медицинские значения, исходные документы, оригинальные имена и частные ссылки на Source, персональные адреса и идентификаторы аккаунтов, приватные URL, файлы конфигурации с секретами, пароли базы, OAuth-токены, refresh token, JWT, ключи service_role, приватные ключи и резервные архивы. Синтетические тесты должны быть явно обозначены как синтетические.
 
-Never commit:
-- real medical records
-- laboratory values
-- source files
-- private filenames containing sensitive information
-- private storage URLs or object IDs
-- production account identifiers
-- OAuth tokens
-- service-role/secret keys
-- database passwords
-- backup credentials
-- real `.env` files
+Защита CI: `scripts/validation/public_secret_guard.py` ищет лишь несколько явно заданных шаблонов секретоподобных **значений** в обрабатываемых текстовых файлах. Текущая реализация **полностью пропускает `.md`**, **не проверяет адреса электронной почты** и не является общим сканером медицинских данных, персональных идентификаторов, приватных URL или Git-истории. Поэтому `PASS` этого guard **не подтверждает отсутствие секретов или медицинских данных в Markdown** (в частности, README) и не заменяет независимую проверку публичного diff, истории и других механизмов secret scanning. При подтверждённой утечке нужно немедленно отозвать затронутые ключи, оценить опубликованную историю Git и форки, затем выбрать безопасную процедуру очистки; исправление текущего файла не удаляет информацию из прошлых коммитов.
 
-## Browser
+## Клиент и база
+PWA — только чтение. Разрешён публичный publishable-ключ Supabase; запрещены пароль базы, service_role и ключ Writer в браузере. Нет анонимного доступа к медицине, регистрация пользователей закрыта, `authenticated` ограничен SELECT-разрешениями и проверкой `app_readers`; RLS обязателен. Будущие объекты получают deny-by-default привилегии.
 
-The PWA is read-only.
+Проверки: `scripts/validation/security_invariants.sql`, `auth_invariants.sql`; некоторые настройки Auth доступны только через фактическую конфигурацию провайдера, а не SQL.
 
-Allowed:
-- public/publishable Supabase client key
-- non-sensitive runtime configuration
+## Клиническая запись и авторизация
+Клиент не может писать напрямую в медицинские или управляющие таблицы. `health_writer` исполняет только разрешённые RPC; отдельный verifier независимо подтверждает изменяемые медицинские значения и точные Source-байты. Точный owner intent/candidate должен быть подписан принятым GitHub workflow и code SHA; это не право произвольной записи. Интерфейс `public.health_writer_authorize_v1` — единственный рассмотренный публичный SECURITY DEFINER мост с фиксированным приватным адресатом, ограниченной ACL и проверкой server JWT. Обычный Writer или browser не может вызывать его напрямую.
 
-Forbidden:
-- service-role key
-- database password
-- storage credentials
-- AI write credentials
+GitHub Secrets не являются доступной чату конфигурацией. Их можно использовать только в разрешённом Actions job; передавать значения в чат, PR или логи запрещено. Для автоматической медицинской операции новый проект должен реально иметь защищённый клиентский оператор, а не только коннекторы к GitHub/Supabase/Drive.
 
-## Database
+## Источники, журналы, восстановление
+Оригиналы на Drive приватны. Открывать конкретный объект можно через авторизованную сессию владельца; не делать объект публичным для удобства. В CI не логировать медицинские payload, реальные имена источников и секреты. После восстановления Writer остаётся выключенным до отдельной проверки и принятия. Любое обновление `main` меняет SHA и требует согласования pin, иначе Writer обязан блокировать новые авторизации.
 
-- public signup disabled
-- one administrative user initially
-- anonymous users receive no medical data
-- authenticated browser access is SELECT-only
-- Row Level Security is mandatory on user-facing medical tables
+## Граница технической приёмки 14.10.2026
 
-## AI write path
+Временный утверждённый порядок технических релизов: exact BASE/HEAD SHA и diff; независимая security/compatibility/negative-test проверка; отдельный owner GO; повторная проверка неизменённого кандидата непосредственно перед merge; фактический postrelease и rollback. Проверки PR-controlled CI не являются независимой гарантией. HIGH [Issue #50](https://github.com/Alexio00/HEALTH/issues/50) остаётся OPEN, автоматический Draft #78 получил R3 NO-GO. Ни одна эта процедура не заменяет отдельную подписанную клиническую авторизацию Writer.
 
-AI clients call controlled server operations. They do not receive raw service-role or unrestricted SQL access.
+## Точные проверки PostgreSQL и публичного исключения
 
-## Source storage
+По умолчанию новые таблицы и последовательности, создаваемые `postgres`, **не получают** прав `anon`/`authenticated`. Новые функции не должны автоматически получать `EXECUTE` от `anon`, `authenticated` или `PUBLIC`. Исторический SQL-снимок: `db/migrations/0003_default_privileges.sql`; актуальная каноническая история — `supabase/migrations/`. `service_role` остаётся только серверной ролью, а не браузерным доступом.
 
-Source files remain private. Browser source opening relies on the owner's authenticated provider session rather than public source URLs.
+После schema/permissions изменений `scripts/validation/security_invariants.sql` проверяет RLS всех публичных таблиц, отсутствие прав `anon`, SELECT-only явного списка для `authenticated`, безопасные default privileges, отсутствие неожиданных elevated public functions и изменение approved bridge. `scripts/validation/auth_invariants.sql` проверяет SQL-состояние Auth/reader, но **не** настройки регистрации новых пользователей в Supabase Dashboard: их требуется проверять отдельно.
 
-## Logging
-
-Do not log medical payloads, raw source contents or secrets into public CI logs.
-
-
-## Default privileges
-
-HEALTH uses deny-by-default browser exposure for future Postgres objects created by `postgres`:
-
-- future public tables do not automatically grant privileges to `anon` or `authenticated`;
-- future public sequences do not automatically grant privileges to `anon` or `authenticated`;
-- future public functions do not automatically grant `EXECUTE` to `anon`, `authenticated` or `PUBLIC`;
-- `service_role` retains server-side access and must never be exposed to the browser.
-
-The desired SQL state is recorded in `db/migrations/0003_default_privileges.sql`.
-
-After schema or security changes, run `scripts/validation/security_invariants.sql`. It verifies:
-- RLS on every public table;
-- no public-table privileges for `anon`;
-- SELECT-only access for `authenticated` on the explicit browser allow-list;
-- safe default privileges for future `postgres`-owned objects.
-
-
-## Pre-migration Auth gate
-
-Before full migration and again before cutover:
-
-- run `scripts/validation/auth_invariants.sql`;
-- run `scripts/validation/security_invariants.sql`;
-- verify in the Supabase Auth dashboard that public self-signup / new-user creation is disabled for the project;
-- verify only the intended owner account remains active;
-- verify the browser still has SELECT-only access and anonymous access remains denied.
-
-The database scripts intentionally fail closed for database/Auth-user invariants. Dashboard-only Auth settings must be checked explicitly because they are not proven by SQL alone.
-
-## Canonical Writer authorization bridge
-
-`public.health_writer_authorize_v1` is the sole reviewed public SECURITY DEFINER exception. It has a fixed private destination, exact versioned body, `postgres` ownership and a fixed `pg_catalog,pg_temp` search path. Only the server `service_role` may execute it; it additionally requires an authenticator session with matching server JWT claims. The broker validates signed owner/workflow/code/digest identity first. Browser, writing and verifier roles cannot invoke it. The invariant script checks the exact body hash and ACL, rejects extra elevated public functions and fails on drift. Private bounded Writer functions are separately protected by their explicit role grants and current runtime guards.
+Рассмотренный `public.health_writer_authorize_v1` имеет фиксированный приватный адресат, версионированное тело, владельца `postgres` и `search_path=pg_catalog,pg_temp`. Вызывать его может только разрешённый серверный `service_role` с проверкой JWT claims; контроль сверяет точное тело и ACL, отклоняет изменения. Наличие этой функции не даёт прямых SQL-прав Writer/Verifier или браузеру.

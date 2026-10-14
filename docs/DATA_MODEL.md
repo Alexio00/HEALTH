@@ -1,90 +1,27 @@
-# Data Model
+# Модель данных HEALTH
 
-## Core principles
+## Основной принцип
+Каноническая медицинская информация и полный текст REC находятся в приватном PostgreSQL/Supabase. Медицинские идентификаторы стабильны и независимы от файлового провайдера. Оригинальные Source хранятся на приватном Drive; физические идентификаторы используются как локаторы, а не как медицинские ID. Все производные данные имеют явное основание.
 
-- Stable health IDs are independent of storage providers.
-- Structured medical data lives in PostgreSQL.
-- Original source files stay in private object/file storage.
-- Provider IDs are locators only.
-- Provenance is explicit.
-- Current-state tables remain traceable to source records.
+## Сущности
+- `records`: `record_id`, `nnn`, `record_date`, `title`, `type`, `record_type`, `tags`, `summary`, `body_text`, `status`, `confidence`, `provenance_status`, `source_label`, `source_request_id`, `source_pages`, `metadata`. Обязательный полный текст. ID не переиспользуется.
+- `sources`: логический `source_id`, путь, исходное имя (только приватно), MIME, размер, SHA-256, дата, метаданные.
+- `source_locations`: физический provider, account alias, provider object ID, роль PRIMARY/BACKUP. Хранится приватно.
+- `record_sources`: связь многие-ко-многим REC ↔ Source со страницами и provenance.
+- `cases`/`case_links`: нормализованные случаи и OPEN/CONTINUES/CLOSES/FOLLOWUP. Открытие и закрытие решает владелец.
+- `analytes`/`labs`: справочник аналитов и производные лабораторные наблюдения. `labs.value` и `labs.reference_range` — **текст** с сохранением исходной точности.
+- `medications`, `monitoring`, `plan_items`, `questions`: актуальные производные слои со ссылками на первичную REC.
+- `operations`: однопоточная история логических изменений.
+- `id_reservations`: единственный действующий атомарный журнал used/reserved/retired номеров NNN в Supabase.
+- `validation_checks`, `validation_results`: структурные и содержательные проверки с областью применимости к операции.
 
-## Main entities
+## Подготовка к визиту и вопросы
+Подготовка к врачу строится из `plan_items` (явные запланированные консультации) и `questions` (вопросы к специалистам), не копирует их в отдельное хранилище. `metadata.category=medical_card` означает внутренний вопрос медицинской карты. `metadata.visit_specialties` включает лишь явно названных специалистов; отсутствие подходящего плана не даёт права выдумать приём.
 
-### records
-Canonical REC metadata and full renderable text for the new system.
+При **новом активном назначении** препарата создаётся ровно один ожидающий проверки вопрос о лекарственных взаимодействиях со ссылкой на ту же назначающую REC. Это атомарное и идемпотентное обязательство Writer, а не сделанный вывод о взаимодействиях. Историческая массовая миграция старых препаратов не должна формировать ложные новые вопросы.
 
-Key fields:
-- `record_id`
-- `nnn`
-- `record_date`
-- `title`
-- `record_type`
-- `summary`
-- `body_text`
-- `status`
-- `confidence`
-- `provenance_status`
-- `metadata`
+## Отличия от прежнего Drive-native
+Google Docs больше не являются каноническим хранилищем REC; полный читаемый текст принадлежит `records.body_text`. Физические Source-локаторы отделены от идентичностей. Целостность обеспечивают SQL-ограничения, Writer и актуальная Validation, а не старая Google Sheets Registry. Старые Docs остаются историческими свидетельствами.
 
-### sources
-Logical source identity:
-- `source_id`
-- `logical_path`
-- original filename
-- MIME type
-- byte size
-- SHA-256
-- source date
-- metadata
-
-### source_locations
-Physical provider locator:
-- `source_id`
-- provider
-- account alias
-- provider object ID
-- role: PRIMARY/BACKUP
-
-### record_sources
-Many-to-many REC в†” source mapping with page/provenance metadata.
-
-### cases / case_links
-Normalized cases and OPEN / CONTINUES / CLOSES / FOLLOWUP relations.
-
-### analytes / labs
-Canonical analyte dictionary plus raw laboratory observations.
-`labs.value` and `labs.reference_range` are text by design.
-
-### medications / monitoring / plan_items / questions
-Current-state layers with explicit basis REC links.
-
-Visit Preparation is a view over plan_items (explicit planned visits)
-and questions (specialist discussion items), not a duplicate storage entity.
-Question metadata.category=medical_card is reserved for chart conflicts/actions;
-metadata.visit_specialties stores only explicit specialist associations.
-The absence of a matching plan item never authorizes inventing an appointment.
-
-New active medications require an idempotent, transactionally linked pending
-medical-card drug-interaction check. Any future authorized post-cutover AI write
-path must enforce this invariant, whether implemented through a dedicated
-Health API or a restricted PostgreSQL RPC/connector. The bounded SQL Writer is implemented and owner-authorized; actual enablement is
-verified through private Project State/runtime. A dedicated Health API remains
-an optional future design. Migration of
-existing medications must not create false new-prescription alerts.
-
-### operations
-Single-writer logical transaction state.
-
-### id_reservations
-Technical NNN ledger preserving used/reserved/retired semantics.
-
-### validation_checks / validation_results
-Machine and semantic validation evidence per operation.
-
-## Deliberate differences from the Drive-native model
-
-- Google Docs URLs are not canonical record storage.
-- REC renderable text is stored in the database for the new frontend.
-- Source provider locations are normalized away from logical source identity.
-- PostgreSQL constraints replace spreadsheet-only integrity checks where possible.
+## Неутверждённые расширения
+Новая нормализованная модель вакцинаций (Issue [#62](https://github.com/Alexio00/HEALTH/issues/62), Draft [#45](https://github.com/Alexio00/HEALTH/pull/45)) не входит в действующую схему. Она требует согласованного Writer/Verifier/Validation/reader contract и одного проверенного migration release до активации. Отображение уже имеющихся записей вакцинаций в PWA — отдельный read-only UI контур и не подтверждает наличие нового канонического реестра.

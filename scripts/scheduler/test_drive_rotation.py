@@ -79,6 +79,37 @@ class RotationTests(unittest.TestCase):
             r=DriveRotation(self.fake,PARENT,other,test=True)
             with self.j.lock(),self.assertRaisesRegex(RotationStop,'concurrently_locked'):r.promote(NEW,SHA,self.restore)
         finally:other.close()
+    def test_old_zip_id_is_bound_before_first_trash(self):
+        self.rotation.promote(NEW,SHA,self.restore)
+        row=self.j.get(NEW)
+        old=json.loads(row['old'])
+        self.assertEqual(old,[{'id':OLD,'sha':'b'*64,'zip_id':OLD+'file'}])
+        self.assertEqual(row['state'],'DONE')
+
+    def test_local_legacy_journal_missing_zip_id_denied_without_mutation(self):
+        self.rotation.promote(NEW,SHA,self.restore)
+        row=self.j.get(NEW)
+        old=json.loads(row['old'])
+        old[0].pop('zip_id')
+        with self.j.db:
+            self.j.db.execute('UPDATE rotations SET old=? WHERE target=?',
+                              (json.dumps(old),NEW))
+        before=self.j.get(NEW)
+        patches=list(self.fake.patches)
+        with self.assertRaisesRegex(RotationStop,'rotation_old_zip_id_binding_required'):
+            self.rotation.promote(NEW,SHA,lambda id:{
+                'status':'ACTUAL_SYNTHETIC_SET_BYTES_READBACK_PASS',
+                'archive_sha256':SHA
+            })
+        self.assertEqual(self.j.get(NEW),before)
+        self.assertEqual(self.fake.patches,patches)
+
+    def test_missing_zip_id_cannot_be_persisted_in_new_local_journal(self):
+        with self.assertRaisesRegex(RotationStop,'rotation_old_zip_id_binding_required'):
+            self.j.plan(NEW,PARENT,SHA,[{'id':OLD,'sha':'b'*64}])
+        self.assertIsNone(self.j.get(NEW))
+        self.assertEqual(self.fake.patches,[])
+
     def test_pending_rotation_blocks_another_target(self):
         with self.assertRaises(RotationStop):self.rotation.promote(NEW,SHA,lambda id:{})
         with self.assertRaisesRegex(RotationStop,'needs_reconciliation'):self.j.plan('anothertarget123',PARENT,SHA,[])

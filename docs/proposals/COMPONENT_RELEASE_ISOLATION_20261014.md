@@ -20,6 +20,34 @@
 
 **Важно:** ветки не являются режимом безопасности. Разграничение основано на GitHub Rulesets/статусах, exact SHA, trust issuer, раздельных секретах/ролях, независимой проверке и фактическом runtime readback.
 
+## Пять постоянных веток и место архитектуры
+
+Ровно пять самостоятельных долгоживущих веток, перечисленных по функциям:
+
+| Git-ветка | Назначение | Условия |
+|---|---|---|
+| `main` | доверенный default control plane, текущий production Writer pin, минимальные launchers | только согласованные изменения и пока что принятая процедура переутверждения Writer SHA |
+| `writer-code` | разработка и синтетическая проверка bounded Writer / Verifier / Validation | staging от принятого main SHA; никакой автоматической медицинской авторизации из этой ветки |
+| `pwa` | read-only интерфейс, Pages и frontend release | защищённый PR, проверка области изменения, отдельный browser postcheck |
+| `scheduler-code` | исполняемые scripts Scheduler, восстановление, keepalive, тесты | Draft #73, выпуск только по принятому immutable SHA |
+| `scheduler` | **только heartbeat-коммиты**, не код и не запускатель | никогда не сливать обратно в main/pwa/writer-code/scheduler-code; cron workflow размещается в default main |
+
+**Ветка `scheduler` НЕ обязана иметь Git ancestry от `scheduler-code`.** В существующей реализации она исторически ответвлена от `main`; её связь с кодом Scheduler — операционная, через доверенный launcher, а не через merge. Нельзя выполнять rebasing `scheduler` на `scheduler-code` или «синхронизацию кода» с этой веткой.
+
+**Постоянную ветку `architecture` не создавать.** Общесистемная архитектура — временная `maintenance/*` / `docs/*` ветка с Draft PR в `main`. Компонентные детали живут рядом с конкретным компонентом: PWA-политика в `pwa`, Scheduler design в `scheduler-code`, Writer design в `writer-code`. Общая документация после согласования принимается только в предусмотренное main-окно, с соблюдением фактического Writer SHA gate.
+
+### Контроль защиты и необходимое действие владельца
+
+GitHub-ветка **не защищается самим созданием**. Для `writer-code` и `scheduler-code` нужно через GitHub Settings → Rules → Rulesets независимо подтвердить:
+
+1. Ограничение на каждую конкретную ветку; PR перед merge, запрет удаления и force-push, без необоснованных bypass; правила действительно Active.
+2. Required check существует и получает результат от принятого trusted issuer, не от PR-кандидата с тем же именем. Держать текущие required checks до проверенного перехода.
+3. Для `writer-code` запрет изменений trusted authorizer/workflow из самой ветки. Для `scheduler-code` запрет schedule/backup launchers и секретов.
+4. Реальные положительные/отрицательные PR-проверки на актуальном SHA, проверка Rule enforcement и конечного Github Pages/Writer/Scheduler результата.
+5. **Никаких self-controlled tests как единственного proof**. Защита требует независимого code review и Issue #50/H-01 closed по факту adversarial проверки.
+
+Интеграция GitHub в текущем чате не предоставляет управления Rulesets. Пока эти настройки и их enforcement не подтверждены, оба направления можно разрабатывать через Draft PR, **но не использовать их коммиты как production release**.
+
 ## Немедленно применимая маршрутизация
 
 1. **PWA_ONLY**: UI/assets/render/read-only запросы на существующей принятой схеме и в пределах `frontend/**`; PR в `pwa`. Сохранить `static` и постпроверку. Workflow/auth/service-worker/release инструменты требуют дополнительного review; не полагаться только на self-controlled CI (#50).

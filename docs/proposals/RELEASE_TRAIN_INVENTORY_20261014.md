@@ -66,6 +66,6 @@ All **19 open PRs** are represented in this snapshot. "Superseded" is a recommen
 - Current private Manual contains a later section titled "18. Procedure ..." after the earlier sections 18 and 19. Treat the **heading title and owner decision date** as the authoritative reference until owner approves a numbering correction; this proposal does not edit the private Manual.
 - #36/#27 and #64/#67/#70/#71 appear archival/superseded. Verify exact content and owners before proposing closure. No PR closed or branch deleted in this task.
 - PWA `AGENTS.md` and open #77 may reference older Writer routing. Reconcile in the respective component's PR; do not force one component's docs onto another.
-- This snapshot is an inventory, not a replacement for [Project State](https://docs.google.com/document/d/1eEZeDWhXw0h3PiVlc6xdGcVBQR0WvMVTgv50vMcGHU4/edit) or [Project Manual](https://docs.google.com/document/d/1Q_ZJ8_QffQUaOLXOSuho0FqPoXWGtHDBPVyBw8MVO90/edit).
+- This snapshot is an inventory, not a replacement for [Project State](private governing Google Doc (not linked publicly)) or [Project Manual](private governing Google Doc (not linked publicly)).
 
 **No cross-component writes, Secrets, production SQL, backup rotation, deployments, merges or approvals were performed for this proposal.**

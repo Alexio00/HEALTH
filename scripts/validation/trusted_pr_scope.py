@@ -127,7 +127,12 @@ def check_scope(changes, mode, author_id, body, head, tree_head, tree_base):
             if head_item is not None or base_item != ("blob", "100644"):
                 raise ScopeStop("removed_tree_state_invalid")
         elif status == "renamed":
-            if old == new or head_item != ("blob", "100644") or base_item != ("blob", "100644"):
+            # A simple rename must remove old from HEAD and must not overwrite
+            # an existing new path in BASE. Complex replacements require review.
+            if (old == new or head_item != ("blob", "100644")
+                    or base_item != ("blob", "100644")
+                    or tree_head.get(old) is not None
+                    or tree_base.get(new) is not None):
                 raise ScopeStop("renamed_tree_state_invalid")
         elif head_item != ("blob", "100644") or base_item != ("blob", "100644"):
             raise ScopeStop("changed_tree_state_invalid")

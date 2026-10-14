@@ -68,6 +68,10 @@ does not store new appointment/administration relations; the page reads optional
 existing metadata for explicit links and leaves unsupported links empty. A
 future canonical relationship model and comprehensive reconciliation are separate
 clinical-data work and are not silently performed by a frontend deploy.
+In the history table, multiple already-visible infection labels can be
+expanded as tags. This is display-only: a multi-infection REC is not proof
+of one combined injection or per-antigen stage, and latest/plan grouping,
+REC evidence links, sorting, and Supabase SELECT remain unchanged.
 Unknown dates, stages and vaccines are not inferred. Overdue is a display-only
 comparison against the current Moscow calendar date, never a database mutation.
 

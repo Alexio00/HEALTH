@@ -39,6 +39,7 @@ jobs:
     if: >-
       github.repository == 'Alexio00/HEALTH' &&
       github.ref == 'refs/heads/main' &&
+      github.run_attempt == '1' &&
       github.event_name == 'workflow_dispatch' &&
       github.actor_id == '308028794' &&
       vars.HEALTH_INREPO_RELEASE_ENABLED == 'true' &&

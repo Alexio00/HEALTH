@@ -25,7 +25,8 @@ function harness() {
     setItem: (key, value) => store.set(key, value),
     removeItem: key => store.delete(key)
   });
-  const client = makeClient(storage(ls), storage(ss),
+  const lsApi = storage(ls), ssApi = storage(ss);
+  const client = makeClient(lsApi, ssApi,
     { addEventListener: (type, fn) => { if(type === "storage") listeners.push(fn); } },
     async (url, init) => {
       calls.push({ url, method: init.method, auth: init.headers.Authorization,
@@ -33,7 +34,7 @@ function harness() {
       return network(url, init);
     })("https://synthetic.invalid", "pk_synthetic");
   return {
-    client, calls, ls, ss, listeners, setNetwork: fn => { network = fn; },
+    client, calls, ls, ss, storage: lsApi, listeners, setNetwork: fn => { network = fn; },
     storageEvent: (oldValue, newValue) => listeners.forEach(fn =>
       fn({key: STORAGE, oldValue, newValue}))
   };
@@ -172,6 +173,16 @@ for (const status of [400,401,422,500]) {
   await h.client.auth.beginPasswordRecovery(fragment());
   assert((await h.client.auth.finishPasswordRecovery("short")).error);
   assert(!h.calls.some(x=>x.method==="PUT"),"short password rejected locally");
+  const retried = await h.client.auth.finishPasswordRecovery("synthetic-long-password");
+  assert(!retried.error && retried.updated,"local validation does not consume the email link");
+}
+{
+  const h = harness();
+  h.storage.removeItem = () => { throw new Error("storage unavailable"); };
+  h.storage.setItem = () => { throw new Error("storage unavailable"); };
+  assert((await h.client.auth.beginPasswordRecovery(fragment())).error,
+    "storage failure is fail-closed");
+  assert.equal(h.calls.length,0,"no recovery token verification after failed local revoke");
 }
 {
   const h = harness();
@@ -249,6 +260,48 @@ function uiHarness(auth) {
   assert.equal(ui.login.classList.hidden,false);
   assert.match(ui.loginStatus.textContent,/Пароль изменён/);
   assert.equal(ui.map["#recovery-password"].value,"");
+}
+// The actual boot() must scrub URL fragments before getSession/read routing.
+const bootStart = appSource.indexOf("async function boot() {");
+const bootEnd = appSource.indexOf("// The public recovery UI",bootStart);
+assert(bootStart >= 0 && bootEnd > bootStart);
+const bootSource = appSource.slice(bootStart,bootEnd);
+function bootCase(hash, scrubFails=false) {
+  const loc={pathname:"/HEALTH/",search:"",hash};
+  let readerReads=0, callback=null, panel=null;
+  const history={replaceState() {
+    if(scrubFails) throw new Error("history rejected");
+    loc.hash=""; loc.search="";
+  }};
+  const auth={getSession:async () => {
+    readerReads++;
+    return {data:{session:null},error:null};
+  }};
+  const loadingPanel={};
+  const build=new Function("location","history","supabase","bootRecovery",
+    "loading","login","loginError","showOnly","enterApp",
+    "let uiGeneration=0;\n"+bootSource+"\nreturn boot;");
+  const boot=build(loc,history,{auth},fragment=>{callback=fragment;},
+    loadingPanel,{}, {textContent:""}, x=>{panel=x;}, async()=>{throw new Error("medical access");});
+  return {boot,loc,reads:()=>readerReads,callback:()=>callback,panel:()=>panel,loadingPanel};
+}
+{
+  const x=bootCase(fragment());
+  await x.boot();
+  assert.equal(x.reads(),0,"recovery callback does not call reader getSession");
+  assert.equal(x.callback(),fragment(),"callback passed in memory only");
+  assert.equal(x.loc.hash,"","token erased from browser history URL");
+}
+{
+  const x=bootCase(fragment(),true);
+  await x.boot();
+  assert.equal(x.reads(),0,"cannot clear callback URL: reader remains locked");
+  assert.equal(x.panel(),x.loadingPanel,"cleanup failure is fail closed");
+}
+{
+  const x=bootCase("#/records/SYNTHETIC");
+  await x.boot();
+  assert.equal(x.reads(),1,"normal reader routing unchanged");
 }
 assert(html.includes('id="forgot-password"'));
 assert(html.includes('autocomplete="new-password"'));

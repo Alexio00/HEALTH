@@ -130,8 +130,8 @@ export function createClient(baseUrl, publishableKey) {
         !values.get("access_token") || !values.get("refresh_token")) throw recoveryError();
     const expiry = values.get("expires_at");
     const ttl = values.get("expires_in");
-    if (expiry !== null && (!/^\\d{10,12}$/.test(expiry) || Number(expiry) <= Math.floor(Date.now()/1000))) throw recoveryError();
-    if (ttl !== null && (!/^\\d{1,6}$/.test(ttl) || Number(ttl) <= 0)) throw recoveryError();
+    if (expiry !== null && (!/^\d{10,12}$/.test(expiry) || Number(expiry) <= Math.floor(Date.now()/1000))) throw recoveryError();
+    if (ttl !== null && (!/^\d{1,6}$/.test(ttl) || Number(ttl) <= 0)) throw recoveryError();
     if (expiry === null && ttl === null) throw recoveryError();
     return { token: values.get("access_token"), expiresAt: expiry !== null ?
       Number(expiry) : Math.floor(Date.now()/1000) + Number(ttl) };
@@ -140,7 +140,7 @@ export function createClient(baseUrl, publishableKey) {
   async function requestPasswordRecovery(email) {
     try {
       if (typeof email !== "string" || email.length > 254 ||
-          !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error("Неверный email.");
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Неверный email.");
       const endpoint = "recover?redirect_to=" + encodeURIComponent(RECOVERY_REDIRECT);
       const response = await authRequest(endpoint, { email });
       return { error: response.ok ? null : apiError(response.status, "Recovery") };

@@ -485,11 +485,35 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
-logoutButton.addEventListener("click", async () => {
-  clearPinnedHeaders();
-  await supabase.auth.signOut();
-  location.hash = "#/";
+function clearMedicalUi() {
   showOnly(login);
+  view.replaceChildren();
+  recordTagFilters.clear();
+  clearPinnedHeaders();
+  const password = document.querySelector("#password");
+  if (password) password.value = "";
+  loginError.textContent = "";
+  location.hash = "#/";
+}
+
+logoutButton.addEventListener("click", async () => {
+  // Wipe the medical screen before any potentially stalled network request.
+  clearMedicalUi();
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error && !login.classList.contains("hidden")) {
+      loginError.textContent = "Локальный выход выполнен. Завершение серверной сессии не подтверждено.";
+    }
+  } catch {
+    if (!login.classList.contains("hidden")) {
+      loginError.textContent = "Локальный выход выполнен. Завершение серверной сессии не подтверждено.";
+    }
+  }
+});
+
+// Other same-origin tabs must not continue displaying medical content after logout.
+window.addEventListener("storage", (event) => {
+  if (event.key === "health.session.v1" && event.newValue === null) clearMedicalUi();
 });
 
 const mobileMenu = document.querySelector("#primary-nav");
@@ -542,6 +566,11 @@ async function route() {
   } catch (error) {
     console.error(error);
     view.innerHTML = '<h1>Ошибка</h1><p class="error">Не удалось загрузить данные.</p>';
+  }
+  // A request started before logout must not leave medical markup in a hidden view.
+  if (app.classList.contains("hidden")) {
+    view.replaceChildren();
+    return;
   }
   setupStickyChrome();
 }

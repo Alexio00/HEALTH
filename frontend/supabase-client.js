@@ -6,6 +6,13 @@ function apiError(status, area) {
 
 export function createClient(baseUrl, publishableKey) {
   let refreshPromise = null;
+  let sessionEpoch = 0;
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (event) => {
+      if (event.key === STORAGE_KEY && event.newValue !== event.oldValue) sessionEpoch += 1;
+    });
+  }
 
   const load = () => {
     try {
@@ -53,15 +60,17 @@ export function createClient(baseUrl, publishableKey) {
     if (refreshPromise) return refreshPromise;
     refreshPromise = (async () => {
       const current = load();
+      const expectedEpoch = sessionEpoch;
       if (!current?.refresh_token) return null;
       const response = await authRequest("token?grant_type=refresh_token", {
         refresh_token: current.refresh_token
       });
       if (!response.ok) {
-        clear();
+        if (expectedEpoch === sessionEpoch && load()?.refresh_token === current.refresh_token) clear();
         throw apiError(response.status, "Auth refresh");
       }
       const payload = await response.json();
+      if (expectedEpoch !== sessionEpoch || load()?.refresh_token !== current.refresh_token) return null;
       return save(payload);
     })().finally(() => {
       refreshPromise = null;
@@ -201,10 +210,12 @@ export function createClient(baseUrl, publishableKey) {
       },
 
       async signInWithPassword({ email, password }) {
+        const expectedEpoch = sessionEpoch;
         try {
           const response = await authRequest("token?grant_type=password", { email, password });
           if (!response.ok) return { data: { session: null }, error: apiError(response.status, "Auth") };
           const payload = await response.json();
+          if (expectedEpoch !== sessionEpoch) throw new Error("Auth state changed");
           const session = save(payload);
           return { data: { session, user: session.user }, error: null };
         } catch (error) {
@@ -214,12 +225,18 @@ export function createClient(baseUrl, publishableKey) {
 
       async signOut() {
         const current = load();
+        sessionEpoch += 1;
+        // Local revocation is immediate, independent of remote logout availability.
+        clear();
         try {
-          if (current?.access_token) await authRequest("logout", undefined, current.access_token);
-        } finally {
-          clear();
+          if (current?.access_token) {
+            const response = await authRequest("logout", undefined, current.access_token);
+            if (!response.ok) return { error: new Error("Server logout not confirmed") };
+          }
+          return { error: null };
+        } catch {
+          return { error: new Error("Server logout not confirmed") };
         }
-        return { error: null };
       }
     },
 

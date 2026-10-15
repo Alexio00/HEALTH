@@ -267,14 +267,28 @@ function stageForPlan(item) {
   return "—";
 }
 
+// Read-only UI: source text asserting a clinical "overdue" verdict is not
+// verified proof. A single shared sanitizer prevents drift between the plan
+// table, its filters, and all vaccination views.
+export function neutralPlanSourceStatus(value, fallback = "Запланировано") {
+  if (value == null || value === "") return fallback;
+  if (typeof value !== "string") return "Статус требует уточнения";
+  const status = value.trim();
+  if (!status) return fallback;
+  // The canonical plan row is still "planned"; source assertions of
+  // medical overdue have not been independently verified.
+  return /(?:^|[^\p{L}])(?:просрочено|overdue)(?=$|[^\p{L}])/iu.test(status)
+    ? fallback : status;
+}
+
 export function plannedVaccinations(items, today = moscowToday()) {
   return (items || []).filter(x => normalizeKind(x.metadata?.kind) === "вакцинация")
     .map(x => {
       const t = targets(String(x.title || ""));
       const due = dateKey(x.due_on);
       const status = String(x.status || "planned");
-      const overdue = status === "planned" && due && due < today;
-      const sourceStatus = String(x.metadata?.source_status || "");
+      // A calendar date alone does not prove an outstanding medical obligation.
+      const sourceStatus = neutralPlanSourceStatus(x.metadata?.source_status);
       return {
         kind:"plan", id:"plan:" + x.plan_item_id, keys:t?.keys || [],
         infection:t?.label || String(x.title || ""), stage:stageForPlan(x),
@@ -285,8 +299,8 @@ export function plannedVaccinations(items, today = moscowToday()) {
         basisRecordId:recId(x.basis_record_id), status,
         sourceStatus:status === "cancelled" ? "Отменено"
           : status === "done" ? "Выполнено"
-          : overdue ? "Просрочено" : sourceStatus || "Запланировано",
-        overdue:Boolean(overdue), title:String(x.title || "")
+          : sourceStatus,
+        overdue:false, title:String(x.title || "")
       };
     }).sort((a,b) => {
       if (!a.date && !b.date) return a.id.localeCompare(b.id);

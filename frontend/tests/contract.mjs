@@ -17,14 +17,14 @@ const fakeEl = {
 const context = vm.createContext({
   createClient() { return { auth: {} }; },
   SUPABASE_URL: "", SUPABASE_PUBLISHABLE_KEY: "",
-  document: { querySelector() { return fakeEl; }, querySelectorAll() { return []; } },
+  document: { querySelector() { return fakeEl; }, querySelectorAll() { return []; }, addEventListener() {}, hidden: false },
   window: { addEventListener() {} },
   navigator: {}, location: { hash: "" },
   URLSearchParams, Date, Intl, Set, Map, console,
   CSS: { escape(x) { return x; } }
 });
 const harness = js.replace(/^import .*;\s*$/gm, "").replace(/\nboot\(\);\s*$/, "");
-vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, plannedVisitSpecialties, isMedicalCardQuestion, questionSpecialties, medicationRecordIds, latestMedicationRecordId, medicationHistoriesForRecord, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable, shouldPinTableHeader, vaccinationRecCell, vaccinationRows };", context);
+vm.runInContext(harness + "\n globalThis.expose = { visitPreparation, plannedVisitSpecialties, isMedicalCardQuestion, questionSpecialties, medicationRecordIds, latestMedicationRecordId, medicationHistoriesForRecord, renderRecordBody, recordDisplayTitle, fmtMskTimestamp, formatTableHeader, sortableTable, shouldPinTableHeader, vaccinationRecCell, vaccinationRows, projectNeutralDates, moscowCalendarDay, untilNextMoscowDate };", context);
 const x = context.expose;
 
 // Shared REC cell renderer is used in all three vaccination tables. Only
@@ -323,7 +323,8 @@ assert.equal(future.length,4,"category filter is immutable and must include canc
 assert.equal(future.find(x => x.id === "plan:1").stage,"Rv");
 assert.equal(future.find(x => x.id === "plan:1").basisRecordId,"REC-20050115-001");
 assert.equal(future.find(x => x.id === "plan:1").appointmentRecordId,null,"supporting REC is not silently a prescription");
-assert.equal(future.find(x => x.id === "plan:2").sourceStatus,"Просрочено");
+assert.equal(future.find(x => x.id === "plan:2").sourceStatus,"запланировано");
+assert(!future.find(x => x.id === "plan:2").overdue,"past date is not verified clinical overdue");
 assert.equal(future.find(x => x.id === "plan:3").stage,"V1–V5");
 assert(!future.find(x => x.id === "plan:3").overdue,"undated items are not overdue");
 const akds = plannedVaccinations([{plan_item_id:99,title:"Ревакцинация АКДС",status:"planned",metadata:{kind:"вакцинация"}}],"2026-10-13")[0];
@@ -475,10 +476,63 @@ const vaccineView=buildVaccinationView(vaccinationRecords,vaccinationPlans,"2026
 assert.equal(vaccineView.planned.length,3,"cancelled plan does not appear among upcoming doses");
 assert.equal(vaccineView.history.length,doses.length+future.length);
 assert(!vaccineView.latest.some(x => x.infection === "Корь"),"later combination vaccine supersedes older measles-only row");
-assert(vaccineView.latest.find(x => x.infection === "Клещевой энцефалит")?.next?.overdue);
+assert(!vaccineView.latest.find(x => x.infection === "Клещевой энцефалит")?.next?.overdue);
 assert(vaccineView.latest.find(x => x.infection === "Грипп")?.next?.date === "2028-04-10");
 assert(vaccineView.history.some(x => x.status === "cancelled"));
-console.log("PASS vaccination REC selection, stages, history, overdue and evidence links");
+console.log("PASS vaccination REC selection, stages, history, neutral dates and evidence links");
+
+
+// Synthetic #40A: no clinical source data, and no stored/persisted system questions.
+const planDay=(id,date,props={})=>({
+  plan_item_id:id,title:"Synthetic planned action",status:"planned",
+  due_on:date,metadata:{},...props
+});
+const projected=(rows,when="2026-10-15T12:00:00Z")=>
+  x.projectNeutralDates(rows,new Date(when));
+const past=projected([planDay(1,"2026-10-14")]);
+assert.equal(past.stateById.get(1),"PAST_DATE_REVIEW");
+assert.equal(past.questions[0].key,"sys:date-review:plan:1");
+assert.equal(past.questions[0].question,"Указанная дата прошла. Уточните выполнение или перенос");
+assert.equal(projected([planDay(1,"2026-10-15")]).stateById.get(1),"DATE_TODAY");
+assert.equal(projected([planDay(1,"2026-10-16")]).stateById.get(1),"FUTURE_DATE");
+assert.equal(projected([planDay(1,"2026-10-15")],"2026-10-15T20:59:59Z").questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-15")],"2026-10-15T21:00:00Z").questions.length,1);
+assert.equal(x.moscowCalendarDay(new Date("2026-10-15T21:00:00Z")),"2026-10-16");
+assert.equal(x.untilNextMoscowDate(new Date("2026-10-15T20:59:59Z")),1000);
+assert.equal(x.untilNextMoscowDate(new Date("2026-10-15T21:00:00Z")),86400000);
+assert.equal(projected([planDay(1,null)]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-02-29")]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14",{status:"done"})]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14",{status:"cancelled"})]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14",{status:"unknown"})]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14",{metadata:{due_text:"After visit"}})]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14",{metadata:{source_status:"Отменено"}})]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14",{metadata:{deadline_condition:"conditional"}})]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14",{metadata:{historical:true}})]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14",{metadata:[]})]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14"),planDay(1,"2026-10-14")]).questions.length,1);
+assert.equal(projected([planDay(1,"2026-10-14"),planDay(1,"2026-11-14")]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14",{updated_at:"first"}),planDay(1,"2026-10-14",{updated_at:"second"})]).questions.length,0);
+assert.equal(projected([planDay(1,"2026-10-14")]).questions.length,1);
+assert.equal(projected([planDay(1,"2026-11-14")]).questions.length,0);
+const shown=x.vaccinationRows([{kind:"plan",id:"plan:7",sourceStatus:"Запланировано"}],
+  "planned",new Map([[7,"PAST_DATE_REVIEW"]]))[0].cells[4].html;
+assert(shown.includes("Указанная дата прошла. Уточните выполнение или перенос"));
+assert(!shown.includes("Просрочено"));
+assert(!x.vaccinationRows([{kind:"plan",id:"plan:7",sourceStatus:"Запланировано"}],
+  "planned",new Map([[7,"UNDETERMINED"]]))[0].cells[4].html.includes("Указанная дата"));
+const legacy=plannedVaccinations([{plan_item_id:7,title:"Вакцинация от гриппа",
+  status:"planned",due_on:"2025-01-01",
+  metadata:{kind:"вакцинация",source_status:"Просрочено"}}],"2026-10-15")[0];
+assert(!legacy.overdue && legacy.sourceStatus==="Запланировано");
+assert(js.includes('window.addEventListener("focus", refreshVisibleDeadlines)'));
+assert(js.includes('window.addEventListener("pageshow", refreshVisibleDeadlines)'));
+assert(js.includes('document.addEventListener("visibilitychange", refreshVisibleDeadlines)'));
+assert(js.includes("cancelNeutralMidnight();\n  uiGeneration += 1;"));
+assert(js.includes("const neutral = projectNeutralDates(plan.data || []);"));
+assert(js.includes("...neutral.questions.map(q => neutralSystemQuestion(q,planById.get(q.plan_item_id)))"));
+assert(!js.includes('vaccination-overdue">Просрочено'));
+console.log("PASS #40A Moscow calendar, neutral dates, ephemeral questions and no clinical overdue");
 
 // TEST OAuth config and network gates; synthetic values only.
 await import('./oauth-consent.mjs');

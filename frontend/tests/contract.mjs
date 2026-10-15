@@ -165,7 +165,8 @@ for (const title of ["Хронические состояния","Открыты
 }
 assert(!js.includes('class="intro"'), "remove page introduction text");
 assert(!js.includes("setupClosedCaseFilters"), "closed cases have no filter logic");
-const closedSource = js.split("async function renderClosedCases() {")[1].split("async function renderCase(")[0];
+const closedSource = js.split(/async function renderClosedCases\([^)]*\) \{/)[1]?.split("async function renderCase(")[0];
+assert(closedSource, "closed cases renderer must be present");
 assert(!closedSource.includes("filter-bar"), "closed cases have no filter bar");
 assert(js.includes('data-sticky-filter aria-label="Фильтр записей"'));
 assert(js.includes('mode === "future-plan" ? "data-sticky-filter" : ""'));

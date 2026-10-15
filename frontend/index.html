@@ -57,10 +57,10 @@
       <p class="muted">Не менее 12 символов. После смены потребуется войти заново.</p>
       <form id="recovery-reset-form">
         <label>Новый пароль
-          <input id="recovery-password" type="password" autocomplete="new-password" minlength="12" required>
+          <input id="recovery-password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
         </label>
         <label>Повторите пароль
-          <input id="recovery-password-confirm" type="password" autocomplete="new-password" minlength="12" required>
+          <input id="recovery-password-confirm" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required>
         </label>
         <button id="recovery-save" type="submit">Сохранить новый пароль</button>
       </form>

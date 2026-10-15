@@ -775,7 +775,7 @@ logoutButton.addEventListener("click", async () => {
 // Same-user refreshes may require re-entry: deliberate fail-closed tradeoff.
 window.addEventListener("storage", (event) => {
   if (event.key !== "health.session.v1" || event.newValue === event.oldValue) return;
-  const recovering = !recoveryReset.classList.contains("hidden");
+  const recovering = document.querySelector("#recovery-reset")?.classList?.contains?.("hidden") === false;
   clearMedicalUi();
   if (recovering) void supabase.auth.cancelPasswordRecovery();
   if (event.newValue) {

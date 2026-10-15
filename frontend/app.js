@@ -16,6 +16,11 @@ const app = document.querySelector("#app");
 const view = document.querySelector("#view");
 const loginForm = document.querySelector("#login-form");
 const loginError = document.querySelector("#login-error");
+const loginStatus = document.querySelector("#login-status");
+const recoveryRequest = document.querySelector("#recovery-request");
+const recoveryReset = document.querySelector("#recovery-reset");
+const recoveryRequestForm = document.querySelector("#recovery-request-form");
+const recoveryResetForm = document.querySelector("#recovery-reset-form");
 const logoutButton = document.querySelector("#logout");
 
 const esc = (value) => String(value ?? "")
@@ -49,7 +54,7 @@ const caseLink = (caseKey, label) =>
   `<a href="#/cases/${encodeURIComponent(caseKey)}">${esc(label || caseKey)}</a>`;
 
 function showOnly(target) {
-  for (const el of [loading, login, app]) el.classList.add("hidden");
+  for (const el of [loading, login, app, recoveryRequest, recoveryReset]) el.classList.add("hidden");
   target.classList.remove("hidden");
 }
 
@@ -586,6 +591,113 @@ async function boot() {
     showOnly(login);
     loginError.textContent = error.message || "Не удалось проверить доступ.";
   }
+}
+
+// The public recovery UI never fetches medical rows or calls the reader router.
+let recoveryRequestPending = false;
+let recoveryUpdatePending = false;
+
+document.querySelector("#forgot-password").addEventListener("click", () => {
+  ++uiGeneration;
+  loginError.textContent = "";
+  loginStatus.textContent = "";
+  document.querySelector("#recovery-email").value = document.querySelector("#email").value.trim();
+  document.querySelector("#recovery-send").disabled = false;
+  document.querySelector("#recovery-request-status").textContent = "";
+  showOnly(recoveryRequest);
+  document.querySelector("#recovery-email").focus();
+});
+
+recoveryRequestForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (recoveryRequestPending) return;
+  const email = document.querySelector("#recovery-email").value.trim();
+  if (!recoveryRequestForm.reportValidity()) return;
+  recoveryRequestPending = true;
+  const button = document.querySelector("#recovery-send");
+  button.disabled = true;
+  const status = document.querySelector("#recovery-request-status");
+  status.textContent = "Отправляю запрос…";
+  const generation = uiGeneration;
+  try { await supabase.auth.requestPasswordRecovery(email); }
+  finally {
+    recoveryRequestPending = false;
+    if (generation === uiGeneration && !recoveryRequest.classList.contains("hidden")) {
+      // Same result for unknown addresses, throttling, and delivery failures:
+      // no account enumeration from the public UI.
+      status.textContent = "Если адрес зарегистрирован, письмо со ссылкой будет отправлено. Если письма нет, попробуйте позже.";
+    }
+  }
+});
+
+document.querySelector("#recovery-request-back").addEventListener("click", () => {
+  ++uiGeneration;
+  showOnly(login);
+  loginStatus.textContent = "";
+});
+
+recoveryResetForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (recoveryUpdatePending || !recoveryResetForm.reportValidity()) return;
+  const first = document.querySelector("#recovery-password");
+  const confirm = document.querySelector("#recovery-password-confirm");
+  const status = document.querySelector("#recovery-reset-status");
+  if (first.value !== confirm.value) {
+    status.textContent = "Пароли не совпадают.";
+    return;
+  }
+  recoveryUpdatePending = true;
+  const button = document.querySelector("#recovery-save");
+  button.disabled = true;
+  status.textContent = "Сохраняю…";
+  const generation = uiGeneration;
+  let result;
+  try { result = await supabase.auth.finishPasswordRecovery(first.value); }
+  catch { result = { error: new Error("Не удалось подтвердить изменение пароля.") }; }
+  finally {
+    first.value = "";
+    confirm.value = "";
+    recoveryUpdatePending = false;
+  }
+  if (generation !== uiGeneration) return;
+  if (result.error || !result.updated) {
+    showOnly(recoveryRequest);
+    document.querySelector("#recovery-request-status").textContent =
+      "Не удалось подтвердить смену пароля. Для новой попытки запросите другое письмо.";
+    document.querySelector("#recovery-send").disabled = false;
+    return;
+  }
+  showOnly(login);
+  loginStatus.textContent = result.logoutConfirmed
+    ? "Пароль изменён. Войдите с новым паролем."
+    : "Пароль изменён. Серверное завершение recovery-сессии не подтверждено. Войдите заново.";
+});
+
+document.querySelector("#recovery-reset-back").addEventListener("click", () => {
+  ++uiGeneration;
+  document.querySelector("#recovery-password").value = "";
+  document.querySelector("#recovery-password-confirm").value = "";
+  showOnly(login);
+  void supabase.auth.cancelPasswordRecovery();
+});
+
+async function bootRecovery(fragment) {
+  ++uiGeneration;
+  const generation = uiGeneration;
+  view.replaceChildren();
+  showOnly(loading);
+  const result = await supabase.auth.beginPasswordRecovery(fragment);
+  if (generation !== uiGeneration) return;
+  if (result.error) {
+    showOnly(recoveryRequest);
+    document.querySelector("#recovery-request-status").textContent =
+      "Ссылка восстановления недействительна или истекла. Запросите новое письмо.";
+    return;
+  }
+  document.querySelector("#recovery-reset-status").textContent = "";
+  document.querySelector("#recovery-save").disabled = false;
+  showOnly(recoveryReset);
+  document.querySelector("#recovery-password").focus();
 }
 
 loginForm.addEventListener("submit", async (event) => {
@@ -1652,4 +1764,22 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }));
 }
 
-boot();
+// Auth callback fragments must be removed from history BEFORE any session read.
+const isRecoveryCandidate = Boolean(location.search) ||
+  (Boolean(location.hash) && !location.hash.startsWith("#/"));
+if (isRecoveryCandidate) {
+  const fragment = location.hash;
+  let scrubbed = false;
+  try {
+    history.replaceState(null, "", location.pathname);
+    scrubbed = !location.search && !location.hash;
+  } catch { /* history may be unavailable */ }
+  if (scrubbed) void bootRecovery(fragment);
+  else {
+    ++uiGeneration;
+    showOnly(loading);
+    loginError.textContent = "Не удалось безопасно обработать ссылку.";
+  }
+} else {
+  boot();
+}

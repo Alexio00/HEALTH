@@ -174,20 +174,24 @@ export function createClient(baseUrl, publishableKey) {
       // A client-supplied "type=recovery" is NOT proof. GoTrue validates
       // the bearer against its current server-side user state.
       const response = await authRequest("user", undefined, artifact.token, "GET");
-      if (!response.ok) return { error: recoveryError() };
+      if (!response.ok) throw recoveryError();
       const user = await response.json();
       if (!user || typeof user.id !== "string" || !user.id ||
+          attempt !== recoveryAttempt || !recoveryMode ||
           expectedEpoch !== sessionEpoch || artifact.expiresAt <= Date.now()/1000) {
-        return { error: recoveryError() };
+        throw recoveryError();
       }
       recoverySession = { token: artifact.token, epoch: expectedEpoch, expiresAt: artifact.expiresAt };
       return { error: null };
-    } catch { return { error: recoveryError() }; }
+    } catch {
+      if (attempt === recoveryAttempt) recoveryMode = false;
+      return { error: recoveryError() };
+    }
   }
 
   async function finishPasswordRecovery(password) {
     const current = recoverySession;
-    if (!current || current.epoch !== sessionEpoch || Date.now()/1000 >= current.expiresAt)
+    if (!recoveryMode || !current || current.epoch !== sessionEpoch || Date.now()/1000 >= current.expiresAt)
       return { error: recoveryError(), logoutConfirmed: false };
     if (typeof password !== "string" || password.length < 12 || password.length > 1024)
       return { error: new Error("Пароль должен содержать от 12 до 1024 символов."), logoutConfirmed: false };
@@ -207,8 +211,10 @@ export function createClient(baseUrl, publishableKey) {
       const response = await authRequest("logout", undefined, current.token);
       logoutConfirmed = response.ok;
     } catch { /* best effort; no token is stored */ }
-    const unchanged = current.epoch === sessionEpoch;
+    const unchanged = recoveryMode && current.epoch === sessionEpoch;
     clear();
+    recoveryMode = false;
+    recoveryAttempt += 1;
     if (!unchanged) error = new Error("Состояние входа изменилось во время восстановления.");
     return { error: error || null, updated, logoutConfirmed };
   }
@@ -216,6 +222,8 @@ export function createClient(baseUrl, publishableKey) {
   async function cancelPasswordRecovery() {
     const current = recoverySession;
     recoverySession = null;
+    recoveryMode = false;
+    recoveryAttempt += 1;
     clear();
     if (current) {
       try { await authRequest("logout", undefined, current.token); }

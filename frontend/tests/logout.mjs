@@ -111,7 +111,8 @@ function simulateUI(signOut) {
   const logoutButton = { addEventListener: (type, cb) => { if (type === "click") clicked = cb; } };
   const window = { addEventListener: (type, cb) => { if (type === "storage") stored = cb; } };
   new Function("logoutButton", "showOnly", "login", "view", "recordTagFilters",
-    "clearPinnedHeaders", "document", "loginError", "location", "supabase", "window", uiCode)(
+    "clearPinnedHeaders", "document", "loginError", "location", "supabase", "window",
+    "let uiGeneration = 0;\n" + uiCode)(
     logoutButton, () => { hidden = true; }, login, view, recordTagFilters,
     () => { pinned++; }, { querySelector: () => password }, loginError, location, { auth: { signOut } }, window);
   return { click: clicked, stored, view, loginError, location, recordTagFilters, password, get hidden() { return hidden; }, get pinned() { return pinned; } };
@@ -139,6 +140,6 @@ function simulateUI(signOut) {
   h.stored({ key: STORAGE_KEY, newValue: null });
   pass(h.hidden && h.view.innerHTML === "", "other-tab logout DOM wiped");
 }
-pass(/if \(app\.classList\.contains\("hidden"\)\) \{\s*view\.replaceChildren\(\)/.test(appSource),
-  "in-flight old route has hidden-view cleanup guard");
+pass(/if \(!isActiveUiGeneration\(generation\)\) return;/.test(appSource),
+  "async rendering guarded by session generation");
 console.log("HEALTH #58 logout synthetic: " + count + "/" + count + " PASS");

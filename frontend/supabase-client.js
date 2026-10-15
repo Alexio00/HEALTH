@@ -1,4 +1,5 @@
 const STORAGE_KEY = "health.session.v1";
+const REVOKED_KEY = "health.session.revoked.v1";
 
 function apiError(status, area) {
   return new Error(`${area} request failed (${status})`);
@@ -6,15 +7,47 @@ function apiError(status, area) {
 
 export function createClient(baseUrl, publishableKey) {
   let refreshPromise = null;
+  let sessionEpoch = 0;
+  // Password requests can overlap without changing the storage epoch.
+  // Only the latest *started* attempt may commit credentials.
+  let passwordSignInAttempt = 0;
+  let locallyRevoked = false;
+  const markRevoked = () => {
+    locallyRevoked = true;
+    try { sessionStorage.setItem(REVOKED_KEY, "1"); } catch { /* memory fallback */ }
+  };
 
-  const load = () => {
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (event) => {
+      if (event.key === STORAGE_KEY && event.newValue !== event.oldValue) {
+        sessionEpoch += 1;
+        if (event.newValue === null || event.newValue === "") markRevoked();
+      }
+    });
+  }
+
+  // Distinguish a confirmed missing session from an unreadable/invalid one.
+  // Logout must never report remote success merely because getItem() failed.
+  const inspectStoredSession = () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return { session: null, knownAbsent: true };
+      const session = JSON.parse(raw);
+      if (typeof session?.access_token === "string" && session.access_token) {
+        return { session, knownAbsent: false };
+      }
     } catch {
-      localStorage.removeItem(STORAGE_KEY);
-      return null;
+      // Storage access denied, or corrupt JSON: server session state is unknown.
     }
+    return { session: null, knownAbsent: false };
+  };
+
+  const load = () => {
+    if (locallyRevoked) return null;
+    try { if (sessionStorage.getItem(REVOKED_KEY) === "1") return null; } catch { /* memory fallback */ }
+    const inspection = inspectStoredSession();
+    if (!inspection.knownAbsent && !inspection.session) clear();
+    return inspection.session;
   };
 
   const save = (payload) => {
@@ -28,11 +61,38 @@ export function createClient(baseUrl, publishableKey) {
       expires_at: payload.expires_at || Math.floor(Date.now() / 1000) + Number(payload.expires_in || 3600),
       user: payload.user
     };
+    // Commit the new session first. If persistence fails, do NOT clear the
+    // previous revocation marker: it may be protecting an older stored token.
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    try {
+      sessionStorage.removeItem(REVOKED_KEY);
+      if (sessionStorage.getItem(REVOKED_KEY) === "1") {
+        throw new Error("Auth state not cleared");
+      }
+    } catch {
+      // Never report a successful login with a still-active tombstone.
+      clear();
+      throw new Error("Unable to establish local auth session");
+    }
+    locallyRevoked = false;
     return session;
   };
 
-  const clear = () => localStorage.removeItem(STORAGE_KEY);
+  const clear = () => {
+    sessionEpoch += 1;
+    markRevoked();
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      return true;
+    } catch {
+      try {
+        localStorage.setItem(STORAGE_KEY, "");
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  };
 
   async function authRequest(path, body, accessToken = "") {
     const headers = {
@@ -53,15 +113,17 @@ export function createClient(baseUrl, publishableKey) {
     if (refreshPromise) return refreshPromise;
     refreshPromise = (async () => {
       const current = load();
+      const expectedEpoch = sessionEpoch;
       if (!current?.refresh_token) return null;
       const response = await authRequest("token?grant_type=refresh_token", {
         refresh_token: current.refresh_token
       });
       if (!response.ok) {
-        clear();
+        if (expectedEpoch === sessionEpoch && load()?.refresh_token === current.refresh_token) clear();
         throw apiError(response.status, "Auth refresh");
       }
       const payload = await response.json();
+      if (expectedEpoch !== sessionEpoch || load()?.refresh_token !== current.refresh_token) return null;
       return save(payload);
     })().finally(() => {
       refreshPromise = null;
@@ -201,10 +263,18 @@ export function createClient(baseUrl, publishableKey) {
       },
 
       async signInWithPassword({ email, password }) {
+        const attempt = ++passwordSignInAttempt;
+        const expectedEpoch = sessionEpoch;
         try {
           const response = await authRequest("token?grant_type=password", { email, password });
           if (!response.ok) return { data: { session: null }, error: apiError(response.status, "Auth") };
           const payload = await response.json();
+          // A prior HTTP response must never overwrite a more recent login.
+          // This check and save() are synchronous: no async interleaving is
+          // possible between the check and the localStorage write.
+          if (attempt !== passwordSignInAttempt || expectedEpoch !== sessionEpoch) {
+            throw new Error("Auth state changed");
+          }
           const session = save(payload);
           return { data: { session, user: session.user }, error: null };
         } catch (error) {
@@ -213,13 +283,22 @@ export function createClient(baseUrl, publishableKey) {
       },
 
       async signOut() {
-        const current = load();
+        // Inspect storage independently of the revocation tombstone, and retain
+        // the difference between "no token" and "cannot read a token".
+        const previous = inspectStoredSession();
+        const localCleared = clear();
+        let remoteConfirmed = previous.knownAbsent;
         try {
-          if (current?.access_token) await authRequest("logout", undefined, current.access_token);
-        } finally {
-          clear();
-        }
-        return { error: null };
+          if (previous.session?.access_token) {
+            const response = await authRequest("logout", undefined, previous.session.access_token);
+            remoteConfirmed = response.ok;
+          }
+        } catch { remoteConfirmed = false; }
+        return {
+          error: localCleared && remoteConfirmed
+            ? null
+            : new Error("Local storage or server logout not confirmed")
+        };
       }
     },
 

@@ -75,6 +75,12 @@ const tableCell = (html, filterValue = "") => ({
 
 const normalizeFilter = (value) => String(value ?? "").trim().toLocaleLowerCase("ru");
 const recordTagFilters = new Set();
+let uiGeneration = 0;
+
+// Binding both authentication and asynchronous rendering to a session generation.
+function isActiveUiGeneration(generation) {
+  return generation === uiGeneration && !app.classList.contains("hidden");
+}
 
 const uniqueValues = (values) =>
   [...new Set((values || []).map(x => String(x ?? "").trim()).filter(Boolean))]
@@ -435,18 +441,24 @@ async function assertReader(userId) {
   return Boolean(data?.user_id);
 }
 
-async function enterApp(session) {
+async function enterApp(session, generation) {
+  if (generation !== uiGeneration) return;
   const allowed = await assertReader(session.user.id);
+  // An old authorization must not revive the view after logout or a new login.
+  if (generation !== uiGeneration) return;
   if (!allowed) {
     await supabase.auth.signOut();
+    if (generation !== uiGeneration) return;
     throw new Error("Этот аккаунт не разрешён для HEALTH.");
   }
   showOnly(app);
-  await route();
+  await route(generation);
 }
 
 async function boot() {
+  const generation = uiGeneration;
   const { data, error } = await supabase.auth.getSession();
+  if (generation !== uiGeneration) return;
   if (error) {
     showOnly(login);
     loginError.textContent = error.message;
@@ -458,8 +470,9 @@ async function boot() {
   }
 
   try {
-    await enterApp(data.session);
+    await enterApp(data.session, generation);
   } catch (error) {
+    if (generation !== uiGeneration) return;
     showOnly(login);
     loginError.textContent = error.message || "Не удалось проверить доступ.";
   }
@@ -467,29 +480,65 @@ async function boot() {
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const generation = ++uiGeneration;
   loginError.textContent = "";
   const email = document.querySelector("#email").value.trim();
   const password = document.querySelector("#password").value;
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (generation !== uiGeneration) return;
   if (error) {
     loginError.textContent = "Не удалось войти.";
     return;
   }
 
   try {
-    await enterApp(data.session);
+    await enterApp(data.session, generation);
   } catch (err) {
+    if (generation !== uiGeneration) return;
     loginError.textContent = err.message || "Доступ запрещён.";
     showOnly(login);
   }
 });
 
-logoutButton.addEventListener("click", async () => {
-  clearPinnedHeaders();
-  await supabase.auth.signOut();
-  location.hash = "#/";
+function clearMedicalUi() {
+  uiGeneration += 1;
   showOnly(login);
+  view.replaceChildren();
+  recordTagFilters.clear();
+  clearPinnedHeaders();
+  const password = document.querySelector("#password");
+  if (password) password.value = "";
+  loginError.textContent = "";
+  location.hash = "#/";
+}
+
+logoutButton.addEventListener("click", async () => {
+  // Wipe the medical screen before any potentially stalled network request.
+  clearMedicalUi();
+  const generation = uiGeneration;
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error && generation === uiGeneration) {
+      loginError.textContent = "Выход выполнен в этой вкладке. Серверный выход или очистка хранилища не подтверждены.";
+    }
+  } catch {
+    if (generation === uiGeneration) {
+      loginError.textContent = "Выход выполнен в этой вкладке. Серверный выход или очистка хранилища не подтверждены.";
+    }
+  }
+});
+
+// Any cross-tab change of the shared Auth session invalidates the visible
+// medical view, including a replacement with a different *nonempty* token.
+// This hides the UI without pretending that the replacement is a logout.
+// Same-user refreshes may require re-entry: deliberate fail-closed tradeoff.
+window.addEventListener("storage", (event) => {
+  if (event.key !== "health.session.v1" || event.newValue === event.oldValue) return;
+  clearMedicalUi();
+  if (event.newValue) {
+    loginError.textContent = "Сессия изменилась в другой вкладке. Подтвердите вход повторно.";
+  }
 });
 
 const mobileMenu = document.querySelector("#primary-nav");
@@ -513,7 +562,8 @@ window.addEventListener("hashchange", () => {
   if (!app.classList.contains("hidden")) route();
 });
 
-async function route() {
+async function route(generation = ++uiGeneration) {
+  if (!isActiveUiGeneration(generation)) return;
   clearPinnedHeaders();
   const raw = location.hash.startsWith("#/") ? location.hash.slice(2) : location.hash.replace(/^#/, "");
   const [pathPart, queryString = ""] = raw.split("?");
@@ -523,26 +573,28 @@ async function route() {
 
   try {
     if (parts.length === 0) {
-      await renderCurrentState();
+      await renderCurrentState("all", generation);
     } else if (["chronic", "open-cases", "medications", "visit-preparation", "future-plan"].includes(parts[0])) {
-      await renderCurrentState(parts[0]);
+      await renderCurrentState(parts[0], generation);
     } else if (parts[0] === "vaccination") {
-      await renderVaccination();
+      await renderVaccination(generation);
     } else if (parts[0] === "closed-cases") {
-      await renderClosedCases();
+      await renderClosedCases(generation);
     } else if (parts[0] === "cases" && parts[1]) {
-      await renderCase(decodeURIComponent(parts[1]));
+      await renderCase(decodeURIComponent(parts[1]), generation);
     } else if (parts[0] === "records" && parts.length === 1) {
-      await renderRecords({ initialTags: params.getAll("tag") });
+      await renderRecords({ initialTags: params.getAll("tag") }, generation);
     } else if (parts[0] === "records" && parts[1]) {
-      await renderRecord(decodeURIComponent(parts[1]));
+      await renderRecord(decodeURIComponent(parts[1]), generation);
     } else {
       view.innerHTML = "<h1>Не найдено</h1>";
     }
   } catch (error) {
+    if (!isActiveUiGeneration(generation)) return;
     console.error(error);
     view.innerHTML = '<h1>Ошибка</h1><p class="error">Не удалось загрузить данные.</p>';
   }
+  if (!isActiveUiGeneration(generation)) return;
   setupStickyChrome();
 }
 
@@ -913,7 +965,7 @@ function vaccinationRows(items, section) {
   });
 }
 
-async function renderVaccination() {
+async function renderVaccination(generation) {
   const [records, plan] = await Promise.all([
     supabase.from("records")
       .select("record_id,record_date,title,summary,body_text,status,tags,metadata")
@@ -928,6 +980,7 @@ async function renderVaccination() {
   const vaccine = buildVaccinationView(records.data || [], plan.data || []);
   const headers = ["Инфекция(и)","Этап","Дата","Вакцина","Контроль","REC"];
   const statuses = uniqueValues(vaccine.history.map(item => item.sourceStatus));
+  if (!isActiveUiGeneration(generation)) return;
   view.innerHTML = [
     '<h1>Вакцинация</h1>',
     '<section><h2>Последние проведённые вакцинации</h2>',
@@ -949,7 +1002,7 @@ async function renderVaccination() {
   bindAttributeFilters("vaccination-history", [{id:"vaccination-history-status",attr:"status"}]);
 }
 
-async function renderCurrentState(mode = "all") {
+async function renderCurrentState(mode = "all", generation) {
   const [cases, meds, plan, questions] = await Promise.all([
     supabase.from("cases").select("case_key,title,summary,status,category,opening_record_id,closing_record_id,metadata").eq("status","open").order("title"),
     supabase.from("medications").select("medication_id,name,dose,schedule,status,basis_record_id,metadata").eq("status","active").order("name"),
@@ -1042,6 +1095,7 @@ async function renderCurrentState(mode = "all") {
     ? ["medical-card", "chronic", "open-cases", "medications", "visit-preparation", "future-plan"]
       .map(name => sections[name]).join("\n")
     : sections[mode] || empty();
+  if (!isActiveUiGeneration(generation)) return;
   view.innerHTML = `
     <h1>${esc(sectionNames[mode] || "Текущее состояние")}</h1>
     ${content}
@@ -1053,7 +1107,7 @@ async function renderCurrentState(mode = "all") {
   ]);
 }
 
-async function renderClosedCases() {
+async function renderClosedCases(generation) {
   const { data, error } = await supabase
     .from("cases")
     .select("case_key,title,summary,status,category,opening_record_id,closing_record_id,metadata")
@@ -1069,6 +1123,7 @@ async function renderClosedCases() {
     return bd.localeCompare(ad);
   });
 
+  if (!isActiveUiGeneration(generation)) return;
   view.innerHTML = `
     <h1>Закрытые случаи</h1>
     <section class="case-stack" id="closed-case-list">
@@ -1077,7 +1132,7 @@ async function renderClosedCases() {
   `;
 }
 
-async function renderCase(caseKey) {
+async function renderCase(caseKey, generation) {
   const { data, error } = await supabase
     .from("cases")
     .select("case_key,title,summary,status,category,opening_record_id,closing_record_id,metadata")
@@ -1101,6 +1156,7 @@ async function renderCase(caseKey) {
     ];
   });
 
+  if (!isActiveUiGeneration(generation)) return;
   view.innerHTML = `
     <p><a href="${backHref}">← ${esc(backLabel)}</a></p>
     <h1>${esc(item.title)}</h1>
@@ -1122,7 +1178,7 @@ async function renderCase(caseKey) {
   bindFilterableTables();
 }
 
-async function renderRecords({ initialTags = [] } = {}) {
+async function renderRecords({ initialTags = [] } = {}, generation) {
   const [{ data: records, error: recordsError }, { data: links, error: linksError }, { data: cases, error: casesError }] = await Promise.all([
     supabase
       .from("records")
@@ -1187,6 +1243,7 @@ async function renderRecords({ initialTags = [] } = {}) {
     };
   });
 
+  if (!isActiveUiGeneration(generation)) return;
   view.innerHTML = `
     <h1>Записи</h1>
     <div class="filter-bar" data-sticky-filter aria-label="Фильтр записей">
@@ -1362,7 +1419,7 @@ function renderRecordBody(text) {
   return blocks.join("\n");
 }
 
-async function renderRecord(recordId) {
+async function renderRecord(recordId, generation) {
   const [{ data: record, error: recordError }, { data: sourceLinks, error: sourceLinksError }, { data: caseLinks, error: caseLinksError }] = await Promise.all([
     supabase.from("records").select("*").eq("record_id", recordId).single(),
     supabase.from("record_sources").select("source_id,role,source_pages").eq("record_id", recordId),
@@ -1402,11 +1459,13 @@ async function renderRecord(recordId) {
   }
 
   const medicationHistory = await medicationHistorySection(recordId);
+  if (!isActiveUiGeneration(generation)) return;
   inlineTableSequence = 0;
   const title = recordDisplayTitle(record);
   const body = renderRecordBody(record.body_text);
   const tags = (record.tags || []).map(recordTagLink).join("");
 
+  if (!isActiveUiGeneration(generation)) return;
   view.innerHTML = `
     <p><a href="#/records">← Записи</a></p>
     <h1>${esc(title)}</h1>

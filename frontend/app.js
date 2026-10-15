@@ -1,6 +1,6 @@
 import { createClient } from "./supabase-client.js";
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config.js";
-import { buildVaccinationView } from "./vaccination.mjs";
+import { buildVaccinationView, neutralPlanSourceStatus } from "./vaccination.mjs";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
@@ -95,13 +95,26 @@ function strictCalendarDate(x) {
   return t.getUTCFullYear()===y&&t.getUTCMonth()===m-1&&t.getUTCDate()===d?x:null;
 }
 function uncertainDate(meta) {
-  if(!meta||typeof meta!=="object"||Array.isArray(meta))return false;
-  const status=meta.source_status;
-  if(typeof status==="string"&&status.trim()&&
-    !["planned","запланировано"].includes(status.trim().toLocaleLowerCase("ru")))return true;
-  return !!((typeof meta.due_text==="string"&&meta.due_text.trim())||
-    meta.historical===true||meta.date_kind!=null&&meta.date_kind!==""||
-    meta.deadline_condition!=null&&meta.deadline_condition!==""&&meta.deadline_condition!==false);
+  // Fail closed for unknown types in fields that qualify a clinical date.
+  // Only an absent/empty qualifier is safe to ignore; no metadata value is
+  // interpreted as independent proof of an unconditional medical obligation.
+  if (meta == null) return false;
+  if (typeof meta !== "object" || Array.isArray(meta)) return true;
+  const status = meta.source_status;
+  if (status != null) {
+    if (typeof status !== "string") return true;
+    const normalized = status.trim().toLocaleLowerCase("ru");
+    if (normalized && !["planned", "запланировано"].includes(normalized)) return true;
+  }
+  const dueText = meta.due_text;
+  if (dueText != null) {
+    if (typeof dueText !== "string" || dueText.trim()) return true;
+  }
+  if (meta.historical != null && meta.historical !== false) return true;
+  if (meta.date_kind != null && meta.date_kind !== "") return true;
+  if (meta.deadline_condition != null && meta.deadline_condition !== "" &&
+      meta.deadline_condition !== false) return true;
+  return false;
 }
 function projectNeutralDates(rows,now=new Date()) {
   if(!Array.isArray(rows))throw new TypeError("Expected plan rows");
@@ -1147,8 +1160,7 @@ async function renderCurrentState(mode = "all", generation) {
   const planRows = (plan.data || []).map(x => {
     const due = x.metadata?.due_text || fmtDate(x.due_on) || "";
     const kind = x.metadata?.kind || "";
-    const rawStatus = x.metadata?.source_status || "запланировано";
-    const status = /^(?:просрочено|overdue)$/iu.test(String(rawStatus).trim()) ? "Статус требует уточнения" : rawStatus;
+    const status = neutralPlanSourceStatus(x.metadata?.source_status, "запланировано");
     const note = neutral.stateById.get(x.plan_item_id)==="PAST_DATE_REVIEW"?neutralDateNote():"";
     return {
       attrs: { "data-kind": kind, "data-status": status },
@@ -1162,10 +1174,8 @@ async function renderCurrentState(mode = "all", generation) {
     };
   });
   const planKinds = uniqueValues((plan.data || []).map(x => x.metadata?.kind || ""));
-  const planStatuses = uniqueValues((plan.data || []).map(x => {
-    const status = x.metadata?.source_status || "запланировано";
-    return /^(?:просрочено|overdue)$/iu.test(String(status).trim()) ? "Статус требует уточнения" : status;
-  }));
+  const planStatuses = uniqueValues((plan.data || []).map(x =>
+    neutralPlanSourceStatus(x.metadata?.source_status, "запланировано")));
 
 
   const sections = {

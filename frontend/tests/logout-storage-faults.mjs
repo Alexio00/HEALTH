@@ -23,6 +23,9 @@ function harness(faults = {}) {
     },
     setItem(key, value) {
       if (faults.blank && value === "") throw Error("synthetic blank storage fault");
+      if (faults.sessionWrite && value.includes("synthetic_access")) {
+        throw Error("synthetic full session write fault");
+      }
       local.set(key, value);
     },
     removeItem(key) {
@@ -115,4 +118,18 @@ function harness(faults = {}) {
   assert.equal(h.session.has(MARKER), false);
   assert.ok((await api.auth.getSession()).data.session, "login state must be usable");
 }
-console.log("HEALTH #58 F-02 storage fault regression: 6/6 PASS");
+{
+  const h = harness({ remove: true, blank: true });
+  const api = h.make();
+  await api.auth.signInWithPassword({ email: "synthetic@example.invalid", password: "x" });
+  const logout = await api.auth.signOut();
+  assert.ok(logout.error, "both local writes failed");
+  assert.equal(h.session.get(MARKER), "1", "tombstone was installed");
+  h.faults.sessionWrite = true;
+  const failed = await api.auth.signInWithPassword({ email: "synthetic@example.invalid", password: "x" });
+  assert.ok(failed.error, "new session write was rejected");
+  assert.equal(h.session.get(MARKER), "1", "failed save cannot erase tombstone for old token");
+  assert.equal((await h.make().auth.getSession()).data.session, null,
+    "a simulated reload must not resurrect the old stored token");
+}
+console.log("HEALTH #58 F-02 storage fault regression: 7/7 PASS");

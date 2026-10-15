@@ -58,17 +58,19 @@ export function createClient(baseUrl, publishableKey) {
       expires_at: payload.expires_at || Math.floor(Date.now() / 1000) + Number(payload.expires_in || 3600),
       user: payload.user
     };
-    // Clear and confirm the old tombstone BEFORE publishing new credentials.
-    // An unsuccessful marker removal must not masquerade as a successful login.
+    // Commit the new session first. If persistence fails, do NOT clear the
+    // previous revocation marker: it may be protecting an older stored token.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
     try {
       sessionStorage.removeItem(REVOKED_KEY);
       if (sessionStorage.getItem(REVOKED_KEY) === "1") {
         throw new Error("Auth state not cleared");
       }
     } catch {
+      // Never report a successful login with a still-active tombstone.
+      clear();
       throw new Error("Unable to establish local auth session");
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
     locallyRevoked = false;
     return session;
   };

@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../app.js"), "utf8");
+const authSource = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../supabase-client.js"), "utf8");
 function sourceSlice(start, end) {
   const i = src.indexOf(start);
   const j = src.indexOf(end, i + start.length);
@@ -126,4 +127,95 @@ function createRuntime(assertReader = async () => true) {
   assert.equal(h.app.hidden, true);
   assert.equal(h.view.innerHTML, "");
 }
-console.log("HEALTH #58 F-01 adversarial auth/UI generation: 3/3 PASS");
+
+// AUTH-01: real loginForm handler + real enterApp + real Auth client. The
+// renderer below is synthetic; prior tests independently execute real route().
+function passwordLoginFixture() {
+  const store = new Map(), tombstones = new Map(), replies = new Map();
+  const localStorage = {
+    getItem: k => store.get(k) ?? null,
+    setItem: (k, v) => store.set(k, v),
+    removeItem: k => store.delete(k)
+  };
+  const sessionStorage = {
+    getItem: k => tombstones.get(k) ?? null,
+    setItem: (k, v) => tombstones.set(k, v),
+    removeItem: k => tombstones.delete(k)
+  };
+  const fetch = (url, args) => {
+    assert.ok(url.includes("grant_type=password"), "no external fetch");
+    const email = JSON.parse(args.body).email;
+    const promise = deferred();
+    replies.set(email, promise);
+    return promise.promise;
+  };
+  const authFactory = new Function("localStorage", "sessionStorage", "window", "fetch",
+    authSource.replace("export function createClient(", "function createClient(") +
+    "\nreturn createClient;");
+  const client = authFactory(localStorage, sessionStorage, { addEventListener() {} }, fetch)(
+    "https://synthetic.invalid", "synthetic-key");
+  let currentEmail = "", medicalDom = "", readerId = "", loginHandler;
+  const loginForm = { addEventListener: (type, fn) => { if (type === "submit") loginHandler = fn; } };
+  const app = {};
+  const ui = new Function("loginForm","document","loginError","supabase",
+    "assertReader","showOnly","app","route",
+    "let uiGeneration = 0;\n" +
+    sourceSlice("async function enterApp(session, generation) {", "\nasync function boot()") +
+    sourceSlice('loginForm.addEventListener("submit", async (event) => {', "\nfunction clearMedicalUi()")
+  );
+  ui(loginForm, {
+    querySelector: selector => selector === "#email" ? { value: currentEmail } :
+      selector === "#password" ? { value: "synthetic-pass" } : null
+  }, { textContent: "" }, client,
+    async user => { readerId = user; return true; },
+    () => {}, app, async () => { medicalDom = "MEDICAL_DOM_" + readerId; });
+  function respond(email, id) {
+    const pending = replies.get(email);
+    assert.ok(pending, "missing deferred Auth response " + email);
+    pending.resolve({
+      ok: true, status: 200,
+      json: async () => ({
+        access_token: "synthetic_access_" + id,
+        refresh_token: "synthetic_refresh_" + id,
+        expires_in: 3600,
+        user: { id }
+      })
+    });
+  }
+  return {
+    client, store, replies, respond,
+    submit(email) {
+      currentEmail = email;
+      return loginHandler({ preventDefault() {} });
+    },
+    get medicalDom() { return medicalDom; }
+  };
+}
+async function assertNewerLoginWins(order) {
+  const h = passwordLoginFixture();
+  const pendingA = h.submit("email_A");
+  const pendingB = h.submit("email_B");
+  assert.ok(h.replies.has("email_A") && h.replies.has("email_B"));
+  if (order === "A-first") {
+    h.respond("email_A", "user_A");
+    await pendingA;
+    assert.equal(h.store.has("health.session.v1"), false,
+      "stale early response must not persist older login");
+  }
+  h.respond("email_B", "user_B");
+  await pendingB;
+  assert.equal(h.medicalDom, "MEDICAL_DOM_user_B");
+  assert.equal(JSON.parse(h.store.get("health.session.v1")).user.id, "user_B");
+  if (order === "B-first") {
+    h.respond("email_A", "user_A");
+    await pendingA;
+  }
+  assert.equal(h.medicalDom, "MEDICAL_DOM_user_B");
+  assert.equal(JSON.parse(h.store.get("health.session.v1")).user.id, "user_B",
+    "late password response must not overwrite newer user's token");
+  assert.equal((await h.client.auth.getSession()).data.session.user.id, "user_B");
+}
+await assertNewerLoginWins("B-first");
+await assertNewerLoginWins("A-first");
+
+console.log("HEALTH #58 F-01 / AUTH-01 adversarial generation: 5/5 PASS");

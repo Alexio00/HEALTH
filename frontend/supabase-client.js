@@ -8,6 +8,9 @@ function apiError(status, area) {
 export function createClient(baseUrl, publishableKey) {
   let refreshPromise = null;
   let sessionEpoch = 0;
+  // Password requests can overlap without changing the storage epoch.
+  // Only the latest *started* attempt may commit credentials.
+  let passwordSignInAttempt = 0;
   let locallyRevoked = false;
   const markRevoked = () => {
     locallyRevoked = true;
@@ -260,12 +263,18 @@ export function createClient(baseUrl, publishableKey) {
       },
 
       async signInWithPassword({ email, password }) {
+        const attempt = ++passwordSignInAttempt;
         const expectedEpoch = sessionEpoch;
         try {
           const response = await authRequest("token?grant_type=password", { email, password });
           if (!response.ok) return { data: { session: null }, error: apiError(response.status, "Auth") };
           const payload = await response.json();
-          if (expectedEpoch !== sessionEpoch) throw new Error("Auth state changed");
+          // A prior HTTP response must never overwrite a more recent login.
+          // This check and save() are synchronous: no async interleaving is
+          // possible between the check and the localStorage write.
+          if (attempt !== passwordSignInAttempt || expectedEpoch !== sessionEpoch) {
+            throw new Error("Auth state changed");
+          }
           const session = save(payload);
           return { data: { session, user: session.user }, error: null };
         } catch (error) {

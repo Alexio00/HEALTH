@@ -774,7 +774,9 @@ logoutButton.addEventListener("click", async () => {
 // This hides the UI without pretending that the replacement is a logout.
 // Same-user refreshes may require re-entry: deliberate fail-closed tradeoff.
 window.addEventListener("storage", (event) => {
-  if (event.key !== "health.session.v1" || event.newValue === event.oldValue) return;
+  if (event.storageArea && event.storageArea !== localStorage) return;
+  if (!(event.key === null && event.storageArea === localStorage) &&
+      (event.key !== "health.session.v1" || event.newValue === event.oldValue)) return;
   // Cross-tab UI and auth generation are already invalidated by the existing guards.
   clearMedicalUi();
   if (event.newValue) {

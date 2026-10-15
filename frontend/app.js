@@ -1147,7 +1147,8 @@ async function renderCurrentState(mode = "all", generation) {
   const planRows = (plan.data || []).map(x => {
     const due = x.metadata?.due_text || fmtDate(x.due_on) || "";
     const kind = x.metadata?.kind || "";
-    const status = x.metadata?.source_status || "запланировано";
+    const rawStatus = x.metadata?.source_status || "запланировано";
+    const status = /^просрочено$/iu.test(String(rawStatus).trim()) ? "Статус требует уточнения" : rawStatus;
     const note = neutral.stateById.get(x.plan_item_id)==="PAST_DATE_REVIEW"?neutralDateNote():"";
     return {
       attrs: { "data-kind": kind, "data-status": status },
@@ -1161,7 +1162,10 @@ async function renderCurrentState(mode = "all", generation) {
     };
   });
   const planKinds = uniqueValues((plan.data || []).map(x => x.metadata?.kind || ""));
-  const planStatuses = uniqueValues((plan.data || []).map(x => x.metadata?.source_status || "запланировано"));
+  const planStatuses = uniqueValues((plan.data || []).map(x => {
+    const status = x.metadata?.source_status || "запланировано";
+    return /^просрочено$/iu.test(String(status).trim()) ? "Статус требует уточнения" : status;
+  }));
 
 
   const sections = {

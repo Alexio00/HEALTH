@@ -1,4 +1,6 @@
 // HEALTH #58 synthetic logout regression. No real Supabase access or medical data.
+import "./logout-auth-races.mjs";
+import "./logout-storage-faults.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

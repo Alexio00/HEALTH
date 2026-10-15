@@ -70,6 +70,9 @@ const recoveryNetwork = () => async (url) => {
 for (const invalid of [
   "", "#/records/SYNTHETIC", "#type=recovery", "#access_token=synthetic&token_type=bearer&type=magiclink",
   fragment("&untrusted=1"), fragment("&type=recovery"),
+  fragment("&sb=payload"), fragment("&sb=%20"), fragment("&sb=%00"),
+  fragment("&sb=&sb="), fragment("&sb=&untrusted=1"),
+  "#error=access_denied&error_code=otp_expired&sb=",
   fragment().replace("token_type=bearer", "token_type=mac"),
   fragment().replace("refresh_token=synthetic-recovery-refresh&", ""),
   fragment().replace("expires_in=3600", "expires_in=0"),
@@ -82,6 +85,28 @@ for (const invalid of [
   assert(result.error, "malformed fragment denied");
   assert.equal(h.ls.has(STORAGE), false, "old reader session cleared");
   assert.equal(h.calls.length, 0, "no server request for malformed fragment");
+}
+// Supabase GoTrue may append the EMPTY sb= flag to an otherwise-valid recovery callback.
+// This is a real parser + /user + password-update regression, not a string-only assertion.
+// It protects the incident found in production after PR #103.
+{
+  const h = harness();
+  h.setNetwork(recoveryNetwork());
+  assert.equal((await h.client.auth.beginPasswordRecovery(fragment("&sb="))).error, null,
+    "verified GoTrue recovery callback with empty sb flag must be accepted");
+  assert.deepEqual(h.calls.map(x => [x.method, new URL(x.url).pathname]), [
+    ["GET", "/auth/v1/user"]
+  ], "client must validate the real recovery bearer with GET /user");
+  assert.equal(h.ls.has(STORAGE), false, "recovery bearer must not persist as reader session");
+  assert.equal((await h.client.auth.getSession()).data.session, null,
+    "recovery must not become ordinary reader authorization");
+  const updated = await h.client.auth.finishPasswordRecovery("synthetic-long-password");
+  assert.equal(updated.error, null);
+  assert.equal(updated.updated, true);
+  assert.deepEqual(h.calls.map(x => [x.method, new URL(x.url).pathname]), [
+    ["GET", "/auth/v1/user"], ["PUT", "/auth/v1/user"], ["POST", "/auth/v1/logout"]
+  ]);
+  assert.equal(h.ls.has(STORAGE), false, "reader token remains absent after password update");
 }
 {
   const h = harness();

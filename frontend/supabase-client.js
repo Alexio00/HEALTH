@@ -232,6 +232,7 @@ export function createClient(baseUrl, publishableKey) {
   }
 
   async function refreshSession() {
+    if (recoveryMode) return null;
     if (refreshPromise) return refreshPromise;
     refreshPromise = (async () => {
       const current = load();
@@ -254,6 +255,7 @@ export function createClient(baseUrl, publishableKey) {
   }
 
   async function ensureSession() {
+    if (recoveryMode) return null;
     const current = load();
     if (!current?.access_token) return null;
     const now = Math.floor(Date.now() / 1000);
@@ -264,6 +266,7 @@ export function createClient(baseUrl, publishableKey) {
   }
 
   async function restRequest(table, params, retry = true) {
+    if (recoveryMode) return { response: null, error: new Error("Auth recovery in progress") };
     const session = await ensureSession();
     if (!session?.access_token) return { response: null, error: new Error("Authentication required") };
 
@@ -284,6 +287,7 @@ export function createClient(baseUrl, publishableKey) {
       await refreshSession();
       return restRequest(table, params, false);
     }
+    if (recoveryMode) return { response: null, error: new Error("Auth recovery in progress") };
     if (!response.ok) return { response, error: apiError(response.status, "Database") };
     return { response, error: null };
   }
@@ -380,6 +384,7 @@ export function createClient(baseUrl, publishableKey) {
       finishPasswordRecovery,
       cancelPasswordRecovery,
       async getSession() {
+        if (recoveryMode) return { data: { session: null }, error: new Error("Auth recovery in progress") };
         try {
           const session = await ensureSession();
           return { data: { session }, error: null };
@@ -389,6 +394,8 @@ export function createClient(baseUrl, publishableKey) {
       },
 
       async signInWithPassword({ email, password }) {
+        if (recoveryMode)
+          return { data: { session: null }, error: new Error("Auth recovery in progress") };
         const attempt = ++passwordSignInAttempt;
         const expectedEpoch = sessionEpoch;
         try {
@@ -398,7 +405,7 @@ export function createClient(baseUrl, publishableKey) {
           // A prior HTTP response must never overwrite a more recent login.
           // This check and save() are synchronous: no async interleaving is
           // possible between the check and the localStorage write.
-          if (attempt !== passwordSignInAttempt || expectedEpoch !== sessionEpoch) {
+          if (recoveryMode || attempt !== passwordSignInAttempt || expectedEpoch !== sessionEpoch) {
             throw new Error("Auth state changed");
           }
           const session = save(payload);

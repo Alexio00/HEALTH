@@ -80,6 +80,11 @@ h3 { margin: 1.4rem 0 .6rem; }
 .nowrap { white-space: nowrap; }
 .summary-cell { min-width: 22rem; }
 .status-line { margin: .6rem 0 1.2rem; }
+/* Calendar review has neutral presentation, never clinical urgency styling. */
+.neutral-date-note { display: block; margin-top: .3rem; color: #555; font-size: .88rem; }
+.neutral-date-question { margin: .75rem 0; padding: .65rem .8rem; border-left: 3px solid #888; background: #f0f0f0; }
+.neutral-date-question p { margin: .2rem 0; }
+
 
 .cards { list-style: none; padding: 0; display: grid; gap: .8rem; }
 .cards li {

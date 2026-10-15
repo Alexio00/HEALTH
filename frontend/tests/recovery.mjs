@@ -1,5 +1,6 @@
 // Issue #102: execute the real shipped client and UI handlers with synthetic fetch/DOM.
 // No live Supabase, medical SELECT, email delivery, or production credentials.
+import "./recovery-sw.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -56,7 +57,7 @@ const recoveryNetwork = () => async (url) => {
   assert.equal(h.calls[0].cache, "no-store");
   const u = new URL(h.calls[0].url);
   assert.equal(u.pathname, "/auth/v1/recover");
-  assert.equal(u.searchParams.get("redirect_to"), "https://alexio00.github.io/HEALTH/");
+  assert.equal(u.searchParams.get("redirect_to"), "https://alexio00.github.io/HEALTH/recovery.html");
   assert.deepEqual(h.calls[0].body, { email: "owner@example.invalid" });
   assert.equal(h.calls[0].auth, undefined);
   assert((await h.client.auth.requestPasswordRecovery("bad")).error);
@@ -190,6 +191,44 @@ for (const status of [400,401,422,500]) {
   const result = await h.client.auth.beginPasswordRecovery(fragment());
   assert(result.error && !result.error.message.includes("TOKEN_SYNTHETIC_SECRET"),
     "network error never exposes credentials");
+}
+
+// Recovery is an exclusive mode, including a pending GET /user.
+{
+  const h = harness();
+  const pending = held();
+  h.setNetwork(async (url,opts) => url.endsWith("/user") && opts.method === "GET"
+    ? pending.promise : response(200,{access_token:"unexpected",refresh_token:"unexpected",user:VALID_USER}));
+  const entering = h.client.auth.beginPasswordRecovery(fragment());
+  const overlapping = await h.client.auth.signInWithPassword({email:"owner@example.invalid",password:"synthetic"});
+  assert(overlapping.error,"ordinary password login rejected during pending recovery");
+  assert.equal((await h.client.auth.getSession()).data.session,null,
+    "reader session unavailable during recovery");
+  assert((await h.client.from("records").select("*")).error,
+    "medical REST denied during recovery");
+  assert(!h.calls.some(call=>call.url.includes("grant_type=password") || call.url.includes("/rest/v1/")),
+    "no login or medical network traffic while recovery pending");
+  pending.resolve(response(200,VALID_USER));
+  assert.equal((await entering).error,null,"valid callback may finish");
+  assert((await h.client.auth.signInWithPassword({email:"owner@example.invalid",password:"synthetic"})).error,
+    "ordinary password login denied after verification, before password update");
+  await h.client.auth.cancelPasswordRecovery();
+  assert.equal((await h.client.auth.signInWithPassword({email:"owner@example.invalid",password:"synthetic"})).error,null,
+    "ordinary password login enabled after explicit cancel");
+}
+{
+  const h=harness();
+  const pending=held();
+  h.setNetwork(async (url,opts)=>url.includes("grant_type=password")?pending.promise:
+    url.endsWith("/user")&&opts.method==="GET"?response(200,VALID_USER):response());
+  const login=h.client.auth.signInWithPassword({email:"owner@example.invalid",password:"synthetic"});
+  await Promise.resolve();
+  assert.equal((await h.client.auth.beginPasswordRecovery(fragment())).error,null);
+  pending.resolve(response(200,{access_token:"late",refresh_token:"late",user:VALID_USER}));
+  assert((await login).error,"old password login cannot commit after recovery start");
+  assert.equal(h.ls.has(STORAGE),false);
+  assert((await h.client.auth.getSession()).error,"reader session still locked");
+  await h.client.auth.cancelPasswordRecovery();
 }
 
 // Execute shipped UI event handlers, not a second test-only implementation.

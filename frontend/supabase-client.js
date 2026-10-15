@@ -129,12 +129,15 @@ export function createClient(baseUrl, publishableKey) {
     if (typeof fragment !== "string" || !fragment.startsWith("#") ||
         fragment.length > 8192 || fragment.startsWith("#/")) throw recoveryError();
     const values = new URLSearchParams(fragment.slice(1));
-    const allowed = new Set(["access_token", "refresh_token", "expires_at", "expires_in", "token_type", "type"]);
+    // Supabase GoTrue can append the empty `sb=` flag after verifying a recovery OTP.
+    // Accept only that exact empty value; other unrecognized or duplicate keys fail closed.
+    const allowed = new Set(["access_token", "refresh_token", "expires_at", "expires_in", "token_type", "type", "sb"]);
     const seen = new Set();
     for (const [key] of values) {
       if (!allowed.has(key) || seen.has(key)) throw recoveryError();
       seen.add(key);
     }
+    if (values.get("sb") !== null && values.get("sb") !== "") throw recoveryError();
     if (values.get("type") !== "recovery" || values.get("token_type")?.toLowerCase() !== "bearer" ||
         !values.get("access_token") || !values.get("refresh_token")) throw recoveryError();
     const expiry = values.get("expires_at");

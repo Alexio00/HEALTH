@@ -775,9 +775,8 @@ logoutButton.addEventListener("click", async () => {
 // Same-user refreshes may require re-entry: deliberate fail-closed tradeoff.
 window.addEventListener("storage", (event) => {
   if (event.key !== "health.session.v1" || event.newValue === event.oldValue) return;
-  const recovering = document.querySelector("#recovery-reset")?.classList?.contains?.("hidden") === false;
+  // Cross-tab UI and auth generation are already invalidated by the existing guards.
   clearMedicalUi();
-  if (recovering) void supabase.auth.cancelPasswordRecovery();
   if (event.newValue) {
     loginError.textContent = "Сессия изменилась в другой вкладке. Подтвердите вход повторно.";
   }

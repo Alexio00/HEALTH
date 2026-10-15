@@ -1,4 +1,5 @@
 // HEALTH #58 synthetic logout regression. No real Supabase access or medical data.
+import "./storage-clear.mjs";
 import "./recovery-entry.mjs";
 import "./recovery.mjs";
 import "./logout-auth-races.mjs";

@@ -267,6 +267,18 @@ function stageForPlan(item) {
   return "—";
 }
 
+// Read-only UI: source text asserting a clinical "overdue" verdict is not
+// verified proof. A single shared sanitizer prevents drift between the plan
+// table, its filters, and all vaccination views.
+export function neutralPlanSourceStatus(value, fallback = "Запланировано") {
+  if (value == null || value === "") return fallback;
+  if (typeof value !== "string") return "Статус требует уточнения";
+  const status = value.trim();
+  if (!status) return fallback;
+  return /(?:^|[^\p{L}])(?:просрочено|overdue)(?=$|[^\p{L}])/iu.test(status)
+    ? "Статус требует уточнения" : status;
+}
+
 export function plannedVaccinations(items, today = moscowToday()) {
   return (items || []).filter(x => normalizeKind(x.metadata?.kind) === "вакцинация")
     .map(x => {
@@ -274,7 +286,7 @@ export function plannedVaccinations(items, today = moscowToday()) {
       const due = dateKey(x.due_on);
       const status = String(x.status || "planned");
       // A calendar date alone does not prove an outstanding medical obligation.
-      const sourceStatus = String(x.metadata?.source_status || "");
+      const sourceStatus = neutralPlanSourceStatus(x.metadata?.source_status);
       return {
         kind:"plan", id:"plan:" + x.plan_item_id, keys:t?.keys || [],
         infection:t?.label || String(x.title || ""), stage:stageForPlan(x),
@@ -285,7 +297,7 @@ export function plannedVaccinations(items, today = moscowToday()) {
         basisRecordId:recId(x.basis_record_id), status,
         sourceStatus:status === "cancelled" ? "Отменено"
           : status === "done" ? "Выполнено"
-          : /^просрочено$/iu.test(sourceStatus.trim()) ? "Запланировано" : sourceStatus || "Запланировано",
+          : sourceStatus,
         overdue:false, title:String(x.title || "")
       };
     }).sort((a,b) => {

@@ -77,6 +77,103 @@ const normalizeFilter = (value) => String(value ?? "").trim().toLocaleLowerCase(
 const recordTagFilters = new Set();
 let uiGeneration = 0;
 
+// #40A: calendar-only neutral projection. This is NOT a medical overdue verdict.
+const NEUTRAL_DATE_TEXT = "Указанная дата прошла. Уточните выполнение или перенос";
+const MOSCOW_DATE = new Intl.DateTimeFormat("en-GB", {
+  timeZone:"Europe/Moscow",year:"numeric",month:"2-digit",day:"2-digit"
+});
+function moscowCalendarDay(now=new Date()) {
+  if(!(now instanceof Date)||!Number.isFinite(now.getTime()))throw new TypeError("Invalid clock");
+  const v=Object.fromEntries(MOSCOW_DATE.formatToParts(now).map(x=>[x.type,x.value]));
+  return v.year+"-"+v.month+"-"+v.day;
+}
+function strictCalendarDate(x) {
+  if(typeof x!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(x))return null;
+  const [y,m,d]=x.split("-").map(Number),t=new Date(0);
+  if(y<1||m<1||m>12||d<1||d>31)return null;
+  t.setUTCFullYear(y,m-1,d);t.setUTCHours(0,0,0,0);
+  return t.getUTCFullYear()===y&&t.getUTCMonth()===m-1&&t.getUTCDate()===d?x:null;
+}
+function uncertainDate(meta) {
+  if(!meta||typeof meta!=="object"||Array.isArray(meta))return false;
+  const status=meta.source_status;
+  if(typeof status==="string"&&status.trim()&&
+    !["planned","запланировано"].includes(status.trim().toLocaleLowerCase("ru")))return true;
+  return !!((typeof meta.due_text==="string"&&meta.due_text.trim())||
+    meta.historical===true||meta.date_kind!=null&&meta.date_kind!==""||
+    meta.deadline_condition!=null&&meta.deadline_condition!==""&&meta.deadline_condition!==false);
+}
+function projectNeutralDates(rows,now=new Date()) {
+  if(!Array.isArray(rows))throw new TypeError("Expected plan rows");
+  const today=moscowCalendarDay(now),groups=new Map();
+  for(const row of rows) {
+    if(!Number.isSafeInteger(row?.plan_item_id)||row.plan_item_id<=0)continue;
+    const bucket=groups.get(row.plan_item_id)||[];bucket.push(row);groups.set(row.plan_item_id,bucket);
+  }
+  const stateById=new Map(),questions=[];
+  for(const [id,bucket] of groups) {
+    const row=bucket[0];
+    let state="UNDETERMINED";
+    // Two different snapshots for the same ID must not create a review notice.
+    const valid=row&&typeof row.title==="string"&&typeof row.status==="string"&&
+      (row.metadata==null||typeof row.metadata==="object"&&!Array.isArray(row.metadata));
+    if(valid&&bucket.every(x=>JSON.stringify(x)===JSON.stringify(row))) {
+      if(["done","cancelled"].includes(row.status))state="INACTIVE";
+      else if(row.status==="planned"&&!uncertainDate(row.metadata)) {
+        const due=strictCalendarDate(row.due_on);
+        if(due)state=due<today?"PAST_DATE_REVIEW":due===today?"DATE_TODAY":"FUTURE_DATE";
+      }
+    }
+    stateById.set(id,state);
+    if(state==="PAST_DATE_REVIEW")questions.push({
+      key:"sys:date-review:plan:"+id,plan_item_id:id,question:NEUTRAL_DATE_TEXT
+    });
+  }
+  questions.sort((a,b)=>a.plan_item_id-b.plan_item_id);
+  return {stateById,questions,today};
+}
+function untilNextMoscowDate(now=new Date()) {
+  const today=moscowCalendarDay(now),start=now.getTime();
+  let lo=start,hi=start+48*3600*1000;
+  if(moscowCalendarDay(new Date(hi))===today)throw new Error("No date boundary");
+  while(hi-lo>1) {
+    const mid=lo+Math.floor((hi-lo)/2);
+    if(moscowCalendarDay(new Date(mid))===today)lo=mid;else hi=mid;
+  }
+  return hi-start;
+}
+function neutralDateNote() {
+  return '<span class="neutral-date-note">'+esc(NEUTRAL_DATE_TEXT)+'</span>';
+}
+function neutralSystemQuestion(q,row) {
+  return '<div class="neutral-date-question" data-system-question-key="'+esc(q.key)+'">'+
+    '<p><strong>'+esc(q.question)+'</strong></p><p class="muted">'+
+    esc(row?.title||"Пункт плана")+' · <a href="#/future-plan">Будущий план</a>'+
+    (row?.basis_record_id?' · '+recLink(row.basis_record_id):"")+'</p></div>';
+}
+let neutralMidnightTimer=null;
+function cancelNeutralMidnight() {
+  if(neutralMidnightTimer!==null)clearTimeout(neutralMidnightTimer);
+  neutralMidnightTimer=null;
+}
+function neutralRoute() {
+  const path=location.hash.replace(/^#\/?/,"").split(/[/?]/)[0];
+  return ["","future-plan","visit-preparation","vaccination"].includes(path);
+}
+function scheduleNeutralMidnight() {
+  cancelNeutralMidnight();
+  if(app.classList.contains("hidden")||!neutralRoute())return;
+  neutralMidnightTimer=setTimeout(()=>{
+    neutralMidnightTimer=null;
+    if(!app.classList.contains("hidden"))void route();
+  },untilNextMoscowDate()+10);
+}
+function refreshVisibleDeadlines() {
+  if(document.hidden||app.classList.contains("hidden")||!neutralRoute())return;
+  void route(); // route increments the UI generation before any async read.
+}
+
+
 // Binding both authentication and asynchronous rendering to a session generation.
 function isActiveUiGeneration(generation) {
   return generation === uiGeneration && !app.classList.contains("hidden");
@@ -502,6 +599,7 @@ loginForm.addEventListener("submit", async (event) => {
 });
 
 function clearMedicalUi() {
+  cancelNeutralMidnight();
   uiGeneration += 1;
   showOnly(login);
   view.replaceChildren();
@@ -561,6 +659,9 @@ window.addEventListener("hashchange", () => {
   closeMobileMenu();
   if (!app.classList.contains("hidden")) route();
 });
+window.addEventListener("focus", refreshVisibleDeadlines);
+window.addEventListener("pageshow", refreshVisibleDeadlines);
+document.addEventListener("visibilitychange", refreshVisibleDeadlines);
 
 async function route(generation = ++uiGeneration) {
   if (!isActiveUiGeneration(generation)) return;
@@ -596,6 +697,7 @@ async function route(generation = ++uiGeneration) {
   }
   if (!isActiveUiGeneration(generation)) return;
   setupStickyChrome();
+  scheduleNeutralMidnight();
 }
 
 async function fetchCaseBundles(cases) {
@@ -915,18 +1017,18 @@ function vaccinationRecCell(item) {
   return links.length ? '<span class="rec-inline">' + links.join('') + '</span>' : '—';
 }
 
-function vaccinationControl(item, section) {
+function vaccinationControl(item, section, neutralById = new Map()) {
+  const note = p => p?.kind === "plan" && neutralById.get(Number(String(p.id).replace(/^plan:/,""))) === "PAST_DATE_REVIEW" ? neutralDateNote() : "";
   if (section === "latest") {
     if (!item.next) return "—";
     const next = item.next;
     const due = next.date ? fmtDate(next.date) : next.dateText || "срок не определён";
     return '<span class="vaccination-control">' +
       esc(next.stage === "—" ? "Следующий этап" : next.stage) + ' · ' + esc(due) +
-      (next.overdue ? ' <span class="vaccination-overdue">Просрочено</span>' : '') +
+      note(next) +
       '</span>';
   }
-  if (item.overdue) return '<span class="vaccination-overdue">Просрочено</span>';
-  return esc(item.sourceStatus || "—");
+  return esc(item.sourceStatus || "—") + note(item);
 }
 
 // Presentation only: several infection labels in a REC do not establish
@@ -945,7 +1047,7 @@ function vaccinationInfectionCell(item, section) {
       '</span></li>').join("") + '</ul></details>';
 }
 
-function vaccinationRows(items, section) {
+function vaccinationRows(items, section, neutralById = new Map()) {
   return items.map(item => {
     const dateText = item.date ? fmtDate(item.date) : item.dateText || "—";
     const status = section === "latest" ? "Проведена" : item.sourceStatus || "—";
@@ -956,7 +1058,7 @@ function vaccinationRows(items, section) {
         tableCell(esc(item.stage), item.stage),
         tableCell(esc(dateText), item.date || dateText),
         tableCell(esc(item.vaccine || "—"), item.vaccine || ""),
-        tableCell(vaccinationControl(item,section), status),
+        tableCell(vaccinationControl(item,section,neutralById), status),
         tableCell(vaccinationRecCell(item), [
           item.appointmentRecordId,item.basisRecordId,item.administrationRecordId
         ].filter(Boolean).join(" "))
@@ -972,29 +1074,30 @@ async function renderVaccination(generation) {
       .contains("tags",["VACCINATION"])
       .order("record_date",{ascending:false}),
     supabase.from("plan_items")
-      .select("plan_item_id,title,due_on,status,basis_record_id,metadata")
+      .select("plan_item_id,title,due_on,status,basis_record_id,metadata,updated_at")
       .order("due_on",{ascending:true,nullsFirst:false})
   ]);
   if (records.error) throw records.error;
   if (plan.error) throw plan.error;
   const vaccine = buildVaccinationView(records.data || [], plan.data || []);
+  const neutral = projectNeutralDates(plan.data || []);
   const headers = ["Инфекция(и)","Этап","Дата","Вакцина","Контроль","REC"];
   const statuses = uniqueValues(vaccine.history.map(item => item.sourceStatus));
   if (!isActiveUiGeneration(generation)) return;
   view.innerHTML = [
     '<h1>Вакцинация</h1>',
     '<section><h2>Последние проведённые вакцинации</h2>',
-    filterableTable(headers, vaccinationRows(vaccine.latest,"latest"), {
+    filterableTable(headers, vaccinationRows(vaccine.latest,"latest",neutral.stateById), {
       id:"vaccination-latest", emptyLabel:"Подтверждённых введений в REC не найдено"
     }), '</section>',
     '<section><h2>Запланированные вакцинации</h2>',
-    filterableTable(headers, vaccinationRows(vaccine.planned,"planned"), {
+    filterableTable(headers, vaccinationRows(vaccine.planned,"planned",neutral.stateById), {
       id:"vaccination-planned", emptyLabel:"Активных пунктов вакцинации в плане нет"
     }), '</section>',
     '<section><h2>Все вакцинации</h2>',
     statuses.length > 1 ? '<div class="filter-bar" aria-label="Фильтр истории вакцинаций">' +
       compactSelect("Статус","vaccination-history-status",statuses) + '</div>' : '',
-    filterableTable(headers, vaccinationRows(vaccine.history,"history"), {
+    filterableTable(headers, vaccinationRows(vaccine.history,"history",neutral.stateById), {
       id:"vaccination-history", emptyLabel:"Сведений о вакцинации пока нет"
     }), '</section>'
   ].join("\n");
@@ -1006,7 +1109,7 @@ async function renderCurrentState(mode = "all", generation) {
   const [cases, meds, plan, questions] = await Promise.all([
     supabase.from("cases").select("case_key,title,summary,status,category,opening_record_id,closing_record_id,metadata").eq("status","open").order("title"),
     supabase.from("medications").select("medication_id,name,dose,schedule,status,basis_record_id,metadata").eq("status","active").order("name"),
-    supabase.from("plan_items").select("plan_item_id,title,due_on,status,basis_record_id,metadata").eq("status","planned").order("due_on",{ascending:true,nullsFirst:false}),
+    supabase.from("plan_items").select("plan_item_id,title,due_on,status,basis_record_id,metadata,updated_at").eq("status","planned").order("due_on",{ascending:true,nullsFirst:false}),
     supabase.from("questions").select("question_id,question,status,basis_record_id,metadata").eq("status","open").order("question_id")
   ]);
 
@@ -1026,6 +1129,8 @@ async function renderCurrentState(mode = "all", generation) {
 
   const bundled = await fetchCaseBundles(cases.data || []);
   const medicalQuestions = (questions.data || []).filter(isMedicalCardQuestion);
+  const neutral = projectNeutralDates(plan.data || []);
+  const planById = new Map((plan.data || []).map(x => [x.plan_item_id, x]));
   const chronic = bundled.filter(x => x.category === "chronic");
   const episodes = bundled.filter(x => x.category !== "chronic");
 
@@ -1043,13 +1148,14 @@ async function renderCurrentState(mode = "all", generation) {
     const due = x.metadata?.due_text || fmtDate(x.due_on) || "";
     const kind = x.metadata?.kind || "";
     const status = x.metadata?.source_status || "запланировано";
+    const note = neutral.stateById.get(x.plan_item_id)==="PAST_DATE_REVIEW"?neutralDateNote():"";
     return {
       attrs: { "data-kind": kind, "data-status": status },
       cells: [
         tableCell(esc(due), due),
         tableCell(esc(kind), kind),
         tableCell(esc(x.title), x.title),
-        tableCell(esc(status), status),
+        tableCell(esc(status)+note, status),
         tableCell(x.basis_record_id ? recLink(x.basis_record_id) : "", x.basis_record_id || "")
       ]
     };
@@ -1060,7 +1166,7 @@ async function renderCurrentState(mode = "all", generation) {
 
   const sections = {
     "medical-card": `<section><h2>Вопросы по медкарте</h2>
-      ${medicalQuestions.length ? medicalQuestions.map(questionDetails).join("") : empty("Открытых вопросов по медкарте нет")}
+      ${medicalQuestions.length || neutral.questions.length ? [...medicalQuestions.map(questionDetails), ...neutral.questions.map(q => neutralSystemQuestion(q,planById.get(q.plan_item_id)))].join("") : empty("Открытых вопросов по медкарте нет")}
     </section>`,
     "chronic": `<section>${mode === "all" ? "<h2>Хронические состояния</h2>" : ""}
       ${chronic.length ? chronic.map(x => caseDetails(x)).join("") : empty()}

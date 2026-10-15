@@ -314,7 +314,7 @@ function uiHarness(auth) {
   email.value="owner@example.invalid";password.value="synthetic";
   let medicalVisible=false,reads=0;
   const document={querySelector:key=>key==="#email"?email:key==="#password"?password:null};
-  const code='let uiGeneration=0;\\n'+appSource.slice(start,end);
+  const code='let uiGeneration=0;\n'+appSource.slice(start,end);
   const setup=new Function("loginForm","supabase","document","loginError","enterApp",
     "showOnly","login",code);
   setup(form,{auth:h.client.auth},document,loginError,

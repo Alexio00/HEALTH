@@ -120,8 +120,8 @@ for (const invalid of [
   assert.equal(h.calls.filter(x=>x.method==="PUT").length,1,"double submit fail closed");
 }
 for (const status of [400,401,422,500]) {
-  const h = harness(); h.setNetwork(async url => {
-    if (url.endsWith("/user")) return response(200,VALID_USER);
+  const h = harness(); h.setNetwork(async (url,init) => {
+    if (url.endsWith("/user") && init.method === "GET") return response(200,VALID_USER);
     if (url.endsWith("/logout")) return response(204);
     return response(status);
   });

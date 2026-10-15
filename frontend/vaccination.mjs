@@ -275,8 +275,10 @@ export function neutralPlanSourceStatus(value, fallback = "Запланиров�
   if (typeof value !== "string") return "Статус требует уточнения";
   const status = value.trim();
   if (!status) return fallback;
+  // The canonical plan row is still "planned"; source assertions of
+  // medical overdue have not been independently verified.
   return /(?:^|[^\p{L}])(?:просрочено|overdue)(?=$|[^\p{L}])/iu.test(status)
-    ? "Статус требует уточнения" : status;
+    ? fallback : status;
 }
 
 export function plannedVaccinations(items, today = moscowToday()) {

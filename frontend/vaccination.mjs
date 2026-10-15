@@ -273,7 +273,7 @@ export function plannedVaccinations(items, today = moscowToday()) {
       const t = targets(String(x.title || ""));
       const due = dateKey(x.due_on);
       const status = String(x.status || "planned");
-      const overdue = status === "planned" && due && due < today;
+      // A calendar date alone does not prove an outstanding medical obligation.
       const sourceStatus = String(x.metadata?.source_status || "");
       return {
         kind:"plan", id:"plan:" + x.plan_item_id, keys:t?.keys || [],
@@ -285,8 +285,8 @@ export function plannedVaccinations(items, today = moscowToday()) {
         basisRecordId:recId(x.basis_record_id), status,
         sourceStatus:status === "cancelled" ? "Отменено"
           : status === "done" ? "Выполнено"
-          : overdue ? "Просрочено" : sourceStatus || "Запланировано",
-        overdue:Boolean(overdue), title:String(x.title || "")
+          : /^просрочено$/iu.test(sourceStatus.trim()) ? "Запланировано" : sourceStatus || "Запланировано",
+        overdue:false, title:String(x.title || "")
       };
     }).sort((a,b) => {
       if (!a.date && !b.date) return a.id.localeCompare(b.id);

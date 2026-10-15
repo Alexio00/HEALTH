@@ -24,9 +24,14 @@ export function createClient(baseUrl, publishableKey) {
 
   if (typeof window !== "undefined") {
     window.addEventListener("storage", (event) => {
-      if (event.key === STORAGE_KEY && event.newValue !== event.oldValue) {
+      // localStorage.clear() dispatches a StorageEvent with key === null.
+      // Ignore events from sessionStorage; tests may omit storageArea for
+      // legacy key-specific notifications, but not for clear().
+      if (event.storageArea != null && event.storageArea !== localStorage) return;
+      const cleared = event.key === null && event.storageArea === localStorage;
+      if (cleared || (event.key === STORAGE_KEY && event.newValue !== event.oldValue)) {
         sessionEpoch += 1;
-        if (event.newValue === null || event.newValue === "") markRevoked();
+        if (cleared || event.newValue === null || event.newValue === "") markRevoked();
       }
     });
   }

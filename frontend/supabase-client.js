@@ -174,13 +174,13 @@ export function createClient(baseUrl, publishableKey) {
 
   async function finishPasswordRecovery(password) {
     const current = recoverySession;
-    // Consumed BEFORE any asynchronous action: neither retries nor rapid
-    // double-submits can perform a second password update.
-    recoverySession = null;
     if (!current || current.epoch !== sessionEpoch || Date.now()/1000 >= current.expiresAt)
       return { error: recoveryError(), logoutConfirmed: false };
     if (typeof password !== "string" || password.length < 12 || password.length > 1024)
-      return { error: new Error("Пароль должен содержать не менее 12 символов."), logoutConfirmed: false };
+      return { error: new Error("Пароль должен содержать от 12 до 1024 символов."), logoutConfirmed: false };
+    // A local validation error leaves the same link usable. A network attempt
+    // consumes it synchronously: no double PUT and no ambiguous retry.
+    recoverySession = null;
     let updated = false;
     let error = null;
     let logoutConfirmed = false;

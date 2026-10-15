@@ -45,7 +45,10 @@ button { cursor: pointer; }
 }
 .pinned-table-header .data-table { margin: 0; }
 .pinned-table-header .data-table th { position: static; }
-#login { max-width: 440px; }
+#login, #recovery-request, #recovery-reset { max-width: 440px; }
+#recovery-request-back, #recovery-reset-back { margin-top: 1rem; }
+.link-button:focus-visible { outline: 3px solid currentColor; outline-offset: 4px; }
+button:disabled { opacity: .65; cursor: wait; }
 form { display: grid; gap: 1rem; margin-top: 2rem; }
 label { display: grid; gap: .4rem; font-weight: 600; }
 input, select { width: 100%; padding: .75rem; border: 1px solid #bbb; border-radius: .6rem; background: white; color: inherit; }

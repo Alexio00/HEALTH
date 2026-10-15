@@ -300,6 +300,34 @@ function uiHarness(auth) {
   assert.match(ui.loginStatus.textContent,/Пароль изменён/);
   assert.equal(ui.map["#recovery-password"].value,"");
 }
+// Reproduce REC-02 through the actual shipped loginForm submit handler.
+{
+  const h=harness(), pending=held();
+  h.setNetwork(async (url,opts)=>url.endsWith("/user")&&opts.method==="GET"?
+    pending.promise:response(200,{access_token:"reader",refresh_token:"reader",user:VALID_USER}));
+  const entering=h.client.auth.beginPasswordRecovery(fragment());
+  const start=appSource.indexOf('loginForm.addEventListener("submit",');
+  const end=appSource.indexOf("function clearMedicalUi()",start);
+  assert(start>=0&&end>start,"real login submit handler available");
+  const form=element();
+  const email=element(), password=element(), loginError=element(), login=element();
+  email.value="owner@example.invalid";password.value="synthetic";
+  let medicalVisible=false,reads=0;
+  const document={querySelector:key=>key==="#email"?email:key==="#password"?password:null};
+  const code='let uiGeneration=0;\\n'+appSource.slice(start,end);
+  const setup=new Function("loginForm","supabase","document","loginError","enterApp",
+    "showOnly","login",code);
+  setup(form,{auth:h.client.auth},document,loginError,
+    async()=>{reads++;medicalVisible=true;},()=>{medicalVisible=true;},login);
+  await form.handlers.get("submit")({preventDefault(){}});
+  assert.equal(reads,0,"reader authorization not called by injected submit");
+  assert.equal(medicalVisible,false,"medical DOM stayed hidden during pending recovery");
+  assert.equal(h.ls.has(STORAGE),false,"hidden form did not commit reader session");
+  assert(!h.calls.some(x=>x.url.includes("grant_type=password")),"client denied network login");
+  pending.resolve(response(200,VALID_USER));
+  await entering;
+  await h.client.auth.cancelPasswordRecovery();
+}
 // The actual boot() must scrub URL fragments before getSession/read routing.
 const bootStart = appSource.indexOf("async function boot() {");
 const bootEnd = appSource.indexOf("// The public recovery UI",bootStart);

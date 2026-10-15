@@ -48,7 +48,8 @@ function createRuntime(assertReader = async () => true) {
   const make = new Function("app","login","view","recordTagFilters","loginError","location",
     "supabase","assertReader","showOnly","clearPinnedHeaders","document","setupStickyChrome",
     "buildVaccinationView","uniqueValues","filterableTable","vaccinationRows",
-    "compactSelect","bindFilterableTables","bindAttributeFilters","console","URLSearchParams",
+    "compactSelect","bindFilterableTables","bindAttributeFilters",
+    "cancelNeutralMidnight","scheduleNeutralMidnight","projectNeutralDates","console","URLSearchParams",
     "let uiGeneration=0;\n" + testedCode +
     "\nreturn {enterApp,clearMedicalUi,generation:()=>uiGeneration,nextGeneration:()=>++uiGeneration};");
   const runner = make(app, login, view, recordTagFilters, loginError, location,
@@ -63,7 +64,8 @@ function createRuntime(assertReader = async () => true) {
     values => [...new Set(values)],
     (_headers, rows) => JSON.stringify(rows),
     items => items.map(x => x.marker || x.sourceStatus),
-    () => "", () => {}, () => {}, { error: () => {} },
+    () => "", () => {}, () => {},
+    () => {}, () => {}, () => ({stateById:new Map(),questions:[]}), { error: () => {} },
     class { getAll() { return []; } });
   return { ...runner, app, view, location, pending };
 }

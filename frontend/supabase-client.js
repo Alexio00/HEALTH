@@ -1,4 +1,5 @@
 const STORAGE_KEY = "health.session.v1";
+const REVOKED_KEY = "health.session.revoked.v1";
 
 function apiError(status, area) {
   return new Error(`${area} request failed (${status})`);
@@ -7,19 +8,29 @@ function apiError(status, area) {
 export function createClient(baseUrl, publishableKey) {
   let refreshPromise = null;
   let sessionEpoch = 0;
+  let locallyRevoked = false;
+  const markRevoked = () => {
+    locallyRevoked = true;
+    try { sessionStorage.setItem(REVOKED_KEY, "1"); } catch { /* memory fallback */ }
+  };
 
   if (typeof window !== "undefined") {
     window.addEventListener("storage", (event) => {
-      if (event.key === STORAGE_KEY && event.newValue !== event.oldValue) sessionEpoch += 1;
+      if (event.key === STORAGE_KEY && event.newValue !== event.oldValue) {
+        sessionEpoch += 1;
+        if (event.newValue === null || event.newValue === "") markRevoked();
+      }
     });
   }
 
   const load = () => {
+    if (locallyRevoked) return null;
+    try { if (sessionStorage.getItem(REVOKED_KEY) === "1") return null; } catch { /* memory fallback */ }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       return raw ? JSON.parse(raw) : null;
     } catch {
-      localStorage.removeItem(STORAGE_KEY);
+      clear();
       return null;
     }
   };
@@ -36,10 +47,26 @@ export function createClient(baseUrl, publishableKey) {
       user: payload.user
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    try { sessionStorage.removeItem(REVOKED_KEY); } catch { /* deny on next load */ }
+    locallyRevoked = false;
     return session;
   };
 
-  const clear = () => localStorage.removeItem(STORAGE_KEY);
+  const clear = () => {
+    sessionEpoch += 1;
+    markRevoked();
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      return true;
+    } catch {
+      try {
+        localStorage.setItem(STORAGE_KEY, "");
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  };
 
   async function authRequest(path, body, accessToken = "") {
     const headers = {
@@ -225,18 +252,20 @@ export function createClient(baseUrl, publishableKey) {
 
       async signOut() {
         const current = load();
-        sessionEpoch += 1;
-        // Local revocation is immediate, independent of remote logout availability.
-        clear();
+        // Local token invalidation cannot suppress the independent remote request.
+        const localCleared = clear();
+        let remoteConfirmed = !current?.access_token;
         try {
           if (current?.access_token) {
             const response = await authRequest("logout", undefined, current.access_token);
-            if (!response.ok) return { error: new Error("Server logout not confirmed") };
+            remoteConfirmed = response.ok;
           }
-          return { error: null };
-        } catch {
-          return { error: new Error("Server logout not confirmed") };
-        }
+        } catch { remoteConfirmed = false; }
+        return {
+          error: localCleared && remoteConfirmed
+            ? null
+            : new Error("Local storage or server logout not confirmed")
+        };
       }
     },
 

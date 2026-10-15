@@ -14,6 +14,9 @@ export function createClient(baseUrl, publishableKey) {
   let locallyRevoked = false;
   // Recovery credentials never enter localStorage or the ordinary reader session.
   let recoverySession = null;
+  // Exclusive recovery state: reader/login cannot run while verifying or updating.
+  let recoveryMode = false;
+  let recoveryAttempt = 0;
   const markRevoked = () => {
     locallyRevoked = true;
     try { sessionStorage.setItem(REVOKED_KEY, "1"); } catch { /* memory fallback */ }
@@ -53,6 +56,7 @@ export function createClient(baseUrl, publishableKey) {
   };
 
   const save = (payload) => {
+    if (recoveryMode) throw new Error("Auth recovery in progress");
     if (!payload?.access_token || !payload?.refresh_token || !payload?.user) {
       throw new Error("Incomplete auth session");
     }
@@ -148,14 +152,23 @@ export function createClient(baseUrl, publishableKey) {
   }
 
   async function beginPasswordRecovery(fragment) {
+    if (recoveryMode) return { error: recoveryError() };
+    recoveryMode = true; // synchronous, before token verification
+    const attempt = ++recoveryAttempt;
     recoverySession = null;
     // This is intentionally destructive to any previous ordinary reader session.
     // Its storage event also invalidates rendering in other open tabs.
     passwordSignInAttempt += 1;
-    if (!clear()) return { error: new Error("Не удалось очистить предыдущую сессию.") };
+    if (!clear()) {
+      recoveryMode = false;
+      return { error: new Error("Не удалось очистить предыдущую сессию.") };
+    }
     let artifact;
     try { artifact = parseRecoveryFragment(fragment); }
-    catch { return { error: recoveryError() }; }
+    catch {
+      if (attempt === recoveryAttempt) recoveryMode = false;
+      return { error: recoveryError() };
+    }
     const expectedEpoch = sessionEpoch;
     try {
       // A client-supplied "type=recovery" is NOT proof. GoTrue validates

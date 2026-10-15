@@ -12,6 +12,8 @@ export function createClient(baseUrl, publishableKey) {
   // Only the latest *started* attempt may commit credentials.
   let passwordSignInAttempt = 0;
   let locallyRevoked = false;
+  // Recovery credentials never enter localStorage or the ordinary reader session.
+  let recoverySession = null;
   const markRevoked = () => {
     locallyRevoked = true;
     try { sessionStorage.setItem(REVOKED_KEY, "1"); } catch { /* memory fallback */ }
@@ -94,19 +96,118 @@ export function createClient(baseUrl, publishableKey) {
     }
   };
 
-  async function authRequest(path, body, accessToken = "") {
+  async function authRequest(path, body, accessToken = "", method = "POST") {
     const headers = {
       apikey: publishableKey,
       "Content-Type": "application/json"
     };
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
     const response = await fetch(`${baseUrl}/auth/v1/${path}`, {
-      method: "POST",
+      method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store"
     });
     return response;
+  }
+
+
+  // Exact production redirect: never accept caller-controlled destinations.
+  const RECOVERY_REDIRECT = "https://alexio00.github.io/HEALTH/";
+  const recoveryError = () => new Error("Ссылка восстановления недействительна или устарела.");
+
+  function parseRecoveryFragment(fragment) {
+    if (typeof fragment !== "string" || !fragment.startsWith("#") ||
+        fragment.length > 8192 || fragment.startsWith("#/")) throw recoveryError();
+    const values = new URLSearchParams(fragment.slice(1));
+    const allowed = new Set(["access_token", "refresh_token", "expires_at", "expires_in", "token_type", "type"]);
+    const seen = new Set();
+    for (const [key] of values) {
+      if (!allowed.has(key) || seen.has(key)) throw recoveryError();
+      seen.add(key);
+    }
+    if (values.get("type") !== "recovery" || values.get("token_type")?.toLowerCase() !== "bearer" ||
+        !values.get("access_token") || !values.get("refresh_token")) throw recoveryError();
+    const expiry = values.get("expires_at");
+    const ttl = values.get("expires_in");
+    if (expiry !== null && (!/^\\d{10,12}$/.test(expiry) || Number(expiry) <= Math.floor(Date.now()/1000))) throw recoveryError();
+    if (ttl !== null && (!/^\\d{1,6}$/.test(ttl) || Number(ttl) <= 0)) throw recoveryError();
+    if (expiry === null && ttl === null) throw recoveryError();
+    return { token: values.get("access_token"), expiresAt: expiry !== null ?
+      Number(expiry) : Math.floor(Date.now()/1000) + Number(ttl) };
+  }
+
+  async function requestPasswordRecovery(email) {
+    try {
+      if (typeof email !== "string" || email.length > 254 ||
+          !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error("Неверный email.");
+      const endpoint = "recover?redirect_to=" + encodeURIComponent(RECOVERY_REDIRECT);
+      const response = await authRequest(endpoint, { email });
+      return { error: response.ok ? null : apiError(response.status, "Recovery") };
+    } catch (error) { return { error }; }
+  }
+
+  async function beginPasswordRecovery(fragment) {
+    recoverySession = null;
+    // This is intentionally destructive to any previous ordinary reader session.
+    // Its storage event also invalidates rendering in other open tabs.
+    passwordSignInAttempt += 1;
+    if (!clear()) return { error: new Error("Не удалось очистить предыдущую сессию.") };
+    let artifact;
+    try { artifact = parseRecoveryFragment(fragment); }
+    catch { return { error: recoveryError() }; }
+    const expectedEpoch = sessionEpoch;
+    try {
+      // A client-supplied "type=recovery" is NOT proof. GoTrue validates
+      // the bearer against its current server-side user state.
+      const response = await authRequest("user", undefined, artifact.token, "GET");
+      if (!response.ok) return { error: recoveryError() };
+      const user = await response.json();
+      if (!user || typeof user.id !== "string" || !user.id ||
+          expectedEpoch !== sessionEpoch || artifact.expiresAt <= Date.now()/1000) {
+        return { error: recoveryError() };
+      }
+      recoverySession = { token: artifact.token, epoch: expectedEpoch, expiresAt: artifact.expiresAt };
+      return { error: null };
+    } catch { return { error: recoveryError() }; }
+  }
+
+  async function finishPasswordRecovery(password) {
+    const current = recoverySession;
+    // Consumed BEFORE any asynchronous action: neither retries nor rapid
+    // double-submits can perform a second password update.
+    recoverySession = null;
+    if (!current || current.epoch !== sessionEpoch || Date.now()/1000 >= current.expiresAt)
+      return { error: recoveryError(), logoutConfirmed: false };
+    if (typeof password !== "string" || password.length < 12 || password.length > 1024)
+      return { error: new Error("Пароль должен содержать не менее 12 символов."), logoutConfirmed: false };
+    let updated = false;
+    let error = null;
+    let logoutConfirmed = false;
+    try {
+      const response = await authRequest("user", { password }, current.token, "PUT");
+      updated = response.ok;
+      if (!updated) error = apiError(response.status, "Password update");
+    } catch { error = new Error("Не удалось подтвердить изменение пароля."); }
+    // Never offer an in-app authenticated session after a recovery.
+    try {
+      const response = await authRequest("logout", undefined, current.token);
+      logoutConfirmed = response.ok;
+    } catch { /* best effort; no token is stored */ }
+    const unchanged = current.epoch === sessionEpoch;
+    clear();
+    if (!unchanged) error = new Error("Состояние входа изменилось во время восстановления.");
+    return { error: error || null, updated, logoutConfirmed };
+  }
+
+  async function cancelPasswordRecovery() {
+    const current = recoverySession;
+    recoverySession = null;
+    clear();
+    if (current) {
+      try { await authRequest("logout", undefined, current.token); }
+      catch { /* no persisted recovery credentials */ }
+    }
   }
 
   async function refreshSession() {
@@ -253,6 +354,10 @@ export function createClient(baseUrl, publishableKey) {
 
   return {
     auth: {
+      requestPasswordRecovery,
+      beginPasswordRecovery,
+      finishPasswordRecovery,
+      cancelPasswordRecovery,
       async getSession() {
         try {
           const session = await ensureSession();

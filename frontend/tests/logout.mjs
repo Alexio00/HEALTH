@@ -119,10 +119,10 @@ function simulateUI(signOut) {
   const logoutButton = { addEventListener: (type, cb) => { if (type === "click") clicked = cb; } };
   const window = { addEventListener: (type, cb) => { if (type === "storage") stored = cb; } };
   new Function("logoutButton", "showOnly", "login", "view", "recordTagFilters",
-    "clearPinnedHeaders", "document", "loginError", "location", "supabase", "window",
+    "clearPinnedHeaders", "document", "loginError", "location", "supabase", "window", "cancelNeutralMidnight",
     "let uiGeneration = 0;\n" + uiCode)(
     logoutButton, () => { hidden = true; }, login, view, recordTagFilters,
-    () => { pinned++; }, { querySelector: () => password }, loginError, location, { auth: { signOut } }, window);
+    () => { pinned++; }, { querySelector: () => password }, loginError, location, { auth: { signOut } }, window, () => {});
   return { click: clicked, stored, view, loginError, location, recordTagFilters, password, get hidden() { return hidden; }, get pinned() { return pinned; } };
 }
 {

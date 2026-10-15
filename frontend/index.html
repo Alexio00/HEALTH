@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#111111">
   <meta name="color-scheme" content="light dark">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://ffvqgbslvjocbwfurxrv.supabase.co wss://ffvqgbslvjocbwfurxrv.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
@@ -31,8 +32,40 @@
           <input id="password" type="password" autocomplete="current-password" required>
         </label>
         <button type="submit">Войти</button>
+        <button id="forgot-password" type="button" class="link-button">Забыли пароль?</button>
       </form>
       <p id="login-error" class="error" role="alert"></p>
+      <p id="login-status" role="status" aria-live="polite"></p>
+    </section>
+
+
+    <section id="recovery-request" class="panel hidden" aria-labelledby="recovery-request-title">
+      <h1 id="recovery-request-title">Восстановление пароля</h1>
+      <p class="muted">Укажите email. Если он зарегистрирован, вы получите письмо со ссылкой.</p>
+      <form id="recovery-request-form">
+        <label>Email
+          <input id="recovery-email" type="email" autocomplete="username" maxlength="254" required>
+        </label>
+        <button id="recovery-send" type="submit">Отправить письмо</button>
+      </form>
+      <p id="recovery-request-status" role="status" aria-live="polite"></p>
+      <button id="recovery-request-back" type="button" class="link-button">Вернуться ко входу</button>
+    </section>
+
+    <section id="recovery-reset" class="panel hidden" aria-labelledby="recovery-reset-title">
+      <h1 id="recovery-reset-title">Новый пароль</h1>
+      <p class="muted">Не менее 12 символов. После смены потребуется войти заново.</p>
+      <form id="recovery-reset-form">
+        <label>Новый пароль
+          <input id="recovery-password" type="password" autocomplete="new-password" minlength="12" required>
+        </label>
+        <label>Повторите пароль
+          <input id="recovery-password-confirm" type="password" autocomplete="new-password" minlength="12" required>
+        </label>
+        <button id="recovery-save" type="submit">Сохранить новый пароль</button>
+      </form>
+      <p id="recovery-reset-status" class="error" role="alert"></p>
+      <button id="recovery-reset-back" type="button" class="link-button">Отменить восстановление</button>
     </section>
 
     <section id="app" class="hidden">

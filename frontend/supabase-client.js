@@ -12,6 +12,11 @@ export function createClient(baseUrl, publishableKey) {
   // Only the latest *started* attempt may commit credentials.
   let passwordSignInAttempt = 0;
   let locallyRevoked = false;
+  // Recovery credentials never enter localStorage or the ordinary reader session.
+  let recoverySession = null;
+  // Exclusive recovery state: reader/login cannot run while verifying or updating.
+  let recoveryMode = false;
+  let recoveryAttempt = 0;
   const markRevoked = () => {
     locallyRevoked = true;
     try { sessionStorage.setItem(REVOKED_KEY, "1"); } catch { /* memory fallback */ }
@@ -19,9 +24,14 @@ export function createClient(baseUrl, publishableKey) {
 
   if (typeof window !== "undefined") {
     window.addEventListener("storage", (event) => {
-      if (event.key === STORAGE_KEY && event.newValue !== event.oldValue) {
+      // localStorage.clear() dispatches a StorageEvent with key === null.
+      // Ignore events from sessionStorage; tests may omit storageArea for
+      // legacy key-specific notifications, but not for clear().
+      if (event.storageArea != null && event.storageArea !== localStorage) return;
+      const cleared = event.key === null && event.storageArea === localStorage;
+      if (cleared || (event.key === STORAGE_KEY && event.newValue !== event.oldValue)) {
         sessionEpoch += 1;
-        if (event.newValue === null || event.newValue === "") markRevoked();
+        if (cleared || event.newValue === null || event.newValue === "") markRevoked();
       }
     });
   }
@@ -51,6 +61,7 @@ export function createClient(baseUrl, publishableKey) {
   };
 
   const save = (payload) => {
+    if (recoveryMode) throw new Error("Auth recovery in progress");
     if (!payload?.access_token || !payload?.refresh_token || !payload?.user) {
       throw new Error("Incomplete auth session");
     }
@@ -94,14 +105,14 @@ export function createClient(baseUrl, publishableKey) {
     }
   };
 
-  async function authRequest(path, body, accessToken = "") {
+  async function authRequest(path, body, accessToken = "", method = "POST") {
     const headers = {
       apikey: publishableKey,
       "Content-Type": "application/json"
     };
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
     const response = await fetch(`${baseUrl}/auth/v1/${path}`, {
-      method: "POST",
+      method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store"
@@ -109,7 +120,124 @@ export function createClient(baseUrl, publishableKey) {
     return response;
   }
 
+
+  // Exact production redirect: never accept caller-controlled destinations.
+  const RECOVERY_REDIRECT = "https://alexio00.github.io/HEALTH/recovery.html";
+  const recoveryError = () => new Error("Ссылка восстановления недействительна или устарела.");
+
+  function parseRecoveryFragment(fragment) {
+    if (typeof fragment !== "string" || !fragment.startsWith("#") ||
+        fragment.length > 8192 || fragment.startsWith("#/")) throw recoveryError();
+    const values = new URLSearchParams(fragment.slice(1));
+    const allowed = new Set(["access_token", "refresh_token", "expires_at", "expires_in", "token_type", "type"]);
+    const seen = new Set();
+    for (const [key] of values) {
+      if (!allowed.has(key) || seen.has(key)) throw recoveryError();
+      seen.add(key);
+    }
+    if (values.get("type") !== "recovery" || values.get("token_type")?.toLowerCase() !== "bearer" ||
+        !values.get("access_token") || !values.get("refresh_token")) throw recoveryError();
+    const expiry = values.get("expires_at");
+    const ttl = values.get("expires_in");
+    if (expiry !== null && (!/^\d{10,12}$/.test(expiry) || Number(expiry) <= Math.floor(Date.now()/1000))) throw recoveryError();
+    if (ttl !== null && (!/^\d{1,6}$/.test(ttl) || Number(ttl) <= 0)) throw recoveryError();
+    if (expiry === null && ttl === null) throw recoveryError();
+    return { token: values.get("access_token"), expiresAt: expiry !== null ?
+      Number(expiry) : Math.floor(Date.now()/1000) + Number(ttl) };
+  }
+
+  async function requestPasswordRecovery(email) {
+    try {
+      if (typeof email !== "string" || email.length > 254 ||
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Неверный email.");
+      const endpoint = "recover?redirect_to=" + encodeURIComponent(RECOVERY_REDIRECT);
+      const response = await authRequest(endpoint, { email });
+      return { error: response.ok ? null : apiError(response.status, "Recovery") };
+    } catch (error) { return { error }; }
+  }
+
+  async function beginPasswordRecovery(fragment) {
+    if (recoveryMode) return { error: recoveryError() };
+    recoveryMode = true; // synchronous, before token verification
+    const attempt = ++recoveryAttempt;
+    recoverySession = null;
+    // This is intentionally destructive to any previous ordinary reader session.
+    // Its storage event also invalidates rendering in other open tabs.
+    passwordSignInAttempt += 1;
+    if (!clear()) {
+      recoveryMode = false;
+      return { error: new Error("Не удалось очистить предыдущую сессию.") };
+    }
+    let artifact;
+    try { artifact = parseRecoveryFragment(fragment); }
+    catch {
+      if (attempt === recoveryAttempt) recoveryMode = false;
+      return { error: recoveryError() };
+    }
+    const expectedEpoch = sessionEpoch;
+    try {
+      // A client-supplied "type=recovery" is NOT proof. GoTrue validates
+      // the bearer against its current server-side user state.
+      const response = await authRequest("user", undefined, artifact.token, "GET");
+      if (!response.ok) throw recoveryError();
+      const user = await response.json();
+      if (!user || typeof user.id !== "string" || !user.id ||
+          attempt !== recoveryAttempt || !recoveryMode ||
+          expectedEpoch !== sessionEpoch || artifact.expiresAt <= Date.now()/1000) {
+        throw recoveryError();
+      }
+      recoverySession = { token: artifact.token, epoch: expectedEpoch, expiresAt: artifact.expiresAt };
+      return { error: null };
+    } catch {
+      if (attempt === recoveryAttempt) recoveryMode = false;
+      return { error: recoveryError() };
+    }
+  }
+
+  async function finishPasswordRecovery(password) {
+    const current = recoverySession;
+    if (!recoveryMode || !current || current.epoch !== sessionEpoch || Date.now()/1000 >= current.expiresAt)
+      return { error: recoveryError(), logoutConfirmed: false };
+    if (typeof password !== "string" || password.length < 12 || password.length > 1024)
+      return { error: new Error("Пароль должен содержать от 12 до 1024 символов."), logoutConfirmed: false };
+    // A local validation error leaves the same link usable. A network attempt
+    // consumes it synchronously: no double PUT and no ambiguous retry.
+    recoverySession = null;
+    let updated = false;
+    let error = null;
+    let logoutConfirmed = false;
+    try {
+      const response = await authRequest("user", { password }, current.token, "PUT");
+      updated = response.ok;
+      if (!updated) error = apiError(response.status, "Password update");
+    } catch { error = new Error("Не удалось подтвердить изменение пароля."); }
+    // Never offer an in-app authenticated session after a recovery.
+    try {
+      const response = await authRequest("logout", undefined, current.token);
+      logoutConfirmed = response.ok;
+    } catch { /* best effort; no token is stored */ }
+    const unchanged = recoveryMode && current.epoch === sessionEpoch;
+    clear();
+    recoveryMode = false;
+    recoveryAttempt += 1;
+    if (!unchanged) error = new Error("Состояние входа изменилось во время восстановления.");
+    return { error: error || null, updated, logoutConfirmed };
+  }
+
+  async function cancelPasswordRecovery() {
+    const current = recoverySession;
+    recoverySession = null;
+    recoveryMode = false;
+    recoveryAttempt += 1;
+    clear();
+    if (current) {
+      try { await authRequest("logout", undefined, current.token); }
+      catch { /* no persisted recovery credentials */ }
+    }
+  }
+
   async function refreshSession() {
+    if (recoveryMode) return null;
     if (refreshPromise) return refreshPromise;
     refreshPromise = (async () => {
       const current = load();
@@ -132,6 +260,7 @@ export function createClient(baseUrl, publishableKey) {
   }
 
   async function ensureSession() {
+    if (recoveryMode) return null;
     const current = load();
     if (!current?.access_token) return null;
     const now = Math.floor(Date.now() / 1000);
@@ -142,6 +271,7 @@ export function createClient(baseUrl, publishableKey) {
   }
 
   async function restRequest(table, params, retry = true) {
+    if (recoveryMode) return { response: null, error: new Error("Auth recovery in progress") };
     const session = await ensureSession();
     if (!session?.access_token) return { response: null, error: new Error("Authentication required") };
 
@@ -162,6 +292,7 @@ export function createClient(baseUrl, publishableKey) {
       await refreshSession();
       return restRequest(table, params, false);
     }
+    if (recoveryMode) return { response: null, error: new Error("Auth recovery in progress") };
     if (!response.ok) return { response, error: apiError(response.status, "Database") };
     return { response, error: null };
   }
@@ -253,7 +384,12 @@ export function createClient(baseUrl, publishableKey) {
 
   return {
     auth: {
+      requestPasswordRecovery,
+      beginPasswordRecovery,
+      finishPasswordRecovery,
+      cancelPasswordRecovery,
       async getSession() {
+        if (recoveryMode) return { data: { session: null }, error: new Error("Auth recovery in progress") };
         try {
           const session = await ensureSession();
           return { data: { session }, error: null };
@@ -263,6 +399,8 @@ export function createClient(baseUrl, publishableKey) {
       },
 
       async signInWithPassword({ email, password }) {
+        if (recoveryMode)
+          return { data: { session: null }, error: new Error("Auth recovery in progress") };
         const attempt = ++passwordSignInAttempt;
         const expectedEpoch = sessionEpoch;
         try {
@@ -272,7 +410,7 @@ export function createClient(baseUrl, publishableKey) {
           // A prior HTTP response must never overwrite a more recent login.
           // This check and save() are synchronous: no async interleaving is
           // possible between the check and the localStorage write.
-          if (attempt !== passwordSignInAttempt || expectedEpoch !== sessionEpoch) {
+          if (recoveryMode || attempt !== passwordSignInAttempt || expectedEpoch !== sessionEpoch) {
             throw new Error("Auth state changed");
           }
           const session = save(payload);

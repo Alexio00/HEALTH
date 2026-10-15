@@ -47,7 +47,9 @@ try {
     const bytes = corrupt === path ? Buffer.from("wrong release") : readFileSync(join(root, path));
     return new Response(bytes, { headers: { "content-type": htmlInsteadOfJS && path.endsWith(".js") ? "text/html" : mime(path) } });
   }
-  assert.equal((await probe(base, sha, fetcher)).files, 15);
+  assert.ok(manifest.files["recovery.html"] && manifest.files["recovery.js"],
+    "standalone callback assets must be included in release manifest");
+  assert.equal((await probe(base, sha, fetcher)).files, 17);
   await assert.rejects(probe(base, other, fetcher), /SHA mismatch/);
   corrupt = "app.js";
   await assert.rejects(probe(base, sha, fetcher), /bytes mismatch/);

@@ -7,7 +7,8 @@ export const RUNTIME_FILES = [
   "index.html", "app.js", "styles.css", "vaccination.mjs", "supabase-client.js",
   "config.js", "manifest.webmanifest", "icon.svg", "sw.js",
   "oauth-home.html", "oauth-privacy.html", "oauth-test/consent.html",
-  "oauth-test/consent.css", "oauth-test/consent.mjs", "oauth-test/consent-policy.mjs"
+  "oauth-test/consent.css", "oauth-test/consent.mjs", "oauth-test/consent-policy.mjs",
+  "recovery.html", "recovery.js"
 ];
 const SHELL_FILES = ["index.html", "styles.css", "app.js", "vaccination.mjs",
   "supabase-client.js", "config.js", "manifest.webmanifest", "icon.svg"];

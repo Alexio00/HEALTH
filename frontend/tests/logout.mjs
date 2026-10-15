@@ -35,12 +35,18 @@ function createHarness() {
     setItem: (key, value) => store.set(key, value),
     removeItem: key => store.delete(key)
   };
+  const sessionStore = new Map();
+  const sessionStorage = {
+    getItem: key => sessionStore.get(key) ?? null,
+    setItem: (key, value) => sessionStore.set(key, value),
+    removeItem: key => sessionStore.delete(key)
+  };
   let network = async () => okResponse("old");
   const fakeWindow = { addEventListener: (type, fn) => { if (type === "storage") listeners.push(fn); } };
-  const factory = new Function("localStorage", "window", "fetch",
+  const factory = new Function("localStorage", "sessionStorage", "window", "fetch",
     clientSource.replace("export function createClient(", "function createClient(") +
     "\nreturn createClient;");
-  const client = factory(storage, fakeWindow, (...args) => network(...args))("https://synthetic.invalid", "pk_synthetic");
+  const client = factory(storage, sessionStorage, fakeWindow, (...args) => network(...args))("https://synthetic.invalid", "pk_synthetic");
   return { storage, store, client, listeners, setNetwork: fn => { network = fn; } };
 }
 

@@ -97,4 +97,33 @@ function createRuntime(assertReader = async () => true) {
   assert.equal(h.app.hidden, true);
   assert.equal(h.view.innerHTML, "");
 }
-console.log("HEALTH #58 F-01 adversarial auth/UI generation: 2/2 PASS");
+
+// A nonempty cross-tab session replacement must wipe A's medical DOM before
+// B's credentials can be observed by this already-open tab.
+{
+  const h = createRuntime();
+  const oldRecords = deferred(), oldPlan = deferred();
+  h.pending.push(oldRecords, oldPlan);
+  const rendered = h.enterApp({ user: { id: "owner_A" } }, h.generation());
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+  oldRecords.resolve({ data: [{ marker: "MEDICAL_CONTENT_OWNER_A" }], error: null });
+  oldPlan.resolve({ data: [], error: null });
+  await rendered;
+  assert.match(h.view.innerHTML, /MEDICAL_CONTENT_OWNER_A/);
+  assert.equal(h.app.hidden, false);
+  let handler;
+  new Function("window", "clearMedicalUi", "loginError",
+    sourceSlice('window.addEventListener("storage", (event) => {', "\nconst mobileMenu"))(
+      { addEventListener: (kind, fn) => { if (kind === "storage") handler = fn; } },
+      h.clearMedicalUi,
+      { textContent: "" });
+  assert.equal(typeof handler, "function");
+  handler({
+    key: "health.session.v1",
+    oldValue: JSON.stringify({ access_token: "synthetic_A", user: { id: "owner_A" } }),
+    newValue: JSON.stringify({ access_token: "synthetic_B", user: { id: "owner_B" } })
+  });
+  assert.equal(h.app.hidden, true);
+  assert.equal(h.view.innerHTML, "");
+}
+console.log("HEALTH #58 F-01 adversarial auth/UI generation: 3/3 PASS");

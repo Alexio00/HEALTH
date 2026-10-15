@@ -17,7 +17,10 @@ const synthetic = {
 function harness(faults = {}) {
   const local = new Map(), session = new Map(), calls = [];
   const localStorage = {
-    getItem: key => local.get(key) ?? null,
+    getItem(key) {
+      if (faults.read) throw Error("synthetic getItem fault");
+      return local.get(key) ?? null;
+    },
     setItem(key, value) {
       if (faults.blank && value === "") throw Error("synthetic blank storage fault");
       local.set(key, value);
@@ -30,7 +33,10 @@ function harness(faults = {}) {
   const sessionStorage = {
     getItem: key => session.get(key) ?? null,
     setItem: (key, value) => session.set(key, value),
-    removeItem: key => session.delete(key)
+    removeItem(key) {
+      if (faults.markerRemove) throw Error("synthetic tombstone removal fault");
+      session.delete(key);
+    }
   };
   const fetch = async (url) => {
     calls.push(url);
@@ -40,7 +46,7 @@ function harness(faults = {}) {
   };
   const make = () => factory(localStorage, sessionStorage, { addEventListener: () => {} }, fetch)
     ("https://synthetic.invalid", "pk_synthetic");
-  return { local, session, calls, make };
+  return { local, session, calls, make, faults };
 }
 {
   const h = harness({ remove: true });
@@ -80,4 +86,33 @@ function harness(faults = {}) {
   h.local.set(KEY, "{invalid");
   assert.equal((await api.auth.getSession()).data.session, null);
 }
-console.log("HEALTH #58 F-02 storage fault regression: 4/4 PASS");
+{
+  const h = harness();
+  const api = h.make();
+  await api.auth.signInWithPassword({ email: "synthetic@example.invalid", password: "x" });
+  h.faults.read = true;
+  const result = await api.auth.signOut();
+  assert.ok(result.error, "getItem fault must not falsely confirm remote logout");
+  assert.equal(h.local.has(KEY), false, "local token removal still attempted");
+  assert.equal(h.calls.filter(url => url.endsWith("/auth/v1/logout")).length, 0,
+    "server logout impossible without reading access token");
+  assert.doesNotMatch(result.error.message, /synthetic_access|synthetic_refresh/);
+}
+{
+  const h = harness();
+  const api = h.make();
+  await api.auth.signInWithPassword({ email: "synthetic@example.invalid", password: "x" });
+  await api.auth.signOut();
+  h.faults.markerRemove = true;
+  const rejected = await api.auth.signInWithPassword({ email: "synthetic@example.invalid", password: "x" });
+  assert.ok(rejected.error, "failed tombstone removal must reject login");
+  assert.equal(h.local.has(KEY), false, "rejected login cannot persist credentials");
+  assert.equal((await api.auth.getSession()).data.session, null);
+  assert.equal(h.session.get(MARKER), "1");
+  h.faults.markerRemove = false;
+  const accepted = await api.auth.signInWithPassword({ email: "synthetic@example.invalid", password: "x" });
+  assert.equal(accepted.error, null, "login works when marker can be cleared");
+  assert.equal(h.session.has(MARKER), false);
+  assert.ok((await api.auth.getSession()).data.session, "login state must be usable");
+}
+console.log("HEALTH #58 F-02 storage fault regression: 6/6 PASS");

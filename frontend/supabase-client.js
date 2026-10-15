@@ -23,16 +23,28 @@ export function createClient(baseUrl, publishableKey) {
     });
   }
 
+  // Distinguish a confirmed missing session from an unreadable/invalid one.
+  // Logout must never report remote success merely because getItem() failed.
+  const inspectStoredSession = () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return { session: null, knownAbsent: true };
+      const session = JSON.parse(raw);
+      if (typeof session?.access_token === "string" && session.access_token) {
+        return { session, knownAbsent: false };
+      }
+    } catch {
+      // Storage access denied, or corrupt JSON: server session state is unknown.
+    }
+    return { session: null, knownAbsent: false };
+  };
+
   const load = () => {
     if (locallyRevoked) return null;
     try { if (sessionStorage.getItem(REVOKED_KEY) === "1") return null; } catch { /* memory fallback */ }
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      clear();
-      return null;
-    }
+    const inspection = inspectStoredSession();
+    if (!inspection.knownAbsent && !inspection.session) clear();
+    return inspection.session;
   };
 
   const save = (payload) => {
@@ -46,8 +58,17 @@ export function createClient(baseUrl, publishableKey) {
       expires_at: payload.expires_at || Math.floor(Date.now() / 1000) + Number(payload.expires_in || 3600),
       user: payload.user
     };
+    // Clear and confirm the old tombstone BEFORE publishing new credentials.
+    // An unsuccessful marker removal must not masquerade as a successful login.
+    try {
+      sessionStorage.removeItem(REVOKED_KEY);
+      if (sessionStorage.getItem(REVOKED_KEY) === "1") {
+        throw new Error("Auth state not cleared");
+      }
+    } catch {
+      throw new Error("Unable to establish local auth session");
+    }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-    try { sessionStorage.removeItem(REVOKED_KEY); } catch { /* deny on next load */ }
     locallyRevoked = false;
     return session;
   };
@@ -251,13 +272,14 @@ export function createClient(baseUrl, publishableKey) {
       },
 
       async signOut() {
-        const current = load();
-        // Local token invalidation cannot suppress the independent remote request.
+        // Inspect storage independently of the revocation tombstone, and retain
+        // the difference between "no token" and "cannot read a token".
+        const previous = inspectStoredSession();
         const localCleared = clear();
-        let remoteConfirmed = !current?.access_token;
+        let remoteConfirmed = previous.knownAbsent;
         try {
-          if (current?.access_token) {
-            const response = await authRequest("logout", undefined, current.access_token);
+          if (previous.session?.access_token) {
+            const response = await authRequest("logout", undefined, previous.session.access_token);
             remoteConfirmed = response.ok;
           }
         } catch { remoteConfirmed = false; }

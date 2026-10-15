@@ -529,9 +529,16 @@ logoutButton.addEventListener("click", async () => {
   }
 });
 
-// Other same-origin tabs must not continue displaying medical content after logout.
+// Any cross-tab change of the shared Auth session invalidates the visible
+// medical view, including a replacement with a different *nonempty* token.
+// This hides the UI without pretending that the replacement is a logout.
+// Same-user refreshes may require re-entry: deliberate fail-closed tradeoff.
 window.addEventListener("storage", (event) => {
-  if (event.key === "health.session.v1" && (event.newValue === null || event.newValue === "")) clearMedicalUi();
+  if (event.key !== "health.session.v1" || event.newValue === event.oldValue) return;
+  clearMedicalUi();
+  if (event.newValue) {
+    loginError.textContent = "Сессия изменилась в другой вкладке. Подтвердите вход повторно.";
+  }
 });
 
 const mobileMenu = document.querySelector("#primary-nav");

@@ -571,6 +571,23 @@ async function enterApp(session, generation) {
 }
 
 async function boot() {
+  // Never run getSession(), reader auth, or routes on an Auth callback.
+  const isRecoveryCandidate = Boolean(location.search) ||
+    (Boolean(location.hash) && !location.hash.startsWith("#/"));
+  if (isRecoveryCandidate) {
+    const fragment = location.hash;
+    let scrubbed = false;
+    try {
+      history.replaceState(null, "", location.pathname);
+      scrubbed = !location.search && !location.hash;
+    } catch { /* no fallback that might leak the URL */ }
+    if (scrubbed) void bootRecovery(fragment);
+    else {
+      ++uiGeneration;
+      showOnly(loading);
+    }
+    return;
+  }
   const generation = uiGeneration;
   const { data, error } = await supabase.auth.getSession();
   if (generation !== uiGeneration) return;
@@ -758,7 +775,9 @@ logoutButton.addEventListener("click", async () => {
 // Same-user refreshes may require re-entry: deliberate fail-closed tradeoff.
 window.addEventListener("storage", (event) => {
   if (event.key !== "health.session.v1" || event.newValue === event.oldValue) return;
+  const recovering = !recoveryReset.classList.contains("hidden");
   clearMedicalUi();
+  if (recovering) void supabase.auth.cancelPasswordRecovery();
   if (event.newValue) {
     loginError.textContent = "Сессия изменилась в другой вкладке. Подтвердите вход повторно.";
   }
@@ -1764,22 +1783,4 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }));
 }
 
-// Auth callback fragments must be removed from history BEFORE any session read.
-const isRecoveryCandidate = Boolean(location.search) ||
-  (Boolean(location.hash) && !location.hash.startsWith("#/"));
-if (isRecoveryCandidate) {
-  const fragment = location.hash;
-  let scrubbed = false;
-  try {
-    history.replaceState(null, "", location.pathname);
-    scrubbed = !location.search && !location.hash;
-  } catch { /* history may be unavailable */ }
-  if (scrubbed) void bootRecovery(fragment);
-  else {
-    ++uiGeneration;
-    showOnly(loading);
-    loginError.textContent = "Не удалось безопасно обработать ссылку.";
-  }
-} else {
-  boot();
-}
+boot();

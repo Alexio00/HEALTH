@@ -14,6 +14,7 @@ on:
         options: [check, heartbeat]
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -33,6 +34,7 @@ jobs:
        (github.event_name == 'workflow_dispatch' && inputs.mode == 'heartbeat' && github.actor_id == '308028794'))
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: write
     steps:
       - name: Checkout approved immutable scheduler code
@@ -52,6 +54,8 @@ jobs:
           git merge-base --is-ancestor "$HEALTH_HEARTBEAT_ACCEPTED_SHA" refs/remotes/origin/scheduler-code
           node --test scripts/automation/health_activity.test.mjs
       - name: Emit heartbeat only into scheduler
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/automation/health_activity.mjs heartbeat
 
   watchdog:
@@ -66,6 +70,7 @@ jobs:
        (github.event_name == 'workflow_dispatch' && inputs.mode == 'check' && github.actor_id == '308028794'))
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: read
     steps:
       - name: Checkout approved immutable scheduler code
@@ -85,4 +90,6 @@ jobs:
           git merge-base --is-ancestor "$HEALTH_HEARTBEAT_ACCEPTED_SHA" refs/remotes/origin/scheduler-code
           node --test scripts/automation/health_activity.test.mjs
       - name: Fail to trigger GitHub email when overdue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/automation/health_activity.mjs check
